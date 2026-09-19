@@ -52,8 +52,8 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           onPress={onToggleDrawCount}
           style={styles.modeBadge}
         >
-          <Text style={styles.modeLabel}>MODE</Text>
-          <Text style={styles.modeValue}>Turn {drawCount}</Text>
+          <Text style={styles.modeLabel}>Draw Mode</Text>
+          <Text style={styles.modeValue}>Draw {drawCount}</Text>
         </TouchableOpacity>
       </View>
 
@@ -66,7 +66,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           style={[styles.actionBtn, !canUndo && styles.btnDisabled]}
         >
           <Text style={[styles.actionBtnText, !canUndo && styles.btnTextDisabled]}>
-            ↩ Undo
+            Undo
           </Text>
         </TouchableOpacity>
 
@@ -75,7 +75,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           onPress={onOpenStats}
           style={styles.actionBtn}
         >
-          <Text style={styles.actionBtnText}>🏆 Stats</Text>
+          <Text style={styles.actionBtnText}>Stats</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -83,7 +83,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           onPress={onNewGame}
           style={[styles.actionBtn, styles.newGameBtn]}
         >
-          <Text style={[styles.actionBtnText, styles.newGameText]}>🔄 New Game</Text>
+          <Text style={[styles.actionBtnText, styles.newGameText]}>New Game</Text>
         </TouchableOpacity>
       </View>
     </View>

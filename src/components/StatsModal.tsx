@@ -25,7 +25,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({ visible, stats, onClose 
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>🏆 Statistics</Text>
+          <Text style={styles.title}>Statistics</Text>
 
           <View style={styles.grid}>
             <View style={styles.statBox}>
