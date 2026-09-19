@@ -6,9 +6,13 @@ import { Card, GameState, getCardColor } from './types';
  * - If column is empty: only a King (rank 13) can be placed.
  * - If column has cards: top card must be face-up, opposite color, and rank must be exactly 1 lower.
  */
-export function canPlaceOnTableau(card: Card, targetColumn: Card[]): boolean {
+export function canPlaceOnTableau(
+  card: Card,
+  targetColumn: Card[],
+  allowAnyCardOnEmpty = false
+): boolean {
   if (targetColumn.length === 0) {
-    return card.rank === 13; // King
+    return allowAnyCardOnEmpty || card.rank === 13; // King (or any card if relaxed rule enabled)
   }
 
   const topCard = targetColumn[targetColumn.length - 1];

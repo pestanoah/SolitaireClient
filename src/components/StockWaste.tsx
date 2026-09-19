@@ -12,6 +12,7 @@ interface StockWasteProps {
   onStockPress: () => void;
   onWasteCardPress: (card: Card) => void;
   selectedCardId?: string | null;
+  hiddenCardIds?: string[];
 }
 
 export const StockWaste: React.FC<StockWasteProps> = ({
@@ -23,6 +24,7 @@ export const StockWaste: React.FC<StockWasteProps> = ({
   onStockPress,
   onWasteCardPress,
   selectedCardId,
+  hiddenCardIds = [],
 }) => {
   const hasStock = stock.length > 0;
   const hasWaste = waste.length > 0;
@@ -73,6 +75,7 @@ export const StockWaste: React.FC<StockWasteProps> = ({
           visibleWaste.map((card, idx) => {
             const isTop = idx === visibleWaste.length - 1;
             const isSelected = card.id === selectedCardId;
+            const isHidden = hiddenCardIds.includes(card.id);
             return (
               <View
                 key={card.id}
@@ -81,6 +84,7 @@ export const StockWaste: React.FC<StockWasteProps> = ({
                   {
                     left: idx * fanOffset,
                     zIndex: idx + 1,
+                    opacity: isHidden ? 0 : 1,
                   },
                 ]}
               >

@@ -9,6 +9,7 @@ interface TableauColumnProps {
   cardWidth: number;
   cardHeight: number;
   selectedCardIds?: string[];
+  hiddenCardIds?: string[];
   onCardPress: (card: Card, colIndex: number) => void;
   onEmptyColumnPress?: (colIndex: number) => void;
 }
@@ -19,6 +20,7 @@ export const TableauColumn: React.FC<TableauColumnProps> = ({
   cardWidth,
   cardHeight,
   selectedCardIds = [],
+  hiddenCardIds = [],
   onCardPress,
   onEmptyColumnPress,
 }) => {
@@ -48,6 +50,7 @@ export const TableauColumn: React.FC<TableauColumnProps> = ({
       ) : (
         cards.map((card, idx) => {
           const isSelected = selectedCardIds.includes(card.id);
+          const isHidden = hiddenCardIds.includes(card.id);
           const topPosition = offsets[idx];
 
           return (
@@ -58,6 +61,7 @@ export const TableauColumn: React.FC<TableauColumnProps> = ({
                 {
                   top: topPosition,
                   zIndex: idx + 1,
+                  opacity: isHidden ? 0 : 1,
                 },
               ]}
             >

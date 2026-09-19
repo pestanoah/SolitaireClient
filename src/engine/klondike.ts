@@ -89,7 +89,8 @@ export function moveCards(
   state: GameState,
   from: PileLocation,
   to: PileLocation,
-  cardIds: string[]
+  cardIds: string[],
+  allowAnyCardOnEmpty = false
 ): GameState | null {
   if (state.status === 'won' || cardIds.length === 0) return null;
 
@@ -121,7 +122,7 @@ export function moveCards(
   const leadCard = sourceCards[0];
   if (to.type === 'tableau') {
     const targetCol = tableau[to.index];
-    if (!canPlaceOnTableau(leadCard, targetCol)) return null;
+    if (!canPlaceOnTableau(leadCard, targetCol, allowAnyCardOnEmpty)) return null;
   } else if (to.type === 'foundation') {
     if (sourceCards.length !== 1) return null; // Foundations only accept 1 card at a time
     const targetPile = foundations[to.index];
@@ -198,7 +199,8 @@ export function moveCards(
  */
 export function findSmartMove(
   state: GameState,
-  cardId: string
+  cardId: string,
+  allowAnyCardOnEmpty = false
 ): { from: PileLocation; to: PileLocation; cardIds: string[] } | null {
   if (state.status === 'won') return null;
 
@@ -243,7 +245,7 @@ export function findSmartMove(
   const candidateIndices: number[] = [];
   for (let t = 0; t < state.tableau.length; t++) {
     if (from.type === 'tableau' && from.index === t) continue; // Same column
-    if (canPlaceOnTableau(card, state.tableau[t])) {
+    if (canPlaceOnTableau(card, state.tableau[t], allowAnyCardOnEmpty)) {
       candidateIndices.push(t);
     }
   }
