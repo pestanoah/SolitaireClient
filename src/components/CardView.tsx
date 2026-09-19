@@ -58,9 +58,11 @@ export const CardView: React.FC<CardViewProps> = React.memo(
     const textColor = color === 'red' ? '#dc2626' : '#0f172a';
     const suitSymbol = SUIT_SYMBOLS[card.suit];
     const rankLabel = RANK_LABELS[card.rank];
-    const fontSize = Math.max(12, Math.floor(width * 0.28));
-    const smallSuitSize = Math.max(10, Math.floor(width * 0.24));
-    const centerSymbolSize = Math.max(18, Math.floor(width * 0.44));
+    const fontSize = Math.max(11, Math.floor(width * 0.22));
+    const smallSuitSize = Math.max(9, Math.floor(width * 0.17));
+    const centerSymbolSize = Math.max(18, Math.floor(width * 0.42));
+    const rankLineHeight = Math.round(fontSize * 1.05);
+    const suitLineHeight = Math.round(smallSuitSize * 1.05);
 
     return (
       <View
@@ -74,8 +76,20 @@ export const CardView: React.FC<CardViewProps> = React.memo(
       >
         {/* Top-left corner */}
         <View style={styles.cornerTopLeft}>
-          <Text style={[styles.rankText, { color: textColor, fontSize }]}>{rankLabel}</Text>
-          <Text style={[styles.smallSuit, { color: textColor, fontSize: smallSuitSize }]}>
+          <Text
+            style={[
+              styles.rankText,
+              { color: textColor, fontSize, lineHeight: rankLineHeight },
+            ]}
+          >
+            {rankLabel}
+          </Text>
+          <Text
+            style={[
+              styles.smallSuit,
+              { color: textColor, fontSize: smallSuitSize, lineHeight: suitLineHeight },
+            ]}
+          >
             {suitSymbol}
           </Text>
         </View>
@@ -89,8 +103,20 @@ export const CardView: React.FC<CardViewProps> = React.memo(
 
         {/* Bottom-right corner (inverted) */}
         <View style={styles.cornerBottomRight}>
-          <Text style={[styles.rankText, { color: textColor, fontSize }]}>{rankLabel}</Text>
-          <Text style={[styles.smallSuit, { color: textColor, fontSize: smallSuitSize }]}>
+          <Text
+            style={[
+              styles.rankText,
+              { color: textColor, fontSize, lineHeight: rankLineHeight },
+            ]}
+          >
+            {rankLabel}
+          </Text>
+          <Text
+            style={[
+              styles.smallSuit,
+              { color: textColor, fontSize: smallSuitSize, lineHeight: suitLineHeight },
+            ]}
+          >
             {suitSymbol}
           </Text>
         </View>
@@ -148,20 +174,20 @@ const styles = StyleSheet.create({
   cornerTopLeft: {
     alignItems: 'center',
     alignSelf: 'flex-start',
-    minWidth: 18,
+    gap: 1,
   },
   cornerBottomRight: {
     alignItems: 'center',
     alignSelf: 'flex-end',
     transform: [{ rotate: '180deg' }],
-    minWidth: 18,
+    gap: 1,
   },
   rankText: {
     fontWeight: '800',
-    lineHeight: 14,
+    textAlign: 'center',
   },
   smallSuit: {
-    lineHeight: 12,
+    textAlign: 'center',
   },
   centerContainer: {
     position: 'absolute',
