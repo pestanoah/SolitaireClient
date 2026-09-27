@@ -33,6 +33,9 @@ export const StockWaste: React.FC<StockWasteProps> = ({
   const visibleWasteCount = drawCount === 3 ? Math.min(3, waste.length) : Math.min(1, waste.length);
   const visibleWaste = waste.slice(-visibleWasteCount);
   const fanOffset = Math.floor(cardWidth * 0.28);
+  const underlyingCard =
+    waste.length > visibleWasteCount ? waste[waste.length - 1 - visibleWasteCount] : null;
+  const isUnderlyingHidden = underlyingCard ? hiddenCardIds.includes(underlyingCard.id) : false;
 
   return (
     <View style={styles.container}>
@@ -71,7 +74,24 @@ export const StockWaste: React.FC<StockWasteProps> = ({
           },
         ]}
       >
-        {hasWaste ? (
+        <View style={[styles.emptyWaste, { width: cardWidth, height: cardHeight }]} />
+
+        {underlyingCard && (
+          <View
+            style={[
+              styles.fannedCard,
+              {
+                left: 0,
+                zIndex: 0,
+                opacity: isUnderlyingHidden ? 0 : 1,
+              },
+            ]}
+          >
+            <CardView card={underlyingCard} width={cardWidth} height={cardHeight} />
+          </View>
+        )}
+
+        {hasWaste &&
           visibleWaste.map((card, idx) => {
             const isTop = idx === visibleWaste.length - 1;
             const isSelected = card.id === selectedCardId;
@@ -102,10 +122,7 @@ export const StockWaste: React.FC<StockWasteProps> = ({
                 </TouchableOpacity>
               </View>
             );
-          })
-        ) : (
-          <View style={[styles.emptyWaste, { width: cardWidth, height: cardHeight }]} />
-        )}
+          })}
       </View>
     </View>
   );
@@ -164,6 +181,9 @@ const styles = StyleSheet.create({
     top: 0,
   },
   emptyWaste: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',

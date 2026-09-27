@@ -468,6 +468,9 @@ export const GameScreen: React.FC = () => {
         } else if (selectedCards.from.type === 'tableau') {
           const col = gameState.tableau[selectedCards.from.index];
           leadCard = col.find((c) => c.id === leadCardId);
+        } else if (selectedCards.from.type === 'foundation') {
+          const f = gameState.foundations[selectedCards.from.index];
+          leadCard = f[f.length - 1];
         }
 
         if (leadCard && leadCard.rank !== 13) {
@@ -493,7 +496,18 @@ export const GameScreen: React.FC = () => {
     (fIndex: number) => {
       if (isAnimatingRef.current) return;
 
+      const pile = gameState.foundations[fIndex];
+      const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
+
+      // 1. If we already have a selection
       if (selectedCards) {
+        // Tapping the same foundation card toggles/deselects it
+        if (selectedCards.from.type === 'foundation' && selectedCards.from.index === fIndex) {
+          setSelectedCards(null);
+          return;
+        }
+
+        // Try to move the currently selected card(s) onto this foundation pile
         const success = executeMoveWithAnimation(
           selectedCards.from,
           { type: 'foundation', index: fIndex },
@@ -501,10 +515,39 @@ export const GameScreen: React.FC = () => {
         );
         if (success) {
           setSelectedCards(null);
+          return;
+        }
+
+        // If move was not valid:
+        // If foundation is empty, clear selection
+        if (!topCard) {
+          setSelectedCards(null);
+          return;
         }
       }
+
+      // 2. Either no card was selected or previous selection couldn't move here
+      if (topCard) {
+        // Tap-to-move smart placement down from foundation to tableau
+        if (settings.autoMoveOnTap) {
+          const smart = findSmartMove(gameState, topCard.id);
+          if (smart) {
+            const success = executeMoveWithAnimation(smart.from, smart.to, smart.cardIds);
+            if (success) {
+              setSelectedCards(null);
+              return;
+            }
+          }
+        }
+
+        // Fallback to selecting the foundation card
+        setSelectedCards({
+          from: { type: 'foundation', index: fIndex },
+          cardIds: [topCard.id],
+        });
+      }
     },
-    [gameState, selectedCards]
+    [gameState, selectedCards, settings.autoMoveOnTap]
   );
 
   // Auto-complete runner with animation
@@ -562,6 +605,10 @@ export const GameScreen: React.FC = () => {
       const col = gameState.tableau[selectedCards.from.index];
       const c = col.find((item) => item.id === leadId);
       return c?.rank === 13;
+    }
+    if (selectedCards.from.type === 'foundation') {
+      const f = gameState.foundations[selectedCards.from.index];
+      return f[f.length - 1]?.rank === 13;
     }
     return false;
   })();
@@ -657,6 +704,12 @@ export const GameScreen: React.FC = () => {
                     width={cardWidth}
                     height={cardHeight}
                     onPress={() => handleFoundationPress(idx)}
+                    selectedCardId={
+                      selectedCards?.from.type === 'foundation' && selectedCards.from.index === idx
+                        ? selectedCards.cardIds[0]
+                        : null
+                    }
+                    hiddenCardIds={hiddenIds}
                   />
                 </View>
               ))}
