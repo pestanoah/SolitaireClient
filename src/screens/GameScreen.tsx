@@ -45,6 +45,8 @@ interface AnimatingCardData {
   endX: number;
   endY: number;
   hiddenCardIds: string[];
+  direction?: 'horizontal' | 'vertical';
+  isReset?: boolean;
 }
 
 export const GameScreen: React.FC = () => {
@@ -102,6 +104,7 @@ export const GameScreen: React.FC = () => {
 
   const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
   const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
+  const fanOffset = Math.floor(cardWidth * 0.28);
 
   // Persistence and Hydration tracking
   const isHydratedRef = useRef(false);
@@ -343,8 +346,46 @@ export const GameScreen: React.FC = () => {
     setSelectedCards(null);
 
     if (gameState.stock.length === 0) {
-      // Recycle waste to stock
-      setGameState((prev) => drawCards(prev));
+      if (gameState.waste.length === 0) return;
+
+      // Recycle waste to stock with animation
+      const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.waste.length);
+      const cardsToAnimate = gameState.waste.slice(-count);
+      const allWasteIds = gameState.waste.map((c) => c.id);
+      const nextState = drawCards(gameState);
+
+      const startPos = {
+        x: wasteLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      };
+      const endPos = {
+        x: stockLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      };
+
+      isAnimatingRef.current = true;
+      setAnimatingCard({
+        cards: cardsToAnimate,
+        startX: startPos.x,
+        startY: startPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        hiddenCardIds: allWasteIds,
+        direction: 'horizontal',
+        isReset: true,
+      });
+
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setGameState(nextState);
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+      });
       return;
     }
 
@@ -369,6 +410,7 @@ export const GameScreen: React.FC = () => {
       endX: endPos.x,
       endY: endPos.y,
       hiddenCardIds: drawnCards.map((c) => c.id),
+      direction: 'horizontal',
     });
 
     animProgress.setValue(0);
@@ -781,24 +823,90 @@ export const GameScreen: React.FC = () => {
                 },
               ]}
             >
-              {animatingCard.cards.map((c, i) => (
-                <View
-                  key={c.id}
-                  style={{
-                    position: 'absolute',
-                    top: i * upOffset,
-                    left: 0,
-                    zIndex: i + 1,
-                  }}
-                >
-                  <CardView
-                    card={c}
-                    width={cardWidth}
-                    height={cardHeight}
-                    isDragging
-                  />
-                </View>
-              ))}
+              {animatingCard.cards.map((c, i) => {
+                const isHorizontal = animatingCard.direction === 'horizontal';
+                const isReset = animatingCard.isReset === true;
+                const animatedLeft = isHorizontal
+                  ? animProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: isReset ? [i * fanOffset, 0] : [0, i * fanOffset],
+                    })
+                  : 0;
+                const animatedTop = isHorizontal ? 0 : i * upOffset;
+
+                return (
+                  <Animated.View
+                    key={c.id}
+                    style={{
+                      position: 'absolute',
+                      top: animatedTop,
+                      left: animatedLeft,
+                      zIndex: i + 1,
+                    }}
+                  >
+                    {isReset ? (
+                      <Animated.View
+                        style={{
+                          width: cardWidth,
+                          height: cardHeight,
+                          transform: [
+                            {
+                              rotateY: animProgress.interpolate({
+                                inputRange: [0, 0.5, 1],
+                                outputRange: ['0deg', '90deg', '0deg'],
+                              }),
+                            },
+                          ],
+                        }}
+                      >
+                        <Animated.View
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            opacity: animProgress.interpolate({
+                              inputRange: [0, 0.49, 0.5, 1],
+                              outputRange: [1, 1, 0, 0],
+                            }),
+                          }}
+                        >
+                          <CardView
+                            card={c}
+                            width={cardWidth}
+                            height={cardHeight}
+                            isDragging
+                          />
+                        </Animated.View>
+                        <Animated.View
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            opacity: animProgress.interpolate({
+                              inputRange: [0, 0.5, 0.51, 1],
+                              outputRange: [0, 0, 1, 1],
+                            }),
+                          }}
+                        >
+                          <CardView
+                            card={{ ...c, faceUp: false }}
+                            width={cardWidth}
+                            height={cardHeight}
+                            isDragging
+                          />
+                        </Animated.View>
+                      </Animated.View>
+                    ) : (
+                      <CardView
+                        card={c}
+                        width={cardWidth}
+                        height={cardHeight}
+                        isDragging
+                      />
+                    )}
+                  </Animated.View>
+                );
+              })}
             </Animated.View>
           )}
         </View>
