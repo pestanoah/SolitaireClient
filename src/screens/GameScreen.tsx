@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   Easing,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -101,34 +103,95 @@ export const GameScreen: React.FC = () => {
   const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
   const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
 
+  // Persistence and Hydration tracking
+  const isHydratedRef = useRef(false);
+  const lastSavedGameRef = useRef<GameState | null>(null);
+  const latestGameStateRef = useRef<GameState>(gameState);
+  latestGameStateRef.current = gameState;
+
   // Load initial saved game and stats
   useEffect(() => {
+    let isMounted = true;
     (async () => {
       const loadedSettings = await loadSettings();
+      if (!isMounted) return;
       setSettings(loadedSettings);
 
       const loadedStats = await loadStats();
+      if (!isMounted) return;
       setStats(loadedStats);
 
       const savedGame = await loadGameState();
+      if (!isMounted) return;
       if (savedGame) {
+        lastSavedGameRef.current = savedGame;
         setGameState(savedGame);
       } else {
         const newGame = dealKlondike(loadedSettings.drawCount);
+        lastSavedGameRef.current = newGame;
         setGameState(newGame);
-        saveGameState(newGame);
+        await saveGameState(newGame);
       }
+      isHydratedRef.current = true;
     })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Autosave game state
+  // Autosave game state only on discrete game actions (moves, draws, undos, deals, wins)
   useEffect(() => {
+    if (!isHydratedRef.current) return;
+
     if (gameState.status === 'won') {
       clearGameState();
-    } else {
-      saveGameState(gameState);
+      lastSavedGameRef.current = null;
+      return;
     }
-  }, [gameState]);
+
+    // Skip if this game action has already been persisted (e.g. initial load or timer ticks)
+    if (
+      lastSavedGameRef.current?.id === gameState.id &&
+      lastSavedGameRef.current?.history === gameState.history
+    ) {
+      return;
+    }
+
+    lastSavedGameRef.current = gameState;
+    saveGameState(gameState);
+  }, [gameState.id, gameState.history, gameState.status]);
+
+  // Flush latest timer & score to storage on tab close, backgrounding, or unmount
+  useEffect(() => {
+    const handleFlush = () => {
+      if (!isHydratedRef.current) return;
+      const current = latestGameStateRef.current;
+      if (current.status !== 'won') {
+        saveGameState(current);
+      }
+    };
+
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        handleFlush();
+      }
+    });
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleFlush);
+      window.addEventListener('pagehide', handleFlush);
+    }
+
+    return () => {
+      appStateSub.remove();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', handleFlush);
+        window.removeEventListener('pagehide', handleFlush);
+      }
+      handleFlush();
+    };
+  }, []);
 
   // Game timer loop
   useEffect(() => {
@@ -465,7 +528,6 @@ export const GameScreen: React.FC = () => {
     isAnimatingRef.current = false;
     const newGame = dealKlondike(settings.drawCount);
     setGameState(newGame);
-    saveGameState(newGame);
   }, [settings.drawCount]);
 
   // Toggle Draw Mode (Turn 1 vs Turn 3)
@@ -479,7 +541,6 @@ export const GameScreen: React.FC = () => {
     isAnimatingRef.current = false;
     const newGame = dealKlondike(nextCount as 1 | 3);
     setGameState(newGame);
-    saveGameState(newGame);
   }, [settings]);
 
   // Undo move
