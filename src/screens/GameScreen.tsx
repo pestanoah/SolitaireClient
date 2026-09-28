@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   AppState,
@@ -114,14 +114,27 @@ export const GameScreen: React.FC = () => {
   const tableauLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
 
   // Calculate responsive dimensions
-  const maxBoardWidth = Math.min(windowWidth - 16, 760);
-  const gap = Math.max(4, Math.floor(maxBoardWidth * 0.015));
-  const cardWidth = Math.max(40, Math.floor((maxBoardWidth - gap * 6 - 16) / 7));
-  const cardHeight = Math.floor(cardWidth * 1.4);
+  const { maxBoardWidth, gap, cardWidth, cardHeight, downOffset, upOffset, fanOffset } =
+    useMemo(() => {
+      const maxBoardWidth = Math.min(windowWidth - 16, 760);
+      const gap = Math.max(4, Math.floor(maxBoardWidth * 0.015));
+      const cardWidth = Math.max(40, Math.floor((maxBoardWidth - gap * 6 - 16) / 7));
+      const cardHeight = Math.floor(cardWidth * 1.4);
 
-  const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
-  const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
-  const fanOffset = Math.floor(cardWidth * 0.28);
+      const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
+      const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
+      const fanOffset = Math.floor(cardWidth * 0.28);
+
+      return {
+        maxBoardWidth,
+        gap,
+        cardWidth,
+        cardHeight,
+        downOffset,
+        upOffset,
+        fanOffset,
+      };
+    }, [windowWidth]);
 
   // Persistence and Hydration tracking
   const isHydratedRef = useRef(false);
