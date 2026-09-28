@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Card, PileLocation } from '../engine/types';
 import { CardView } from './CardView';
@@ -18,38 +18,51 @@ interface TableauColumnProps {
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
 }
 
+const EMPTY_STRING_ARRAY: string[] = [];
+
 export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
   columnIndex,
   cards,
   cardWidth,
   cardHeight,
-  selectedCardIds = [],
-  hiddenCardIds = [],
+  selectedCardIds = EMPTY_STRING_ARRAY,
+  hiddenCardIds = EMPTY_STRING_ARRAY,
   onCardPress,
   onEmptyColumnPress,
   onDragStart,
   onDragMove,
   onDragEnd,
 }) => {
-  const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
-  const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
+  const fromLocation: PileLocation = useMemo(() => ({ type: 'tableau', index: columnIndex }), [columnIndex]);
 
-  // Compute vertical offset positions for each card
-  const offsets: number[] = [];
-  let currentTop = 0;
-  for (let i = 0; i < cards.length; i++) {
-    offsets.push(currentTop);
-    currentTop += cards[i].faceUp ? upOffset : downOffset;
-  }
+  const { offsets, columnHeight } = useMemo(() => {
+    const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
+    const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
 
-  const columnHeight = cards.length === 0 ? cardHeight : currentTop - (cards[cards.length - 1].faceUp ? upOffset : downOffset) + cardHeight;
+    // Compute vertical offset positions for each card
+    const offsets: number[] = [];
+    let currentTop = 0;
+    for (let i = 0; i < cards.length; i++) {
+      offsets.push(currentTop);
+      currentTop += cards[i].faceUp ? upOffset : downOffset;
+    }
+
+    const columnHeight =
+      cards.length === 0
+        ? cardHeight
+        : currentTop - (cards[cards.length - 1].faceUp ? upOffset : downOffset) + cardHeight;
+
+    return { offsets, columnHeight };
+  }, [cards, cardHeight]);
+
+  const handleEmptyPress = useCallback(() => onEmptyColumnPress?.(columnIndex), [onEmptyColumnPress, columnIndex]);
 
   return (
     <View style={[styles.columnContainer, { width: cardWidth, minHeight: columnHeight }]}>
       {cards.length === 0 ? (
         <TouchableOpacity
           activeOpacity={0.8}
-          onPress={() => onEmptyColumnPress && onEmptyColumnPress(columnIndex)}
+          onPress={handleEmptyPress}
           style={[styles.emptySlot, { width: cardWidth, height: cardHeight }]}
         >
           <Text style={[styles.emptyK, { fontSize: Math.floor(cardWidth * 0.4) }]}>K</Text>
@@ -75,7 +88,7 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
               {card.faceUp ? (
                 <DraggableCard
                   card={card}
-                  from={{ type: 'tableau', index: columnIndex }}
+                  from={fromLocation}
                   cardIndex={idx}
                   onPress={() => onCardPress(card, columnIndex)}
                   onDragStart={onDragStart}

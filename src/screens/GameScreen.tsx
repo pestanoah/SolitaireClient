@@ -62,6 +62,8 @@ interface DragState {
   startPos: { x: number; y: number };
 }
 
+const EMPTY_CARD_IDS: string[] = [];
+
 export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -816,6 +818,15 @@ export const GameScreen: React.FC = () => {
     [gameState, selectedCards, settings.autoMoveOnTap]
   );
 
+  const handleFoundation0Press = useCallback(() => handleFoundationPress(0), [handleFoundationPress]);
+  const handleFoundation1Press = useCallback(() => handleFoundationPress(1), [handleFoundationPress]);
+  const handleFoundation2Press = useCallback(() => handleFoundationPress(2), [handleFoundationPress]);
+  const handleFoundation3Press = useCallback(() => handleFoundationPress(3), [handleFoundationPress]);
+  const foundationPressHandlers = useMemo(
+    () => [handleFoundation0Press, handleFoundation1Press, handleFoundation2Press, handleFoundation3Press],
+    [handleFoundation0Press, handleFoundation1Press, handleFoundation2Press, handleFoundation3Press]
+  );
+
   // Auto-complete runner with animation
   useEffect(() => {
     if (gameState.status === 'playing' && canAutoComplete(gameState) && !isAnimatingRef.current) {
@@ -1042,11 +1053,7 @@ export const GameScreen: React.FC = () => {
     return false;
   })();
 
-  const hiddenIds = animatingCard
-    ? animatingCard.hiddenCardIds
-    : dragState
-    ? dragState.cardIds
-    : [];
+  const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : dragState ? dragState.cardIds : EMPTY_CARD_IDS;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1141,7 +1148,7 @@ export const GameScreen: React.FC = () => {
                     cards={pile}
                     width={cardWidth}
                     height={cardHeight}
-                    onPress={() => handleFoundationPress(idx)}
+                    onPress={foundationPressHandlers[idx]}
                     selectedCardId={
                       selectedCards?.from.type === 'foundation' && selectedCards.from.index === idx
                         ? selectedCards.cardIds[0]
@@ -1186,7 +1193,7 @@ export const GameScreen: React.FC = () => {
                     cards={col}
                     cardWidth={cardWidth}
                     cardHeight={cardHeight}
-                    selectedCardIds={isSelectedCol ? selectedCards.cardIds : []}
+                    selectedCardIds={isSelectedCol ? selectedCards.cardIds : EMPTY_CARD_IDS}
                     hiddenCardIds={hiddenIds}
                     onCardPress={handleTableauCardPress}
                     onEmptyColumnPress={handleEmptyColumnPress}
