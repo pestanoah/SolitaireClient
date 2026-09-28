@@ -208,7 +208,19 @@ describe('State Transitions & Gameplay', () => {
     expect(afterUndo.tableau[0][0].faceUp).toBe(false); // Reflipped face down
     expect(afterUndo.tableau[0][1].id).toBe('ace_card');
     expect(afterUndo.score).toBe(0);
-    expect(afterUndo.moves).toBe(state.moves);
+    // Undoing counts as a move, increasing the total moves count
+    expect(afterUndo.moves).toBe(afterMove.moves + 1);
+  });
+
+  test('undoing a stock draw increments moves', () => {
+    let state = dealKlondike(1, 42);
+    expect(state.moves).toBe(0);
+    const afterDraw = drawCards(state);
+    expect(afterDraw.moves).toBe(1);
+    const afterUndo = undo(afterDraw);
+    expect(afterUndo.moves).toBe(2);
+    expect(afterUndo.stock.length).toBe(state.stock.length);
+    expect(afterUndo.waste.length).toBe(0);
   });
 
   test('findSmartMove finds foundation and tableau placements', () => {
@@ -328,6 +340,7 @@ describe('State Transitions & Gameplay', () => {
     expect(restored.tableau[2].length).toBe(1);
     expect(restored.tableau[2][0].id).toBe('black_6');
     expect(restored.score).toBe(50);
+    expect(restored.moves).toBe(nextState!.moves + 1);
   });
 
   test('findSmartMove finds legal tableau placement for card in foundation', () => {

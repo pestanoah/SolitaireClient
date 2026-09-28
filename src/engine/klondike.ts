@@ -333,7 +333,7 @@ export function undo(state: GameState): GameState {
       ...state,
       stock,
       waste,
-      moves: Math.max(0, state.moves - 1),
+      moves: state.moves + 1,
       history: remainingHistory,
     };
   }
@@ -351,7 +351,7 @@ export function undo(state: GameState): GameState {
       stock,
       waste,
       score: Math.max(0, state.score - lastMove.pointsEarned),
-      moves: Math.max(0, state.moves - 1),
+      moves: state.moves + 1,
       history: remainingHistory,
     };
   }
@@ -393,7 +393,7 @@ export function undo(state: GameState): GameState {
     foundations,
     tableau,
     score: Math.max(0, state.score - lastMove.pointsEarned),
-    moves: Math.max(0, state.moves - 1),
+    moves: state.moves + 1,
     status: 'playing',
     history: remainingHistory,
   };
