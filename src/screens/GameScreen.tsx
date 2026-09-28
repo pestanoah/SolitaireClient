@@ -258,54 +258,57 @@ export const GameScreen: React.FC = () => {
   }, [gameState.status]);
 
   // Calculate card screen position in board coordinates
-  const getPileCardPosition = (
-    pile: PileLocation,
-    cardIndexInPile: number,
-    state: GameState
-  ): { x: number; y: number } => {
-    if (pile.type === 'stock') {
+  const getPileCardPosition = useCallback(
+    (
+      pile: PileLocation,
+      cardIndexInPile: number,
+      state: GameState
+    ): { x: number; y: number } => {
+      if (pile.type === 'stock') {
+        return {
+          x: stockLayoutRef.current.x,
+          y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        };
+      }
+
+      if (pile.type === 'waste') {
+        const effectiveCount = Math.max(
+          1,
+          cardIndexInPile !== undefined && cardIndexInPile >= 0 ? cardIndexInPile + 1 : state.waste.length
+        );
+        const visibleCount =
+          state.drawCount === 3 ? Math.min(3, effectiveCount) : Math.min(1, effectiveCount);
+        const hOffset = Math.max(0, visibleCount - 1) * fanOffset;
+        return {
+          x: wasteLayoutRef.current.x + hOffset,
+          y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        };
+      }
+
+      if (pile.type === 'foundation') {
+        const fLayout = foundationLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
+        return {
+          x: foundationsRowLayoutRef.current.x + fLayout.x,
+          y: topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y,
+        };
+      }
+
+      // Tableau column
+      const tLayout = tableauLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
+      const col = state.tableau[pile.index] ?? [];
+      let vertOffset = 0;
+      const limit = Math.min(cardIndexInPile, col.length);
+      for (let i = 0; i < limit; i++) {
+        vertOffset += col[i].faceUp ? upOffset : downOffset;
+      }
+
       return {
-        x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        x: tableauRowLayoutRef.current.x + tLayout.x,
+        y: tableauRowLayoutRef.current.y + tLayout.y + vertOffset,
       };
-    }
-
-    if (pile.type === 'waste') {
-      const effectiveCount = Math.max(
-        1,
-        cardIndexInPile !== undefined && cardIndexInPile >= 0 ? cardIndexInPile + 1 : state.waste.length
-      );
-      const visibleCount =
-        state.drawCount === 3 ? Math.min(3, effectiveCount) : Math.min(1, effectiveCount);
-      const hOffset = Math.max(0, visibleCount - 1) * fanOffset;
-      return {
-        x: wasteLayoutRef.current.x + hOffset,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
-      };
-    }
-
-    if (pile.type === 'foundation') {
-      const fLayout = foundationLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
-      return {
-        x: foundationsRowLayoutRef.current.x + fLayout.x,
-        y: topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y,
-      };
-    }
-
-    // Tableau column
-    const tLayout = tableauLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
-    const col = state.tableau[pile.index] ?? [];
-    let vertOffset = 0;
-    const limit = Math.min(cardIndexInPile, col.length);
-    for (let i = 0; i < limit; i++) {
-      vertOffset += col[i].faceUp ? upOffset : downOffset;
-    }
-
-    return {
-      x: tableauRowLayoutRef.current.x + tLayout.x,
-      y: tableauRowLayoutRef.current.y + tLayout.y + vertOffset,
-    };
-  };
+    },
+    [fanOffset, upOffset, downOffset]
+  );
 
   // Animate and execute move
   const executeMoveWithAnimation = (
