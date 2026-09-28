@@ -1,4 +1,4 @@
-import { Card, GameState, getCardColor } from './types';
+import { Card, FOUNDATION_SUITS, GameState, getCardColor } from './types';
 
 /**
  * Checks if a card (or stack of cards represented by its top card) can be placed
@@ -28,10 +28,22 @@ export function canPlaceOnTableau(
 
 /**
  * Checks if a card can be placed onto a foundation pile:
+ * - If foundationIndex is provided: card suit must match the designated suit for that pile.
  * - If pile is empty: only an Ace (rank 1) can be placed.
  * - If pile has cards: same suit, and rank must be exactly 1 higher.
  */
-export function canPlaceOnFoundation(card: Card, foundationPile: Card[]): boolean {
+export function canPlaceOnFoundation(
+  card: Card,
+  foundationPile: Card[],
+  foundationIndex?: number
+): boolean {
+  if (foundationIndex !== undefined && foundationIndex >= 0) {
+    const expectedSuit = FOUNDATION_SUITS[foundationIndex % FOUNDATION_SUITS.length];
+    if (card.suit !== expectedSuit) {
+      return false;
+    }
+  }
+
   if (foundationPile.length === 0) {
     return card.rank === 1; // Ace
   }

@@ -85,6 +85,29 @@ describe('Rules Validation', () => {
     expect(canPlaceOnFoundation(threeHearts, [aceHearts])).toBe(false);
   });
 
+  test('canPlaceOnFoundation validates designated foundation pile suits (0:spades, 1:hearts, 2:diamonds, 3:clubs)', () => {
+    const aceSpades: Card = { id: 'as', suit: 'spades', rank: 1, faceUp: true };
+    const aceHearts: Card = { id: 'ah', suit: 'hearts', rank: 1, faceUp: true };
+    const aceDiamonds: Card = { id: 'ad', suit: 'diamonds', rank: 1, faceUp: true };
+    const aceClubs: Card = { id: 'ac', suit: 'clubs', rank: 1, faceUp: true };
+
+    // Foundation 0 is Spades
+    expect(canPlaceOnFoundation(aceSpades, [], 0)).toBe(true);
+    expect(canPlaceOnFoundation(aceHearts, [], 0)).toBe(false);
+
+    // Foundation 1 is Hearts
+    expect(canPlaceOnFoundation(aceHearts, [], 1)).toBe(true);
+    expect(canPlaceOnFoundation(aceSpades, [], 1)).toBe(false);
+
+    // Foundation 2 is Diamonds
+    expect(canPlaceOnFoundation(aceDiamonds, [], 2)).toBe(true);
+    expect(canPlaceOnFoundation(aceClubs, [], 2)).toBe(false);
+
+    // Foundation 3 is Clubs
+    expect(canPlaceOnFoundation(aceClubs, [], 3)).toBe(true);
+    expect(canPlaceOnFoundation(aceDiamonds, [], 3)).toBe(false);
+  });
+
   test('isGameWon checks for 52 cards across foundations', () => {
     const fullPile = Array.from({ length: 13 }, (_, i) => ({
       id: `f_${i}`,
@@ -140,7 +163,7 @@ describe('State Transitions & Gameplay', () => {
     // Set up deterministic tableau state
     state.tableau[0] = [
       { id: 'down_card', suit: 'clubs', rank: 10, faceUp: false },
-      { id: 'ace_card', suit: 'hearts', rank: 1, faceUp: true },
+      { id: 'ace_card', suit: 'spades', rank: 1, faceUp: true },
     ];
     state.foundations[0] = [];
 
@@ -166,7 +189,7 @@ describe('State Transitions & Gameplay', () => {
     let state = dealKlondike(1);
     state.tableau[0] = [
       { id: 'down_card', suit: 'clubs', rank: 10, faceUp: false },
-      { id: 'ace_card', suit: 'hearts', rank: 1, faceUp: true },
+      { id: 'ace_card', suit: 'spades', rank: 1, faceUp: true },
     ];
 
     const afterMove = moveCards(
@@ -185,7 +208,19 @@ describe('State Transitions & Gameplay', () => {
     expect(afterUndo.tableau[0][0].faceUp).toBe(false); // Reflipped face down
     expect(afterUndo.tableau[0][1].id).toBe('ace_card');
     expect(afterUndo.score).toBe(0);
-    expect(afterUndo.moves).toBe(state.moves);
+    // Undoing counts as a move, increasing the total moves count
+    expect(afterUndo.moves).toBe(afterMove.moves + 1);
+  });
+
+  test('undoing a stock draw increments moves', () => {
+    let state = dealKlondike(1, 42);
+    expect(state.moves).toBe(0);
+    const afterDraw = drawCards(state);
+    expect(afterDraw.moves).toBe(1);
+    const afterUndo = undo(afterDraw);
+    expect(afterUndo.moves).toBe(2);
+    expect(afterUndo.stock.length).toBe(state.stock.length);
+    expect(afterUndo.waste.length).toBe(0);
   });
 
   test('findSmartMove finds foundation and tableau placements', () => {
@@ -205,6 +240,42 @@ describe('State Transitions & Gameplay', () => {
     expect(smartMove2).not.toBeNull();
     expect(smartMove2!.to.type).toBe('tableau');
     expect(smartMove2!.to.index).toBe(3);
+  });
+
+  test('findSmartMove targets the designated foundation pile matching card suit (0:♠, 1:♥, 2:♦, 3:♣)', () => {
+    const state = dealKlondike(1);
+    state.foundations = [[], [], [], []];
+
+    // Ace of Spades -> Foundation 0
+    state.waste = [{ id: 'as', suit: 'spades', rank: 1, faceUp: true }];
+    expect(findSmartMove(state, 'as')?.to).toEqual({ type: 'foundation', index: 0 });
+
+    // Ace of Hearts -> Foundation 1
+    state.waste = [{ id: 'ah', suit: 'hearts', rank: 1, faceUp: true }];
+    expect(findSmartMove(state, 'ah')?.to).toEqual({ type: 'foundation', index: 1 });
+
+    // Ace of Diamonds -> Foundation 2
+    state.waste = [{ id: 'ad', suit: 'diamonds', rank: 1, faceUp: true }];
+    expect(findSmartMove(state, 'ad')?.to).toEqual({ type: 'foundation', index: 2 });
+
+    // Ace of Clubs -> Foundation 3
+    state.waste = [{ id: 'ac', suit: 'clubs', rank: 1, faceUp: true }];
+    expect(findSmartMove(state, 'ac')?.to).toEqual({ type: 'foundation', index: 3 });
+  });
+
+  test('moveCards rejects placing an Ace on a foundation pile with the wrong suit watermark', () => {
+    const state = dealKlondike(1);
+    state.foundations = [[], [], [], []];
+    state.waste = [{ id: 'ah', suit: 'hearts', rank: 1, faceUp: true }];
+
+    // Trying to move Ace of Hearts into Foundation 0 (Spades) must be rejected
+    const invalidMove = moveCards(state, { type: 'waste', index: 0 }, { type: 'foundation', index: 0 }, ['ah']);
+    expect(invalidMove).toBeNull();
+
+    // Moving Ace of Hearts into Foundation 1 (Hearts) must succeed
+    const validMove = moveCards(state, { type: 'waste', index: 0 }, { type: 'foundation', index: 1 }, ['ah']);
+    expect(validMove).not.toBeNull();
+    expect(validMove!.foundations[1].length).toBe(1);
   });
 
   test('canAutoComplete and autoCompleteStep advance cards to foundation', () => {
@@ -269,6 +340,7 @@ describe('State Transitions & Gameplay', () => {
     expect(restored.tableau[2].length).toBe(1);
     expect(restored.tableau[2][0].id).toBe('black_6');
     expect(restored.score).toBe(50);
+    expect(restored.moves).toBe(nextState!.moves + 1);
   });
 
   test('findSmartMove finds legal tableau placement for card in foundation', () => {

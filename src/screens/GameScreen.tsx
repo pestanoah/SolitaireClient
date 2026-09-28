@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   AppState,
@@ -26,8 +26,8 @@ import {
   moveCards,
   undo,
 } from '../engine/klondike';
-import { canAutoComplete } from '../engine/rules';
-import { Card, GameState, PileLocation, PlayerStats, UserSettings } from '../engine/types';
+import { canAutoComplete, canPlaceOnFoundation, canPlaceOnTableau } from '../engine/rules';
+import { Card, FOUNDATION_SUITS, GameState, PileLocation, PlayerStats, UserSettings } from '../engine/types';
 import {
   clearGameState,
   loadGameState,
@@ -55,6 +55,15 @@ interface AnimatingCardData {
   isReset?: boolean;
 }
 
+interface DragState {
+  from: PileLocation;
+  cards: Card[];
+  cardIds: string[];
+  startPos: { x: number; y: number };
+}
+
+const EMPTY_CARD_IDS: string[] = [];
+
 export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -78,6 +87,10 @@ export const GameScreen: React.FC = () => {
   // Animation State
   const animProgress = useRef(new Animated.Value(0)).current;
   const [animatingCard, setAnimatingCard] = useState<AnimatingCardData | null>(null);
+
+  // Drag State
+  const [dragState, setDraggedCard] = useState<DragState | null>(null);
+  const dragPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const isAnimatingRef = useRef(false);
 
   // Toast / Hint for empty column
@@ -103,14 +116,27 @@ export const GameScreen: React.FC = () => {
   const tableauLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
 
   // Calculate responsive dimensions
-  const maxBoardWidth = Math.min(windowWidth - 16, 760);
-  const gap = Math.max(4, Math.floor(maxBoardWidth * 0.015));
-  const cardWidth = Math.max(40, Math.floor((maxBoardWidth - gap * 6 - 16) / 7));
-  const cardHeight = Math.floor(cardWidth * 1.4);
+  const { maxBoardWidth, gap, cardWidth, cardHeight, downOffset, upOffset, fanOffset } =
+    useMemo(() => {
+      const maxBoardWidth = Math.min(windowWidth - 16, 760);
+      const gap = Math.max(4, Math.floor(maxBoardWidth * 0.015));
+      const cardWidth = Math.max(40, Math.floor((maxBoardWidth - gap * 6 - 16) / 7));
+      const cardHeight = Math.floor(cardWidth * 1.4);
 
-  const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
-  const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
-  const fanOffset = Math.floor(cardWidth * 0.28);
+      const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
+      const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
+      const fanOffset = Math.floor(cardWidth * 0.28);
+
+      return {
+        maxBoardWidth,
+        gap,
+        cardWidth,
+        cardHeight,
+        downOffset,
+        upOffset,
+        fanOffset,
+      };
+    }, [windowWidth]);
 
   // Persistence and Hydration tracking
   const isHydratedRef = useRef(false);
@@ -234,47 +260,57 @@ export const GameScreen: React.FC = () => {
   }, [gameState.status]);
 
   // Calculate card screen position in board coordinates
-  const getPileCardPosition = (
-    pile: PileLocation,
-    cardIndexInPile: number,
-    state: GameState
-  ): { x: number; y: number } => {
-    if (pile.type === 'stock') {
+  const getPileCardPosition = useCallback(
+    (
+      pile: PileLocation,
+      cardIndexInPile: number,
+      state: GameState
+    ): { x: number; y: number } => {
+      if (pile.type === 'stock') {
+        return {
+          x: stockLayoutRef.current.x,
+          y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        };
+      }
+
+      if (pile.type === 'waste') {
+        const effectiveCount = Math.max(
+          1,
+          cardIndexInPile !== undefined && cardIndexInPile >= 0 ? cardIndexInPile + 1 : state.waste.length
+        );
+        const visibleCount =
+          state.drawCount === 3 ? Math.min(3, effectiveCount) : Math.min(1, effectiveCount);
+        const hOffset = Math.max(0, visibleCount - 1) * fanOffset;
+        return {
+          x: wasteLayoutRef.current.x + hOffset,
+          y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        };
+      }
+
+      if (pile.type === 'foundation') {
+        const fLayout = foundationLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
+        return {
+          x: foundationsRowLayoutRef.current.x + fLayout.x,
+          y: topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y,
+        };
+      }
+
+      // Tableau column
+      const tLayout = tableauLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
+      const col = state.tableau[pile.index] ?? [];
+      let vertOffset = 0;
+      const limit = Math.min(cardIndexInPile, col.length);
+      for (let i = 0; i < limit; i++) {
+        vertOffset += col[i].faceUp ? upOffset : downOffset;
+      }
+
       return {
-        x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        x: tableauRowLayoutRef.current.x + tLayout.x,
+        y: tableauRowLayoutRef.current.y + tLayout.y + vertOffset,
       };
-    }
-
-    if (pile.type === 'waste') {
-      return {
-        x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
-      };
-    }
-
-    if (pile.type === 'foundation') {
-      const fLayout = foundationLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
-      return {
-        x: foundationsRowLayoutRef.current.x + fLayout.x,
-        y: topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y,
-      };
-    }
-
-    // Tableau column
-    const tLayout = tableauLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
-    const col = state.tableau[pile.index] ?? [];
-    let vertOffset = 0;
-    const limit = Math.min(cardIndexInPile, col.length);
-    for (let i = 0; i < limit; i++) {
-      vertOffset += col[i].faceUp ? upOffset : downOffset;
-    }
-
-    return {
-      x: tableauRowLayoutRef.current.x + tLayout.x,
-      y: tableauRowLayoutRef.current.y + tLayout.y + vertOffset,
-    };
-  };
+    },
+    [fanOffset, upOffset, downOffset]
+  );
 
   // Animate and execute move
   const executeMoveWithAnimation = (
@@ -348,6 +384,183 @@ export const GameScreen: React.FC = () => {
 
     return true;
   };
+
+  // Find valid drop target under drop point
+  const findDropTarget = useCallback(
+    (
+      cards: Card[],
+      from: PileLocation,
+      dropX: number,
+      dropY: number
+    ): PileLocation | null => {
+      const leadCard = cards[0];
+      const dropCenterX = dropX + cardWidth / 2;
+      const dropCenterY = dropY + cardHeight / 2;
+
+      // 1. Check Foundations if dragging a single card
+      if (cards.length === 1) {
+        let bestFoundation: { index: number; dist: number } | null = null;
+        for (let f = 0; f < gameState.foundations.length; f++) {
+          if (from.type === 'foundation' && from.index === f) continue;
+          const fLayout = foundationLayoutsRef.current.get(f) ?? { x: 0, y: 0 };
+          const fx = foundationsRowLayoutRef.current.x + fLayout.x;
+          const fy = topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y;
+
+          const inBounds =
+            dropCenterX >= fx - 15 &&
+            dropCenterX <= fx + cardWidth + 15 &&
+            dropCenterY >= fy - 15 &&
+            dropCenterY <= fy + cardHeight + 40;
+
+          if (inBounds && canPlaceOnFoundation(leadCard, gameState.foundations[f], f)) {
+            const fCenterX = fx + cardWidth / 2;
+            const dist = Math.abs(dropCenterX - fCenterX);
+            if (!bestFoundation || dist < bestFoundation.dist) {
+              bestFoundation = { index: f, dist };
+            }
+          }
+        }
+
+        if (bestFoundation) {
+          return { type: 'foundation', index: bestFoundation.index };
+        }
+      }
+
+      // 2. Check Tableau columns
+      let bestTableau: { index: number; dist: number } | null = null;
+      for (let t = 0; t < gameState.tableau.length; t++) {
+        if (from.type === 'tableau' && from.index === t) continue;
+        const tLayout = tableauLayoutsRef.current.get(t) ?? { x: 0, y: 0 };
+        const tx = tableauRowLayoutRef.current.x + tLayout.x;
+        const ty = tableauRowLayoutRef.current.y + tLayout.y;
+
+        const col = gameState.tableau[t] ?? [];
+        const colHeight = Math.max(cardHeight, (col.length - 1) * downOffset + cardHeight + 60);
+
+        const inBounds =
+          dropCenterX >= tx - gap &&
+          dropCenterX <= tx + cardWidth + gap &&
+          dropCenterY >= ty - 30 &&
+          dropCenterY <= ty + colHeight + 80;
+
+        if (inBounds && canPlaceOnTableau(leadCard, col, false)) {
+          const colCenterX = tx + cardWidth / 2;
+          const dist = Math.abs(dropCenterX - colCenterX);
+          if (!bestTableau || dist < bestTableau.dist) {
+            bestTableau = { index: t, dist };
+          }
+        }
+      }
+
+      if (bestTableau) {
+        return { type: 'tableau', index: bestTableau.index };
+      }
+
+      return null;
+    },
+    [gameState, cardWidth, cardHeight, gap, downOffset]
+  );
+
+  // Drag-and-drop handlers
+  const handleDragStart = useCallback(
+    (from: PileLocation, card: Card, cardIndex: number) => {
+      if (isAnimatingRef.current) return;
+      setSelectedCards(null);
+
+      let movingCards: Card[] = [];
+      if (from.type === 'tableau') {
+        const col = gameState.tableau[from.index] ?? [];
+        movingCards = col.slice(cardIndex);
+      } else if (from.type === 'waste') {
+        const top = gameState.waste[gameState.waste.length - 1];
+        if (top) movingCards = [top];
+      } else if (from.type === 'foundation') {
+        const pile = gameState.foundations[from.index] ?? [];
+        const top = pile[pile.length - 1];
+        if (top) movingCards = [top];
+      }
+
+      if (movingCards.length === 0) return;
+
+      const startPos = getPileCardPosition(from, cardIndex, gameState);
+      dragPan.setValue({ x: 0, y: 0 });
+
+      setDraggedCard({
+        from,
+        cards: movingCards,
+        cardIds: movingCards.map((c) => c.id),
+        startPos,
+      });
+    },
+    [gameState, getPileCardPosition, dragPan]
+  );
+
+  const handleDragMove = useCallback(
+    (dx: number, dy: number) => {
+      dragPan.setValue({ x: dx, y: dy });
+    },
+    [dragPan]
+  );
+
+  const handleDragEnd = useCallback(
+    (dx: number, dy: number, isDrag: boolean) => {
+      if (!dragState) return;
+
+      if (!isDrag) {
+        setDraggedCard(null);
+        return;
+      }
+
+      const dropX = dragState.startPos.x + dx;
+      const dropY = dragState.startPos.y + dy;
+
+      const target = findDropTarget(dragState.cards, dragState.from, dropX, dropY);
+
+      if (target) {
+        const nextState = moveCards(gameState, dragState.from, target, dragState.cardIds);
+        if (nextState) {
+          playCardMoveSound();
+          let destCardIndex = 0;
+          if (target.type === 'tableau') {
+            destCardIndex = gameState.tableau[target.index].length;
+          } else if (target.type === 'foundation') {
+            destCardIndex = gameState.foundations[target.index].length;
+          }
+          const targetPos = getPileCardPosition(target, destCardIndex, gameState);
+
+          isAnimatingRef.current = true;
+          Animated.timing(dragPan, {
+            toValue: {
+              x: targetPos.x - dragState.startPos.x,
+              y: targetPos.y - dragState.startPos.y,
+            },
+            duration: 120,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false,
+          }).start(() => {
+            setGameState(nextState);
+            setDraggedCard(null);
+            setSelectedCards(null);
+            isAnimatingRef.current = false;
+          });
+          return;
+        }
+      }
+
+      // Snap back if invalid drop
+      isAnimatingRef.current = true;
+      Animated.timing(dragPan, {
+        toValue: { x: 0, y: 0 },
+        duration: 160,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setDraggedCard(null);
+        isAnimatingRef.current = false;
+      });
+    },
+    [dragState, gameState, findDropTarget, getPileCardPosition, dragPan]
+  );
 
   // Stock press with draw animation
   const handleStockPress = useCallback(() => {
@@ -572,8 +785,10 @@ export const GameScreen: React.FC = () => {
         }
 
         // If move was not valid:
-        // If foundation is empty, clear selection
+        // If foundation is empty, display hint and clear selection
         if (!topCard) {
+          const expectedSuit = FOUNDATION_SUITS[fIndex % FOUNDATION_SUITS.length];
+          showHint(`This foundation is reserved for ${expectedSuit}.`);
           setSelectedCards(null);
           return;
         }
@@ -603,19 +818,30 @@ export const GameScreen: React.FC = () => {
     [gameState, selectedCards, settings.autoMoveOnTap]
   );
 
+  const handleFoundation0Press = useCallback(() => handleFoundationPress(0), [handleFoundationPress]);
+  const handleFoundation1Press = useCallback(() => handleFoundationPress(1), [handleFoundationPress]);
+  const handleFoundation2Press = useCallback(() => handleFoundationPress(2), [handleFoundationPress]);
+  const handleFoundation3Press = useCallback(() => handleFoundationPress(3), [handleFoundationPress]);
+  const foundationPressHandlers = useMemo(
+    () => [handleFoundation0Press, handleFoundation1Press, handleFoundation2Press, handleFoundation3Press],
+    [handleFoundation0Press, handleFoundation1Press, handleFoundation2Press, handleFoundation3Press]
+  );
+
   // Auto-complete runner with animation
   useEffect(() => {
-    if (gameState.status === 'playing' && canAutoComplete(gameState) && !isAnimatingRef.current) {
+    const currentState = latestGameStateRef.current;
+    if (currentState.status === 'playing' && canAutoComplete(currentState) && !isAnimatingRef.current) {
       const timer = setTimeout(() => {
-        const next = autoCompleteStep(gameState);
-        if (next && next.history.length > gameState.history.length) {
+        const activeState = latestGameStateRef.current;
+        const next = autoCompleteStep(activeState);
+        if (next && next.history.length > activeState.history.length) {
           const lastMove = next.history[next.history.length - 1];
           executeMoveWithAnimation(lastMove.from, lastMove.to, lastMove.cardIds);
         }
       }, 160);
       return () => clearTimeout(timer);
     }
-  }, [gameState]);
+  }, [gameState.id, gameState.history, gameState.status]);
 
   // Start new game
   const handleNewGame = useCallback(() => {
@@ -653,13 +879,161 @@ export const GameScreen: React.FC = () => {
     }
   }, [settings]);
 
-  // Undo move
+  // Undo move with animation
   const handleUndo = useCallback(() => {
     if (isAnimatingRef.current) return;
+    if (gameState.history.length === 0) return;
+
     setSelectedCards(null);
+
+    const lastMove = gameState.history[gameState.history.length - 1];
+    const nextState = undo(gameState);
+
+    // Case 1: Undo draw from stock to waste (return drawn cards to stock)
+    if (lastMove.from.type === 'stock' && lastMove.to.type === 'waste') {
+      const count = lastMove.cardIds.length;
+      const cardsToAnimate = gameState.waste.slice(-count);
+      const allUndoneWasteIds = cardsToAnimate.map((c) => c.id);
+
+      const startPos = {
+        x: wasteLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      };
+      const endPos = {
+        x: stockLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      };
+
+      isAnimatingRef.current = true;
+      playDealSound();
+      setAnimatingCard({
+        cards: cardsToAnimate,
+        startX: startPos.x,
+        startY: startPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        hiddenCardIds: allUndoneWasteIds,
+        direction: 'horizontal',
+        isReset: true,
+      });
+
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setGameState(nextState);
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+      });
+      return;
+    }
+
+    // Case 2: Undo stock recycle (waste -> stock)
+    if (lastMove.from.type === 'waste' && lastMove.to.type === 'stock') {
+      const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.stock.length);
+      const cardsToAnimate = gameState.stock.slice(0, count).map((c) => ({ ...c, faceUp: true }));
+
+      const startPos = {
+        x: stockLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      };
+      const endPos = {
+        x: wasteLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      };
+
+      isAnimatingRef.current = true;
+      playResetSound();
+      setAnimatingCard({
+        cards: cardsToAnimate,
+        startX: startPos.x,
+        startY: startPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        hiddenCardIds: [],
+        direction: 'horizontal',
+      });
+
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setGameState(nextState);
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+      });
+      return;
+    }
+
+    // Case 3: Undo move between piles (tableau, foundation, waste)
+    let movingCards: Card[] = [];
+    let sourceCardIndex = 0;
+
+    if (lastMove.to.type === 'tableau') {
+      const col = gameState.tableau[lastMove.to.index];
+      const count = lastMove.cardIds.length;
+      sourceCardIndex = Math.max(0, col.length - count);
+      movingCards = col.slice(sourceCardIndex);
+    } else if (lastMove.to.type === 'foundation') {
+      const f = gameState.foundations[lastMove.to.index];
+      sourceCardIndex = Math.max(0, f.length - 1);
+      if (f.length > 0) {
+        movingCards = [f[sourceCardIndex]];
+      }
+    } else if (lastMove.to.type === 'waste') {
+      sourceCardIndex = Math.max(0, gameState.waste.length - 1);
+      if (gameState.waste.length > 0) {
+        movingCards = [gameState.waste[sourceCardIndex]];
+      }
+    }
+
+    if (movingCards.length === 0) {
+      playCardMoveSound();
+      setGameState(nextState);
+      return;
+    }
+
+    let destCardIndex = 0;
+    if (lastMove.from.type === 'tableau') {
+      destCardIndex = gameState.tableau[lastMove.from.index].length;
+    } else if (lastMove.from.type === 'foundation') {
+      destCardIndex = gameState.foundations[lastMove.from.index].length;
+    } else if (lastMove.from.type === 'waste') {
+      destCardIndex = gameState.waste.length;
+    }
+
+    const startPos = getPileCardPosition(lastMove.to, sourceCardIndex, gameState);
+    const endPos = getPileCardPosition(lastMove.from, destCardIndex, gameState);
+
+    isAnimatingRef.current = true;
     playCardMoveSound();
-    setGameState((prev) => undo(prev));
-  }, []);
+    setAnimatingCard({
+      cards: movingCards,
+      startX: startPos.x,
+      startY: startPos.y,
+      endX: endPos.x,
+      endY: endPos.y,
+      hiddenCardIds: lastMove.cardIds,
+    });
+
+    animProgress.setValue(0);
+    Animated.timing(animProgress, {
+      toValue: 1,
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => {
+      setGameState(nextState);
+      setAnimatingCard(null);
+      isAnimatingRef.current = false;
+    });
+  }, [gameState]);
 
   // Check if selected card is King (for highlighting empty columns)
   const isSelectedKing = (() => {
@@ -681,7 +1055,7 @@ export const GameScreen: React.FC = () => {
     return false;
   })();
 
-  const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : [];
+  const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : dragState ? dragState.cardIds : EMPTY_CARD_IDS;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -744,6 +1118,9 @@ export const GameScreen: React.FC = () => {
                   selectedCards?.from.type === 'waste' ? selectedCards.cardIds[0] : null
                 }
                 hiddenCardIds={hiddenIds}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={handleDragEnd}
               />
             </View>
 
@@ -773,13 +1150,16 @@ export const GameScreen: React.FC = () => {
                     cards={pile}
                     width={cardWidth}
                     height={cardHeight}
-                    onPress={() => handleFoundationPress(idx)}
+                    onPress={foundationPressHandlers[idx]}
                     selectedCardId={
                       selectedCards?.from.type === 'foundation' && selectedCards.from.index === idx
                         ? selectedCards.cardIds[0]
                         : null
                     }
                     hiddenCardIds={hiddenIds}
+                    onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
+                    onDragEnd={handleDragEnd}
                   />
                 </View>
               ))}
@@ -815,10 +1195,13 @@ export const GameScreen: React.FC = () => {
                     cards={col}
                     cardWidth={cardWidth}
                     cardHeight={cardHeight}
-                    selectedCardIds={isSelectedCol ? selectedCards.cardIds : []}
+                    selectedCardIds={isSelectedCol ? selectedCards.cardIds : EMPTY_CARD_IDS}
                     hiddenCardIds={hiddenIds}
                     onCardPress={handleTableauCardPress}
                     onEmptyColumnPress={handleEmptyColumnPress}
+                    onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
+                    onDragEnd={handleDragEnd}
                   />
                 </View>
               );
@@ -935,6 +1318,41 @@ export const GameScreen: React.FC = () => {
                   </Animated.View>
                 );
               })}
+            </Animated.View>
+          )}
+
+          {/* Floating Dragged Card Overlay */}
+          {dragState && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.floatingAnimatedContainer,
+                {
+                  left: Animated.add(dragState.startPos.x, dragPan.x),
+                  top: Animated.add(dragState.startPos.y, dragPan.y),
+                  zIndex: 10000,
+                  transform: [{ scale: 1.05 }],
+                },
+              ]}
+            >
+              {dragState.cards.map((c, i) => (
+                <View
+                  key={c.id}
+                  style={{
+                    position: 'absolute',
+                    top: i * upOffset,
+                    left: 0,
+                    zIndex: i + 1,
+                  }}
+                >
+                  <CardView
+                    card={c}
+                    width={cardWidth}
+                    height={cardHeight}
+                    isDragging
+                  />
+                </View>
+              ))}
             </Animated.View>
           )}
         </View>

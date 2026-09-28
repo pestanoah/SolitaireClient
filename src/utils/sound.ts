@@ -1,7 +1,28 @@
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
 let audioCtx: AudioContext | null = null;
+export let cachedNoiseBuffer: AudioBuffer | null = null;
 let soundEnabled = true;
+
+/**
+ * Returns a cached 1-second white noise AudioBuffer for the AudioContext,
+ * initialized once or lazily when needed.
+ */
+export function getCachedNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  if (!cachedNoiseBuffer || cachedNoiseBuffer.sampleRate !== ctx.sampleRate) {
+    const sampleRate = ctx.sampleRate;
+    cachedNoiseBuffer = ctx.createBuffer(1, sampleRate, sampleRate);
+    const output = cachedNoiseBuffer.getChannelData(0);
+    for (let i = 0; i < sampleRate; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+  }
+  return cachedNoiseBuffer;
+}
+
+export function resetCachedNoiseBufferForTesting(): void {
+  cachedNoiseBuffer = null;
+}
 
 /**
  * Initializes and resumes AudioContext on user interaction (Web only).
@@ -15,6 +36,7 @@ function getWebAudioContext(): AudioContext | null {
         window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtxClass) {
         audioCtx = new AudioCtxClass();
+        getCachedNoiseBuffer(audioCtx);
       }
     }
     if (audioCtx && audioCtx.state === 'suspended') {
@@ -29,7 +51,7 @@ function getWebAudioContext(): AudioContext | null {
 /**
  * Synthesizes a resonant card-sliding "shoooooop" friction sound using Web Audio API.
  */
-function playWebCardSlide(
+export function playWebCardSlide(
   ctx: AudioContext,
   startTime: number,
   startFreq: number,
@@ -39,12 +61,17 @@ function playWebCardSlide(
   q: number = 2.8
 ): void {
   try {
-    const sampleRate = ctx.sampleRate;
-    const bufferSize = Math.max(1, Math.floor(sampleRate * duration));
-    const noiseBuffer = ctx.createBuffer(1, bufferSize, sampleRate);
-    const output = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
+    let noiseBuffer: AudioBuffer;
+    if (duration <= 1) {
+      noiseBuffer = getCachedNoiseBuffer(ctx);
+    } else {
+      const sampleRate = ctx.sampleRate;
+      const bufferSize = Math.max(1, Math.floor(sampleRate * duration));
+      noiseBuffer = ctx.createBuffer(1, bufferSize, sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
     }
 
     const whiteNoise = ctx.createBufferSource();
