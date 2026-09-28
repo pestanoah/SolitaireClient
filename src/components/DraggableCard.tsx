@@ -18,7 +18,7 @@ interface DraggableCardProps {
   children: React.ReactNode;
 }
 
-export const DraggableCard: React.FC<DraggableCardProps> = ({
+export const DraggableCard: React.FC<DraggableCardProps> = React.memo(({
   card,
   from,
   cardIndex,
@@ -117,7 +117,7 @@ export const DraggableCard: React.FC<DraggableCardProps> = ({
       {children}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   draggable: {

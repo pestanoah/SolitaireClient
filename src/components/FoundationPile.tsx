@@ -24,7 +24,7 @@ const SUIT_SYMBOLS: Record<Suit, string> = {
   clubs: '♣',
 };
 
-export const FoundationPile: React.FC<FoundationPileProps> = ({
+export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
   index,
   cards,
   width,
@@ -106,7 +106,7 @@ export const FoundationPile: React.FC<FoundationPileProps> = ({
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

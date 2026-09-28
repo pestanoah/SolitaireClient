@@ -19,7 +19,7 @@ interface StockWasteProps {
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
 }
 
-export const StockWaste: React.FC<StockWasteProps> = ({
+export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   stock,
   waste,
   drawCount,
@@ -146,7 +146,7 @@ export const StockWaste: React.FC<StockWasteProps> = ({
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

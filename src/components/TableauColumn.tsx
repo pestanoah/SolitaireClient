@@ -18,7 +18,7 @@ interface TableauColumnProps {
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
 }
 
-export const TableauColumn: React.FC<TableauColumnProps> = ({
+export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
   columnIndex,
   cards,
   cardWidth,
@@ -102,7 +102,7 @@ export const TableauColumn: React.FC<TableauColumnProps> = ({
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   columnContainer: {
