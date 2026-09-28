@@ -37,6 +37,12 @@ import {
   saveGameState,
   saveSettings,
 } from '../storage/storage';
+import {
+  playCardMoveSound,
+  playDealSound,
+  playResetSound,
+  setSoundEnabled,
+} from '../utils/sound';
 
 interface AnimatingCardData {
   cards: Card[];
@@ -45,6 +51,8 @@ interface AnimatingCardData {
   endX: number;
   endY: number;
   hiddenCardIds: string[];
+  direction?: 'horizontal' | 'vertical';
+  isReset?: boolean;
 }
 
 export const GameScreen: React.FC = () => {
@@ -102,6 +110,7 @@ export const GameScreen: React.FC = () => {
 
   const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
   const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
+  const fanOffset = Math.floor(cardWidth * 0.28);
 
   // Persistence and Hydration tracking
   const isHydratedRef = useRef(false);
@@ -116,6 +125,7 @@ export const GameScreen: React.FC = () => {
       const loadedSettings = await loadSettings();
       if (!isMounted) return;
       setSettings(loadedSettings);
+      setSoundEnabled(loadedSettings.soundEnabled !== false);
 
       const loadedStats = await loadStats();
       if (!isMounted) return;
@@ -277,6 +287,8 @@ export const GameScreen: React.FC = () => {
     const nextState = moveCards(gameState, from, to, cardIds);
     if (!nextState) return false;
 
+    playCardMoveSound();
+
     // Determine moving cards and initial index
     let movingCards: Card[] = [];
     let sourceCardIndex = 0;
@@ -343,8 +355,47 @@ export const GameScreen: React.FC = () => {
     setSelectedCards(null);
 
     if (gameState.stock.length === 0) {
-      // Recycle waste to stock
-      setGameState((prev) => drawCards(prev));
+      if (gameState.waste.length === 0) return;
+
+      // Recycle waste to stock with animation
+      const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.waste.length);
+      const cardsToAnimate = gameState.waste.slice(-count);
+      const allWasteIds = gameState.waste.map((c) => c.id);
+      const nextState = drawCards(gameState);
+
+      const startPos = {
+        x: wasteLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      };
+      const endPos = {
+        x: stockLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      };
+
+      isAnimatingRef.current = true;
+      playResetSound();
+      setAnimatingCard({
+        cards: cardsToAnimate,
+        startX: startPos.x,
+        startY: startPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        hiddenCardIds: allWasteIds,
+        direction: 'horizontal',
+        isReset: true,
+      });
+
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setGameState(nextState);
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+      });
       return;
     }
 
@@ -362,6 +413,7 @@ export const GameScreen: React.FC = () => {
     };
 
     isAnimatingRef.current = true;
+    playDealSound();
     setAnimatingCard({
       cards: drawnCards,
       startX: startPos.x,
@@ -369,6 +421,7 @@ export const GameScreen: React.FC = () => {
       endX: endPos.x,
       endY: endPos.y,
       hiddenCardIds: drawnCards.map((c) => c.id),
+      direction: 'horizontal',
     });
 
     animProgress.setValue(0);
@@ -468,6 +521,9 @@ export const GameScreen: React.FC = () => {
         } else if (selectedCards.from.type === 'tableau') {
           const col = gameState.tableau[selectedCards.from.index];
           leadCard = col.find((c) => c.id === leadCardId);
+        } else if (selectedCards.from.type === 'foundation') {
+          const f = gameState.foundations[selectedCards.from.index];
+          leadCard = f[f.length - 1];
         }
 
         if (leadCard && leadCard.rank !== 13) {
@@ -493,7 +549,18 @@ export const GameScreen: React.FC = () => {
     (fIndex: number) => {
       if (isAnimatingRef.current) return;
 
+      const pile = gameState.foundations[fIndex];
+      const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
+
+      // 1. If we already have a selection
       if (selectedCards) {
+        // Tapping the same foundation card toggles/deselects it
+        if (selectedCards.from.type === 'foundation' && selectedCards.from.index === fIndex) {
+          setSelectedCards(null);
+          return;
+        }
+
+        // Try to move the currently selected card(s) onto this foundation pile
         const success = executeMoveWithAnimation(
           selectedCards.from,
           { type: 'foundation', index: fIndex },
@@ -501,10 +568,39 @@ export const GameScreen: React.FC = () => {
         );
         if (success) {
           setSelectedCards(null);
+          return;
+        }
+
+        // If move was not valid:
+        // If foundation is empty, clear selection
+        if (!topCard) {
+          setSelectedCards(null);
+          return;
         }
       }
+
+      // 2. Either no card was selected or previous selection couldn't move here
+      if (topCard) {
+        // Tap-to-move smart placement down from foundation to tableau
+        if (settings.autoMoveOnTap) {
+          const smart = findSmartMove(gameState, topCard.id);
+          if (smart) {
+            const success = executeMoveWithAnimation(smart.from, smart.to, smart.cardIds);
+            if (success) {
+              setSelectedCards(null);
+              return;
+            }
+          }
+        }
+
+        // Fallback to selecting the foundation card
+        setSelectedCards({
+          from: { type: 'foundation', index: fIndex },
+          cardIds: [topCard.id],
+        });
+      }
     },
-    [gameState, selectedCards]
+    [gameState, selectedCards, settings.autoMoveOnTap]
   );
 
   // Auto-complete runner with animation
@@ -526,6 +622,7 @@ export const GameScreen: React.FC = () => {
     setSelectedCards(null);
     setAnimatingCard(null);
     isAnimatingRef.current = false;
+    playDealSound();
     const newGame = dealKlondike(settings.drawCount);
     setGameState(newGame);
   }, [settings.drawCount]);
@@ -539,14 +636,28 @@ export const GameScreen: React.FC = () => {
     setSelectedCards(null);
     setAnimatingCard(null);
     isAnimatingRef.current = false;
+    playDealSound();
     const newGame = dealKlondike(nextCount as 1 | 3);
     setGameState(newGame);
+  }, [settings]);
+
+  // Toggle Sound Effects (Mute / Unmute)
+  const handleToggleSound = useCallback(() => {
+    const nextSound = settings.soundEnabled === false ? true : false;
+    const nextSettings = { ...settings, soundEnabled: nextSound };
+    setSettings(nextSettings);
+    saveSettings(nextSettings);
+    setSoundEnabled(nextSound);
+    if (nextSound) {
+      playCardMoveSound();
+    }
   }, [settings]);
 
   // Undo move
   const handleUndo = useCallback(() => {
     if (isAnimatingRef.current) return;
     setSelectedCards(null);
+    playCardMoveSound();
     setGameState((prev) => undo(prev));
   }, []);
 
@@ -563,6 +674,10 @@ export const GameScreen: React.FC = () => {
       const c = col.find((item) => item.id === leadId);
       return c?.rank === 13;
     }
+    if (selectedCards.from.type === 'foundation') {
+      const f = gameState.foundations[selectedCards.from.index];
+      return f[f.length - 1]?.rank === 13;
+    }
     return false;
   })();
 
@@ -576,9 +691,11 @@ export const GameScreen: React.FC = () => {
         elapsedSeconds={gameState.elapsedSeconds}
         drawCount={gameState.drawCount}
         canUndo={gameState.history.length > 0}
+        soundEnabled={settings.soundEnabled !== false}
         onUndo={handleUndo}
         onNewGame={handleNewGame}
         onToggleDrawCount={handleToggleDrawCount}
+        onToggleSound={handleToggleSound}
         onOpenStats={() => setStatsVisible(true)}
       />
 
@@ -657,6 +774,12 @@ export const GameScreen: React.FC = () => {
                     width={cardWidth}
                     height={cardHeight}
                     onPress={() => handleFoundationPress(idx)}
+                    selectedCardId={
+                      selectedCards?.from.type === 'foundation' && selectedCards.from.index === idx
+                        ? selectedCards.cardIds[0]
+                        : null
+                    }
+                    hiddenCardIds={hiddenIds}
                   />
                 </View>
               ))}
@@ -728,24 +851,90 @@ export const GameScreen: React.FC = () => {
                 },
               ]}
             >
-              {animatingCard.cards.map((c, i) => (
-                <View
-                  key={c.id}
-                  style={{
-                    position: 'absolute',
-                    top: i * upOffset,
-                    left: 0,
-                    zIndex: i + 1,
-                  }}
-                >
-                  <CardView
-                    card={c}
-                    width={cardWidth}
-                    height={cardHeight}
-                    isDragging
-                  />
-                </View>
-              ))}
+              {animatingCard.cards.map((c, i) => {
+                const isHorizontal = animatingCard.direction === 'horizontal';
+                const isReset = animatingCard.isReset === true;
+                const animatedLeft = isHorizontal
+                  ? animProgress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: isReset ? [i * fanOffset, 0] : [0, i * fanOffset],
+                    })
+                  : 0;
+                const animatedTop = isHorizontal ? 0 : i * upOffset;
+
+                return (
+                  <Animated.View
+                    key={c.id}
+                    style={{
+                      position: 'absolute',
+                      top: animatedTop,
+                      left: animatedLeft,
+                      zIndex: i + 1,
+                    }}
+                  >
+                    {isReset ? (
+                      <Animated.View
+                        style={{
+                          width: cardWidth,
+                          height: cardHeight,
+                          transform: [
+                            {
+                              rotateY: animProgress.interpolate({
+                                inputRange: [0, 0.5, 1],
+                                outputRange: ['0deg', '90deg', '0deg'],
+                              }),
+                            },
+                          ],
+                        }}
+                      >
+                        <Animated.View
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            opacity: animProgress.interpolate({
+                              inputRange: [0, 0.49, 0.5, 1],
+                              outputRange: [1, 1, 0, 0],
+                            }),
+                          }}
+                        >
+                          <CardView
+                            card={c}
+                            width={cardWidth}
+                            height={cardHeight}
+                            isDragging
+                          />
+                        </Animated.View>
+                        <Animated.View
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            opacity: animProgress.interpolate({
+                              inputRange: [0, 0.5, 0.51, 1],
+                              outputRange: [0, 0, 1, 1],
+                            }),
+                          }}
+                        >
+                          <CardView
+                            card={{ ...c, faceUp: false }}
+                            width={cardWidth}
+                            height={cardHeight}
+                            isDragging
+                          />
+                        </Animated.View>
+                      </Animated.View>
+                    ) : (
+                      <CardView
+                        card={c}
+                        width={cardWidth}
+                        height={cardHeight}
+                        isDragging
+                      />
+                    )}
+                  </Animated.View>
+                );
+              })}
             </Animated.View>
           )}
         </View>

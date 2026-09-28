@@ -17,6 +17,7 @@ const DEFAULT_STATS: PlayerStats = {
 const DEFAULT_SETTINGS: UserSettings = {
   drawCount: 1,
   autoMoveOnTap: true,
+  soundEnabled: true,
 };
 
 export async function saveGameState(state: GameState): Promise<void> {

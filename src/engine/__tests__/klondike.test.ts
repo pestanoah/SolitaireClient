@@ -231,4 +231,65 @@ describe('State Transitions & Gameplay', () => {
     expect(totalFoundations).toBe(1);
     expect(nextState!.tableau[0].length).toBe(0);
   });
+
+  test('moveCards transfers card from foundation back down to tableau with penalty and undo restores it', () => {
+    let state = dealKlondike(1);
+    const red5: Card = { id: 'red_5', suit: 'hearts', rank: 5, faceUp: true };
+    const black6: Card = { id: 'black_6', suit: 'spades', rank: 6, faceUp: true };
+
+    state.foundations[0] = [
+      { id: 'h_1', suit: 'hearts', rank: 1, faceUp: true },
+      { id: 'h_2', suit: 'hearts', rank: 2, faceUp: true },
+      { id: 'h_3', suit: 'hearts', rank: 3, faceUp: true },
+      { id: 'h_4', suit: 'hearts', rank: 4, faceUp: true },
+      red5,
+    ];
+    state.tableau[2] = [black6];
+    state.score = 50;
+
+    const nextState = moveCards(
+      state,
+      { type: 'foundation', index: 0 },
+      { type: 'tableau', index: 2 },
+      ['red_5']
+    );
+
+    expect(nextState).not.toBeNull();
+    expect(nextState!.foundations[0].length).toBe(4);
+    expect(nextState!.foundations[0][3].id).toBe('h_4');
+    expect(nextState!.tableau[2].length).toBe(2);
+    expect(nextState!.tableau[2][1].id).toBe('red_5');
+    // Score penalty is -15 points
+    expect(nextState!.score).toBe(35);
+
+    // Undo restores the card back to foundation and restores score
+    const restored = undo(nextState!);
+    expect(restored.foundations[0].length).toBe(5);
+    expect(restored.foundations[0][4].id).toBe('red_5');
+    expect(restored.tableau[2].length).toBe(1);
+    expect(restored.tableau[2][0].id).toBe('black_6');
+    expect(restored.score).toBe(50);
+  });
+
+  test('findSmartMove finds legal tableau placement for card in foundation', () => {
+    let state = dealKlondike(1);
+    const red5: Card = { id: 'red_5', suit: 'hearts', rank: 5, faceUp: true };
+    const black6: Card = { id: 'black_6', suit: 'spades', rank: 6, faceUp: true };
+
+    state.foundations[1] = [red5];
+    state.tableau = [[], [], [], [], [], [], []];
+    state.tableau[4] = [black6];
+
+    const smart = findSmartMove(state, 'red_5');
+    expect(smart).not.toBeNull();
+    expect(smart!.from).toEqual({ type: 'foundation', index: 1 });
+    expect(smart!.to).toEqual({ type: 'tableau', index: 4 });
+    expect(smart!.cardIds).toEqual(['red_5']);
+
+    // If no valid tableau destination exists, returns null
+    state.tableau[4] = [{ id: 'red_6', suit: 'diamonds', rank: 6, faceUp: true }];
+    const noMove = findSmartMove(state, 'red_5');
+    expect(noMove).toBeNull();
+  });
 });
+

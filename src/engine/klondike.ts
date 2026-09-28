@@ -93,6 +93,7 @@ export function moveCards(
   allowAnyCardOnEmpty = false
 ): GameState | null {
   if (state.status === 'won' || cardIds.length === 0) return null;
+  if (from.type === to.type && from.index === to.index) return null;
 
   const { stock, waste, foundations, tableau } = clonePiles(state);
 
@@ -111,6 +112,7 @@ export function moveCards(
       return null;
     }
   } else if (from.type === 'foundation') {
+    if (cardIds.length !== 1) return null;
     const pile = foundations[from.index];
     if (pile.length === 0 || pile[pile.length - 1].id !== cardIds[0]) return null;
     sourceCards = [pile[pile.length - 1]];
@@ -226,10 +228,23 @@ export function findSmartMove(
     }
   }
 
+  // Also check foundations if card not found in waste or tableau
+  if (!from) {
+    for (let f = 0; f < state.foundations.length; f++) {
+      const pile = state.foundations[f];
+      if (pile.length > 0 && pile[pile.length - 1].id === cardId) {
+        from = { type: 'foundation', index: f };
+        card = pile[pile.length - 1];
+        cardIds = [card.id];
+        break;
+      }
+    }
+  }
+
   if (!from || !card) return null;
 
-  // Single card: try foundations first
-  if (cardIds.length === 1) {
+  // Single card: try foundations first (only if not already on a foundation)
+  if (from.type !== 'foundation' && cardIds.length === 1) {
     for (let f = 0; f < state.foundations.length; f++) {
       if (canPlaceOnFoundation(card, state.foundations[f])) {
         return {
