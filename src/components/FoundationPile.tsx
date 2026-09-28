@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Card, Suit } from '../engine/types';
+import { Card, FOUNDATION_SUITS, Suit } from '../engine/types';
 import { CardView } from './CardView';
 
 interface FoundationPileProps {
@@ -13,7 +13,6 @@ interface FoundationPileProps {
   hiddenCardIds?: string[];
 }
 
-const WATERMARK_SUITS: Suit[] = ['spades', 'hearts', 'diamonds', 'clubs'];
 const SUIT_SYMBOLS: Record<Suit, string> = {
   spades: '♠',
   hearts: '♥',
@@ -35,7 +34,7 @@ export const FoundationPile: React.FC<FoundationPileProps> = ({
   const isSelected = topCard ? topCard.id === selectedCardId : false;
   const isHidden = topCard ? hiddenCardIds.includes(topCard.id) : false;
   const isPrevHidden = previousCard ? hiddenCardIds.includes(previousCard.id) : false;
-  const suit = WATERMARK_SUITS[index % 4];
+  const suit = FOUNDATION_SUITS[index % 4];
   const isRed = suit === 'hearts' || suit === 'diamonds';
 
   return (

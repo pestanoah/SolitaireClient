@@ -1,4 +1,4 @@
-import { Card, GameState, MoveRecord, PileLocation } from './types';
+import { Card, FOUNDATION_SUITS, GameState, MoveRecord, PileLocation } from './types';
 import { canPlaceOnFoundation, canPlaceOnTableau, isGameWon } from './rules';
 
 /**
@@ -128,7 +128,7 @@ export function moveCards(
   } else if (to.type === 'foundation') {
     if (sourceCards.length !== 1) return null; // Foundations only accept 1 card at a time
     const targetPile = foundations[to.index];
-    if (!canPlaceOnFoundation(leadCard, targetPile)) return null;
+    if (!canPlaceOnFoundation(leadCard, targetPile, to.index)) return null;
   } else {
     return null; // Cannot move into waste or stock directly
   }
@@ -245,8 +245,22 @@ export function findSmartMove(
 
   // Single card: try foundations first (only if not already on a foundation)
   if (from.type !== 'foundation' && cardIds.length === 1) {
+    // 1. Try the foundation pile designated for the card's suit
+    const suitIndex = FOUNDATION_SUITS.indexOf(card.suit);
+    if (suitIndex >= 0 && suitIndex < state.foundations.length) {
+      if (canPlaceOnFoundation(card, state.foundations[suitIndex], suitIndex)) {
+        return {
+          from,
+          to: { type: 'foundation', index: suitIndex },
+          cardIds,
+        };
+      }
+    }
+
+    // 2. Check remaining foundation piles (for variants or multi-deck foundations)
     for (let f = 0; f < state.foundations.length; f++) {
-      if (canPlaceOnFoundation(card, state.foundations[f])) {
+      if (f === suitIndex) continue;
+      if (canPlaceOnFoundation(card, state.foundations[f], f)) {
         return {
           from,
           to: { type: 'foundation', index: f },
@@ -393,8 +407,23 @@ export function autoCompleteStep(state: GameState): GameState | null {
     const col = state.tableau[c];
     if (col.length === 0) continue;
     const topCard = col[col.length - 1];
+
+    // 1. Try designated foundation for card's suit
+    const suitIndex = FOUNDATION_SUITS.indexOf(topCard.suit);
+    if (
+      suitIndex >= 0 &&
+      suitIndex < state.foundations.length &&
+      canPlaceOnFoundation(topCard, state.foundations[suitIndex], suitIndex)
+    ) {
+      return moveCards(state, { type: 'tableau', index: c }, { type: 'foundation', index: suitIndex }, [
+        topCard.id,
+      ]);
+    }
+
+    // 2. Check remaining foundation piles
     for (let f = 0; f < state.foundations.length; f++) {
-      if (canPlaceOnFoundation(topCard, state.foundations[f])) {
+      if (f === suitIndex) continue;
+      if (canPlaceOnFoundation(topCard, state.foundations[f], f)) {
         return moveCards(state, { type: 'tableau', index: c }, { type: 'foundation', index: f }, [
           topCard.id,
         ]);

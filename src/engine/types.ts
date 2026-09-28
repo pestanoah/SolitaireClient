@@ -2,6 +2,8 @@ export type Suit = 'spades' | 'hearts' | 'diamonds' | 'clubs';
 export type CardColor = 'black' | 'red';
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
+export const FOUNDATION_SUITS: Suit[] = ['spades', 'hearts', 'diamonds', 'clubs'];
+
 /**
  * Derived helper: color is determined strictly by suit.
  * Hearts and Diamonds are red; Spades and Clubs are black.

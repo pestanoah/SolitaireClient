@@ -27,7 +27,7 @@ import {
   undo,
 } from '../engine/klondike';
 import { canAutoComplete } from '../engine/rules';
-import { Card, GameState, PileLocation, PlayerStats, UserSettings } from '../engine/types';
+import { Card, FOUNDATION_SUITS, GameState, PileLocation, PlayerStats, UserSettings } from '../engine/types';
 import {
   clearGameState,
   loadGameState,
@@ -572,8 +572,10 @@ export const GameScreen: React.FC = () => {
         }
 
         // If move was not valid:
-        // If foundation is empty, clear selection
+        // If foundation is empty, display hint and clear selection
         if (!topCard) {
+          const expectedSuit = FOUNDATION_SUITS[fIndex % FOUNDATION_SUITS.length];
+          showHint(`This foundation is reserved for ${expectedSuit}.`);
           setSelectedCards(null);
           return;
         }
