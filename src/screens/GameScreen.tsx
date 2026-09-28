@@ -247,8 +247,15 @@ export const GameScreen: React.FC = () => {
     }
 
     if (pile.type === 'waste') {
+      const effectiveCount = Math.max(
+        1,
+        cardIndexInPile !== undefined && cardIndexInPile >= 0 ? cardIndexInPile + 1 : state.waste.length
+      );
+      const visibleCount =
+        state.drawCount === 3 ? Math.min(3, effectiveCount) : Math.min(1, effectiveCount);
+      const hOffset = Math.max(0, visibleCount - 1) * fanOffset;
       return {
-        x: wasteLayoutRef.current.x,
+        x: wasteLayoutRef.current.x + hOffset,
         y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
       };
     }
@@ -655,13 +662,161 @@ export const GameScreen: React.FC = () => {
     }
   }, [settings]);
 
-  // Undo move
+  // Undo move with animation
   const handleUndo = useCallback(() => {
     if (isAnimatingRef.current) return;
+    if (gameState.history.length === 0) return;
+
     setSelectedCards(null);
+
+    const lastMove = gameState.history[gameState.history.length - 1];
+    const nextState = undo(gameState);
+
+    // Case 1: Undo draw from stock to waste (return drawn cards to stock)
+    if (lastMove.from.type === 'stock' && lastMove.to.type === 'waste') {
+      const count = lastMove.cardIds.length;
+      const cardsToAnimate = gameState.waste.slice(-count);
+      const allUndoneWasteIds = cardsToAnimate.map((c) => c.id);
+
+      const startPos = {
+        x: wasteLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      };
+      const endPos = {
+        x: stockLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      };
+
+      isAnimatingRef.current = true;
+      playDealSound();
+      setAnimatingCard({
+        cards: cardsToAnimate,
+        startX: startPos.x,
+        startY: startPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        hiddenCardIds: allUndoneWasteIds,
+        direction: 'horizontal',
+        isReset: true,
+      });
+
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setGameState(nextState);
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+      });
+      return;
+    }
+
+    // Case 2: Undo stock recycle (waste -> stock)
+    if (lastMove.from.type === 'waste' && lastMove.to.type === 'stock') {
+      const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.stock.length);
+      const cardsToAnimate = gameState.stock.slice(0, count).map((c) => ({ ...c, faceUp: true }));
+
+      const startPos = {
+        x: stockLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      };
+      const endPos = {
+        x: wasteLayoutRef.current.x,
+        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      };
+
+      isAnimatingRef.current = true;
+      playResetSound();
+      setAnimatingCard({
+        cards: cardsToAnimate,
+        startX: startPos.x,
+        startY: startPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        hiddenCardIds: [],
+        direction: 'horizontal',
+      });
+
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setGameState(nextState);
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+      });
+      return;
+    }
+
+    // Case 3: Undo move between piles (tableau, foundation, waste)
+    let movingCards: Card[] = [];
+    let sourceCardIndex = 0;
+
+    if (lastMove.to.type === 'tableau') {
+      const col = gameState.tableau[lastMove.to.index];
+      const count = lastMove.cardIds.length;
+      sourceCardIndex = Math.max(0, col.length - count);
+      movingCards = col.slice(sourceCardIndex);
+    } else if (lastMove.to.type === 'foundation') {
+      const f = gameState.foundations[lastMove.to.index];
+      sourceCardIndex = Math.max(0, f.length - 1);
+      if (f.length > 0) {
+        movingCards = [f[sourceCardIndex]];
+      }
+    } else if (lastMove.to.type === 'waste') {
+      sourceCardIndex = Math.max(0, gameState.waste.length - 1);
+      if (gameState.waste.length > 0) {
+        movingCards = [gameState.waste[sourceCardIndex]];
+      }
+    }
+
+    if (movingCards.length === 0) {
+      playCardMoveSound();
+      setGameState(nextState);
+      return;
+    }
+
+    let destCardIndex = 0;
+    if (lastMove.from.type === 'tableau') {
+      destCardIndex = gameState.tableau[lastMove.from.index].length;
+    } else if (lastMove.from.type === 'foundation') {
+      destCardIndex = gameState.foundations[lastMove.from.index].length;
+    } else if (lastMove.from.type === 'waste') {
+      destCardIndex = gameState.waste.length;
+    }
+
+    const startPos = getPileCardPosition(lastMove.to, sourceCardIndex, gameState);
+    const endPos = getPileCardPosition(lastMove.from, destCardIndex, gameState);
+
+    isAnimatingRef.current = true;
     playCardMoveSound();
-    setGameState((prev) => undo(prev));
-  }, []);
+    setAnimatingCard({
+      cards: movingCards,
+      startX: startPos.x,
+      startY: startPos.y,
+      endX: endPos.x,
+      endY: endPos.y,
+      hiddenCardIds: lastMove.cardIds,
+    });
+
+    animProgress.setValue(0);
+    Animated.timing(animProgress, {
+      toValue: 1,
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => {
+      setGameState(nextState);
+      setAnimatingCard(null);
+      isAnimatingRef.current = false;
+    });
+  }, [gameState]);
 
   // Check if selected card is King (for highlighting empty columns)
   const isSelectedKing = (() => {
