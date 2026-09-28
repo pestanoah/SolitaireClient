@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Card, FOUNDATION_SUITS, Suit } from '../engine/types';
+import { Card, FOUNDATION_SUITS, PileLocation, Suit } from '../engine/types';
 import { CardView } from './CardView';
+import { DraggableCard } from './DraggableCard';
 
 interface FoundationPileProps {
   index: number;
@@ -11,6 +12,9 @@ interface FoundationPileProps {
   onPress?: () => void;
   selectedCardId?: string | null;
   hiddenCardIds?: string[];
+  onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
+  onDragMove?: (dx: number, dy: number) => void;
+  onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
 }
 
 const SUIT_SYMBOLS: Record<Suit, string> = {
@@ -28,6 +32,9 @@ export const FoundationPile: React.FC<FoundationPileProps> = ({
   onPress,
   selectedCardId,
   hiddenCardIds = [],
+  onDragStart,
+  onDragMove,
+  onDragEnd,
 }) => {
   const previousCard = cards.length >= 2 ? cards[cards.length - 2] : null;
   const topCard = cards.length > 0 ? cards[cards.length - 1] : null;
@@ -38,13 +45,14 @@ export const FoundationPile: React.FC<FoundationPileProps> = ({
   const isRed = suit === 'hearts' || suit === 'diamonds';
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={onPress}
-      style={[styles.container, { width, height }]}
-    >
+    <View style={[styles.container, { width, height }]}>
       {/* Base empty slot watermark */}
-      <View style={[styles.emptySlot, { width, height }]}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={onPress}
+        disabled={topCard !== null}
+        style={[styles.emptySlot, { width, height }]}
+      >
         <Text
           style={[
             styles.watermark,
@@ -56,7 +64,7 @@ export const FoundationPile: React.FC<FoundationPileProps> = ({
         >
           {SUIT_SYMBOLS[suit]}
         </Text>
-      </View>
+      </TouchableOpacity>
 
       {/* Card immediately underneath top card (revealed while top card is animating away) */}
       {previousCard && (
@@ -78,15 +86,25 @@ export const FoundationPile: React.FC<FoundationPileProps> = ({
             { width, height, opacity: isHidden ? 0 : 1 },
           ]}
         >
-          <CardView
+          <DraggableCard
             card={topCard}
-            width={width}
-            height={height}
-            isSelected={isSelected}
-          />
+            from={{ type: 'foundation', index }}
+            cardIndex={cards.length - 1}
+            onPress={onPress}
+            onDragStart={onDragStart}
+            onDragMove={onDragMove}
+            onDragEnd={onDragEnd}
+          >
+            <CardView
+              card={topCard}
+              width={width}
+              height={height}
+              isSelected={isSelected}
+            />
+          </DraggableCard>
         </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 };
 

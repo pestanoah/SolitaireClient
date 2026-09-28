@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Card } from '../engine/types';
+import { Card, PileLocation } from '../engine/types';
 import { CardView } from './CardView';
+import { DraggableCard } from './DraggableCard';
 
 interface StockWasteProps {
   stock: Card[];
@@ -13,6 +14,9 @@ interface StockWasteProps {
   onWasteCardPress: (card: Card) => void;
   selectedCardId?: string | null;
   hiddenCardIds?: string[];
+  onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
+  onDragMove?: (dx: number, dy: number) => void;
+  onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
 }
 
 export const StockWaste: React.FC<StockWasteProps> = ({
@@ -25,6 +29,9 @@ export const StockWaste: React.FC<StockWasteProps> = ({
   onWasteCardPress,
   selectedCardId,
   hiddenCardIds = [],
+  onDragStart,
+  onDragMove,
+  onDragEnd,
 }) => {
   const hasStock = stock.length > 0;
   const hasWaste = waste.length > 0;
@@ -108,18 +115,31 @@ export const StockWaste: React.FC<StockWasteProps> = ({
                   },
                 ]}
               >
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  disabled={!isTop}
-                  onPress={() => isTop && onWasteCardPress(card)}
-                >
+                {isTop ? (
+                  <DraggableCard
+                    card={card}
+                    from={{ type: 'waste', index: 0 }}
+                    cardIndex={waste.length - 1}
+                    onPress={() => onWasteCardPress(card)}
+                    onDragStart={onDragStart}
+                    onDragMove={onDragMove}
+                    onDragEnd={onDragEnd}
+                  >
+                    <CardView
+                      card={card}
+                      width={cardWidth}
+                      height={cardHeight}
+                      isSelected={isSelected}
+                    />
+                  </DraggableCard>
+                ) : (
                   <CardView
                     card={card}
                     width={cardWidth}
                     height={cardHeight}
                     isSelected={isSelected}
                   />
-                </TouchableOpacity>
+                )}
               </View>
             );
           })}

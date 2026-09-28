@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Card } from '../engine/types';
+import { Card, PileLocation } from '../engine/types';
 import { CardView } from './CardView';
+import { DraggableCard } from './DraggableCard';
 
 interface TableauColumnProps {
   columnIndex: number;
@@ -12,6 +13,9 @@ interface TableauColumnProps {
   hiddenCardIds?: string[];
   onCardPress: (card: Card, colIndex: number) => void;
   onEmptyColumnPress?: (colIndex: number) => void;
+  onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
+  onDragMove?: (dx: number, dy: number) => void;
+  onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
 }
 
 export const TableauColumn: React.FC<TableauColumnProps> = ({
@@ -23,6 +27,9 @@ export const TableauColumn: React.FC<TableauColumnProps> = ({
   hiddenCardIds = [],
   onCardPress,
   onEmptyColumnPress,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
 }) => {
   const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
   const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
@@ -65,18 +72,30 @@ export const TableauColumn: React.FC<TableauColumnProps> = ({
                 },
               ]}
             >
-              <TouchableOpacity
-                activeOpacity={card.faceUp ? 0.75 : 1}
-                disabled={!card.faceUp}
-                onPress={() => card.faceUp && onCardPress(card, columnIndex)}
-              >
+              {card.faceUp ? (
+                <DraggableCard
+                  card={card}
+                  from={{ type: 'tableau', index: columnIndex }}
+                  cardIndex={idx}
+                  onPress={() => onCardPress(card, columnIndex)}
+                  onDragStart={onDragStart}
+                  onDragMove={onDragMove}
+                  onDragEnd={onDragEnd}
+                >
+                  <CardView
+                    card={card}
+                    width={cardWidth}
+                    height={cardHeight}
+                    isSelected={isSelected}
+                  />
+                </DraggableCard>
+              ) : (
                 <CardView
                   card={card}
                   width={cardWidth}
                   height={cardHeight}
-                  isSelected={isSelected}
                 />
-              </TouchableOpacity>
+              )}
             </View>
           );
         })

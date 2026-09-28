@@ -26,7 +26,7 @@ import {
   moveCards,
   undo,
 } from '../engine/klondike';
-import { canAutoComplete } from '../engine/rules';
+import { canAutoComplete, canPlaceOnFoundation, canPlaceOnTableau } from '../engine/rules';
 import { Card, FOUNDATION_SUITS, GameState, PileLocation, PlayerStats, UserSettings } from '../engine/types';
 import {
   clearGameState,
@@ -55,6 +55,13 @@ interface AnimatingCardData {
   isReset?: boolean;
 }
 
+interface DragState {
+  from: PileLocation;
+  cards: Card[];
+  cardIds: string[];
+  startPos: { x: number; y: number };
+}
+
 export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -78,6 +85,10 @@ export const GameScreen: React.FC = () => {
   // Animation State
   const animProgress = useRef(new Animated.Value(0)).current;
   const [animatingCard, setAnimatingCard] = useState<AnimatingCardData | null>(null);
+
+  // Drag State
+  const [dragState, setDraggedCard] = useState<DragState | null>(null);
+  const dragPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const isAnimatingRef = useRef(false);
 
   // Toast / Hint for empty column
@@ -355,6 +366,183 @@ export const GameScreen: React.FC = () => {
 
     return true;
   };
+
+  // Find valid drop target under drop point
+  const findDropTarget = useCallback(
+    (
+      cards: Card[],
+      from: PileLocation,
+      dropX: number,
+      dropY: number
+    ): PileLocation | null => {
+      const leadCard = cards[0];
+      const dropCenterX = dropX + cardWidth / 2;
+      const dropCenterY = dropY + cardHeight / 2;
+
+      // 1. Check Foundations if dragging a single card
+      if (cards.length === 1) {
+        let bestFoundation: { index: number; dist: number } | null = null;
+        for (let f = 0; f < gameState.foundations.length; f++) {
+          if (from.type === 'foundation' && from.index === f) continue;
+          const fLayout = foundationLayoutsRef.current.get(f) ?? { x: 0, y: 0 };
+          const fx = foundationsRowLayoutRef.current.x + fLayout.x;
+          const fy = topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y;
+
+          const inBounds =
+            dropCenterX >= fx - 15 &&
+            dropCenterX <= fx + cardWidth + 15 &&
+            dropCenterY >= fy - 15 &&
+            dropCenterY <= fy + cardHeight + 40;
+
+          if (inBounds && canPlaceOnFoundation(leadCard, gameState.foundations[f], f)) {
+            const fCenterX = fx + cardWidth / 2;
+            const dist = Math.abs(dropCenterX - fCenterX);
+            if (!bestFoundation || dist < bestFoundation.dist) {
+              bestFoundation = { index: f, dist };
+            }
+          }
+        }
+
+        if (bestFoundation) {
+          return { type: 'foundation', index: bestFoundation.index };
+        }
+      }
+
+      // 2. Check Tableau columns
+      let bestTableau: { index: number; dist: number } | null = null;
+      for (let t = 0; t < gameState.tableau.length; t++) {
+        if (from.type === 'tableau' && from.index === t) continue;
+        const tLayout = tableauLayoutsRef.current.get(t) ?? { x: 0, y: 0 };
+        const tx = tableauRowLayoutRef.current.x + tLayout.x;
+        const ty = tableauRowLayoutRef.current.y + tLayout.y;
+
+        const col = gameState.tableau[t] ?? [];
+        const colHeight = Math.max(cardHeight, (col.length - 1) * downOffset + cardHeight + 60);
+
+        const inBounds =
+          dropCenterX >= tx - gap &&
+          dropCenterX <= tx + cardWidth + gap &&
+          dropCenterY >= ty - 30 &&
+          dropCenterY <= ty + colHeight + 80;
+
+        if (inBounds && canPlaceOnTableau(leadCard, col, false)) {
+          const colCenterX = tx + cardWidth / 2;
+          const dist = Math.abs(dropCenterX - colCenterX);
+          if (!bestTableau || dist < bestTableau.dist) {
+            bestTableau = { index: t, dist };
+          }
+        }
+      }
+
+      if (bestTableau) {
+        return { type: 'tableau', index: bestTableau.index };
+      }
+
+      return null;
+    },
+    [gameState, cardWidth, cardHeight, gap, downOffset]
+  );
+
+  // Drag-and-drop handlers
+  const handleDragStart = useCallback(
+    (from: PileLocation, card: Card, cardIndex: number) => {
+      if (isAnimatingRef.current) return;
+      setSelectedCards(null);
+
+      let movingCards: Card[] = [];
+      if (from.type === 'tableau') {
+        const col = gameState.tableau[from.index] ?? [];
+        movingCards = col.slice(cardIndex);
+      } else if (from.type === 'waste') {
+        const top = gameState.waste[gameState.waste.length - 1];
+        if (top) movingCards = [top];
+      } else if (from.type === 'foundation') {
+        const pile = gameState.foundations[from.index] ?? [];
+        const top = pile[pile.length - 1];
+        if (top) movingCards = [top];
+      }
+
+      if (movingCards.length === 0) return;
+
+      const startPos = getPileCardPosition(from, cardIndex, gameState);
+      dragPan.setValue({ x: 0, y: 0 });
+
+      setDraggedCard({
+        from,
+        cards: movingCards,
+        cardIds: movingCards.map((c) => c.id),
+        startPos,
+      });
+    },
+    [gameState, getPileCardPosition, dragPan]
+  );
+
+  const handleDragMove = useCallback(
+    (dx: number, dy: number) => {
+      dragPan.setValue({ x: dx, y: dy });
+    },
+    [dragPan]
+  );
+
+  const handleDragEnd = useCallback(
+    (dx: number, dy: number, isDrag: boolean) => {
+      if (!dragState) return;
+
+      if (!isDrag) {
+        setDraggedCard(null);
+        return;
+      }
+
+      const dropX = dragState.startPos.x + dx;
+      const dropY = dragState.startPos.y + dy;
+
+      const target = findDropTarget(dragState.cards, dragState.from, dropX, dropY);
+
+      if (target) {
+        const nextState = moveCards(gameState, dragState.from, target, dragState.cardIds);
+        if (nextState) {
+          playCardMoveSound();
+          let destCardIndex = 0;
+          if (target.type === 'tableau') {
+            destCardIndex = gameState.tableau[target.index].length;
+          } else if (target.type === 'foundation') {
+            destCardIndex = gameState.foundations[target.index].length;
+          }
+          const targetPos = getPileCardPosition(target, destCardIndex, gameState);
+
+          isAnimatingRef.current = true;
+          Animated.timing(dragPan, {
+            toValue: {
+              x: targetPos.x - dragState.startPos.x,
+              y: targetPos.y - dragState.startPos.y,
+            },
+            duration: 120,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false,
+          }).start(() => {
+            setGameState(nextState);
+            setDraggedCard(null);
+            setSelectedCards(null);
+            isAnimatingRef.current = false;
+          });
+          return;
+        }
+      }
+
+      // Snap back if invalid drop
+      isAnimatingRef.current = true;
+      Animated.timing(dragPan, {
+        toValue: { x: 0, y: 0 },
+        duration: 160,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start(() => {
+        setDraggedCard(null);
+        isAnimatingRef.current = false;
+      });
+    },
+    [dragState, gameState, findDropTarget, getPileCardPosition, dragPan]
+  );
 
   // Stock press with draw animation
   const handleStockPress = useCallback(() => {
@@ -838,7 +1026,11 @@ export const GameScreen: React.FC = () => {
     return false;
   })();
 
-  const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : [];
+  const hiddenIds = animatingCard
+    ? animatingCard.hiddenCardIds
+    : dragState
+    ? dragState.cardIds
+    : [];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -901,6 +1093,9 @@ export const GameScreen: React.FC = () => {
                   selectedCards?.from.type === 'waste' ? selectedCards.cardIds[0] : null
                 }
                 hiddenCardIds={hiddenIds}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragEnd={handleDragEnd}
               />
             </View>
 
@@ -937,6 +1132,9 @@ export const GameScreen: React.FC = () => {
                         : null
                     }
                     hiddenCardIds={hiddenIds}
+                    onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
+                    onDragEnd={handleDragEnd}
                   />
                 </View>
               ))}
@@ -976,6 +1174,9 @@ export const GameScreen: React.FC = () => {
                     hiddenCardIds={hiddenIds}
                     onCardPress={handleTableauCardPress}
                     onEmptyColumnPress={handleEmptyColumnPress}
+                    onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
+                    onDragEnd={handleDragEnd}
                   />
                 </View>
               );
@@ -1092,6 +1293,41 @@ export const GameScreen: React.FC = () => {
                   </Animated.View>
                 );
               })}
+            </Animated.View>
+          )}
+
+          {/* Floating Dragged Card Overlay */}
+          {dragState && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.floatingAnimatedContainer,
+                {
+                  left: Animated.add(dragState.startPos.x, dragPan.x),
+                  top: Animated.add(dragState.startPos.y, dragPan.y),
+                  zIndex: 10000,
+                  transform: [{ scale: 1.05 }],
+                },
+              ]}
+            >
+              {dragState.cards.map((c, i) => (
+                <View
+                  key={c.id}
+                  style={{
+                    position: 'absolute',
+                    top: i * upOffset,
+                    left: 0,
+                    zIndex: i + 1,
+                  }}
+                >
+                  <CardView
+                    card={c}
+                    width={cardWidth}
+                    height={cardHeight}
+                    isDragging
+                  />
+                </View>
+              ))}
             </Animated.View>
           )}
         </View>
