@@ -829,17 +829,19 @@ export const GameScreen: React.FC = () => {
 
   // Auto-complete runner with animation
   useEffect(() => {
-    if (gameState.status === 'playing' && canAutoComplete(gameState) && !isAnimatingRef.current) {
+    const currentState = latestGameStateRef.current;
+    if (currentState.status === 'playing' && canAutoComplete(currentState) && !isAnimatingRef.current) {
       const timer = setTimeout(() => {
-        const next = autoCompleteStep(gameState);
-        if (next && next.history.length > gameState.history.length) {
+        const activeState = latestGameStateRef.current;
+        const next = autoCompleteStep(activeState);
+        if (next && next.history.length > activeState.history.length) {
           const lastMove = next.history[next.history.length - 1];
           executeMoveWithAnimation(lastMove.from, lastMove.to, lastMove.cardIds);
         }
       }, 160);
       return () => clearTimeout(timer);
     }
-  }, [gameState]);
+  }, [gameState.id, gameState.history, gameState.status]);
 
   // Start new game
   const handleNewGame = useCallback(() => {
