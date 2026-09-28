@@ -24,6 +24,9 @@
     },
     "experiments": {
       "baseUrl": "/SolitaireClient"
-    }
+    },
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }

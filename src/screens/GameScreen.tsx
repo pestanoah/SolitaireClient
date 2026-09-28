@@ -37,6 +37,12 @@ import {
   saveGameState,
   saveSettings,
 } from '../storage/storage';
+import {
+  playCardMoveSound,
+  playDealSound,
+  playResetSound,
+  setSoundEnabled,
+} from '../utils/sound';
 
 interface AnimatingCardData {
   cards: Card[];
@@ -119,6 +125,7 @@ export const GameScreen: React.FC = () => {
       const loadedSettings = await loadSettings();
       if (!isMounted) return;
       setSettings(loadedSettings);
+      setSoundEnabled(loadedSettings.soundEnabled !== false);
 
       const loadedStats = await loadStats();
       if (!isMounted) return;
@@ -280,6 +287,8 @@ export const GameScreen: React.FC = () => {
     const nextState = moveCards(gameState, from, to, cardIds);
     if (!nextState) return false;
 
+    playCardMoveSound();
+
     // Determine moving cards and initial index
     let movingCards: Card[] = [];
     let sourceCardIndex = 0;
@@ -364,6 +373,7 @@ export const GameScreen: React.FC = () => {
       };
 
       isAnimatingRef.current = true;
+      playResetSound();
       setAnimatingCard({
         cards: cardsToAnimate,
         startX: startPos.x,
@@ -403,6 +413,7 @@ export const GameScreen: React.FC = () => {
     };
 
     isAnimatingRef.current = true;
+    playDealSound();
     setAnimatingCard({
       cards: drawnCards,
       startX: startPos.x,
@@ -611,6 +622,7 @@ export const GameScreen: React.FC = () => {
     setSelectedCards(null);
     setAnimatingCard(null);
     isAnimatingRef.current = false;
+    playDealSound();
     const newGame = dealKlondike(settings.drawCount);
     setGameState(newGame);
   }, [settings.drawCount]);
@@ -624,14 +636,28 @@ export const GameScreen: React.FC = () => {
     setSelectedCards(null);
     setAnimatingCard(null);
     isAnimatingRef.current = false;
+    playDealSound();
     const newGame = dealKlondike(nextCount as 1 | 3);
     setGameState(newGame);
+  }, [settings]);
+
+  // Toggle Sound Effects (Mute / Unmute)
+  const handleToggleSound = useCallback(() => {
+    const nextSound = settings.soundEnabled === false ? true : false;
+    const nextSettings = { ...settings, soundEnabled: nextSound };
+    setSettings(nextSettings);
+    saveSettings(nextSettings);
+    setSoundEnabled(nextSound);
+    if (nextSound) {
+      playCardMoveSound();
+    }
   }, [settings]);
 
   // Undo move
   const handleUndo = useCallback(() => {
     if (isAnimatingRef.current) return;
     setSelectedCards(null);
+    playCardMoveSound();
     setGameState((prev) => undo(prev));
   }, []);
 
@@ -665,9 +691,11 @@ export const GameScreen: React.FC = () => {
         elapsedSeconds={gameState.elapsedSeconds}
         drawCount={gameState.drawCount}
         canUndo={gameState.history.length > 0}
+        soundEnabled={settings.soundEnabled !== false}
         onUndo={handleUndo}
         onNewGame={handleNewGame}
         onToggleDrawCount={handleToggleDrawCount}
+        onToggleSound={handleToggleSound}
         onOpenStats={() => setStatsVisible(true)}
       />
 

@@ -7,9 +7,11 @@ interface GameHeaderProps {
   elapsedSeconds: number;
   drawCount: 1 | 3;
   canUndo: boolean;
+  soundEnabled?: boolean;
   onUndo: () => void;
   onNewGame: () => void;
   onToggleDrawCount: () => void;
+  onToggleSound?: () => void;
   onOpenStats: () => void;
 }
 
@@ -19,9 +21,11 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   elapsedSeconds,
   drawCount,
   canUndo,
+  soundEnabled = true,
   onUndo,
   onNewGame,
   onToggleDrawCount,
+  onToggleSound,
   onOpenStats,
 }) => {
   const minutes = Math.floor(elapsedSeconds / 60);
@@ -77,6 +81,17 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
         >
           <Text style={styles.actionBtnText}>Stats</Text>
         </TouchableOpacity>
+
+        {onToggleSound && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onToggleSound}
+            style={styles.actionBtn}
+            accessibilityLabel={soundEnabled ? 'Mute sound' : 'Unmute sound'}
+          >
+            <Text style={styles.actionBtnText}>{soundEnabled ? '🔊' : '🔇'}</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           activeOpacity={0.7}
