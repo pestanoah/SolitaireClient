@@ -17,6 +17,22 @@ export const shadows = {
     elevation: 6,
   } as ViewStyle,
 
+  cardHintSource: {
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 7,
+  } as ViewStyle,
+
+  cardHintTarget: {
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 7,
+  } as ViewStyle,
+
   cardDragging: {
     elevation: 8,
     shadowColor: '#000000',

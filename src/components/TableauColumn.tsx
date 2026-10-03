@@ -12,6 +12,8 @@ interface TableauColumnProps {
   cardHeight: number;
   selectedCardIds?: string[];
   hiddenCardIds?: string[];
+  hintSourceCardIds?: string[];
+  isHintTargetColumn?: boolean;
   onCardPress: (card: Card, colIndex: number) => void;
   onEmptyColumnPress?: (colIndex: number) => void;
   onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
@@ -28,6 +30,8 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
   cardHeight,
   selectedCardIds = EMPTY_STRING_ARRAY,
   hiddenCardIds = EMPTY_STRING_ARRAY,
+  hintSourceCardIds = EMPTY_STRING_ARRAY,
+  isHintTargetColumn = false,
   onCardPress,
   onEmptyColumnPress,
   onDragStart,
@@ -64,7 +68,11 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={handleEmptyPress}
-          style={[styles.emptySlot, { width: cardWidth, height: cardHeight }]}
+          style={[
+            styles.emptySlot,
+            { width: cardWidth, height: cardHeight },
+            isHintTargetColumn && styles.emptySlotHintTarget,
+          ]}
         >
           <Text style={[styles.emptyK, { fontSize: Math.floor(cardWidth * 0.4) }]}>K</Text>
         </TouchableOpacity>
@@ -72,6 +80,8 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
         cards.map((card, idx) => {
           const isSelected = selectedCardIds.includes(card.id);
           const isHidden = hiddenCardIds.includes(card.id);
+          const isHintSource = hintSourceCardIds.includes(card.id);
+          const isHintTarget = isHintTargetColumn && idx === cards.length - 1;
           const topPosition = offsets[idx];
 
           return (
@@ -101,6 +111,8 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
                     width={cardWidth}
                     height={cardHeight}
                     isSelected={isSelected}
+                    isHintSource={isHintSource}
+                    isHintTarget={isHintTarget}
                   />
                 </DraggableCard>
               ) : (
@@ -108,6 +120,8 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
                   card={card}
                   width={cardWidth}
                   height={cardHeight}
+                  isHintSource={isHintSource}
+                  isHintTarget={isHintTarget}
                 />
               )}
             </View>
@@ -139,5 +153,10 @@ const styles = StyleSheet.create({
   emptyK: {
     color: colors.overlay.borderWhiteMedium,
     fontWeight: fontWeight.bold,
+  },
+  emptySlotHintTarget: {
+    borderColor: colors.hint.targetBorder,
+    borderWidth: 2,
+    backgroundColor: colors.hint.targetBg,
   },
 });

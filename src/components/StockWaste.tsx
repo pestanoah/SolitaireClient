@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Card, PileLocation } from '../engine/types';
 import { CardView } from './CardView';
 import { DraggableCard } from './DraggableCard';
-import { colors, spacing, borderRadius, fontSize, fontWeight } from '../theme';
+import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '../theme';
 
 interface StockWasteProps {
   stock: Card[];
@@ -15,6 +15,9 @@ interface StockWasteProps {
   onWasteCardPress: (card: Card) => void;
   selectedCardId?: string | null;
   hiddenCardIds?: string[];
+  isStockHintSource?: boolean;
+  isStockHintTarget?: boolean;
+  hintWasteCardId?: string | null;
   onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
   onDragMove?: (dx: number, dy: number) => void;
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
@@ -30,6 +33,9 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   onWasteCardPress,
   selectedCardId,
   hiddenCardIds = [],
+  isStockHintSource = false,
+  isStockHintTarget = false,
+  hintWasteCardId = null,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -51,7 +57,11 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={onStockPress}
-        style={[styles.pile, { width: cardWidth, height: cardHeight }]}
+        style={[
+          styles.pile,
+          { width: cardWidth, height: cardHeight },
+          isStockHintSource && styles.stockHintSource,
+        ]}
       >
         {hasStock ? (
           <View style={{ width: cardWidth, height: cardHeight }}>
@@ -59,13 +69,20 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
               card={{ id: 'stock_back', suit: 'spades', rank: 1, faceUp: false }}
               width={cardWidth}
               height={cardHeight}
+              isHintSource={isStockHintSource}
             />
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{stock.length}</Text>
             </View>
           </View>
         ) : (
-          <View style={[styles.emptyStock, { width: cardWidth, height: cardHeight }]}>
+          <View
+            style={[
+              styles.emptyStock,
+              { width: cardWidth, height: cardHeight },
+              isStockHintTarget && styles.emptyStockHintTarget,
+            ]}
+          >
             <Text style={styles.recycleIcon}>↺</Text>
             {hasWaste && <Text style={styles.recycleSubtext}>Reset</Text>}
           </View>
@@ -104,6 +121,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
             const isTop = idx === visibleWaste.length - 1;
             const isSelected = card.id === selectedCardId;
             const isHidden = hiddenCardIds.includes(card.id);
+            const isHintSource = card.id === hintWasteCardId;
             return (
               <View
                 key={card.id}
@@ -131,6 +149,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
                       width={cardWidth}
                       height={cardHeight}
                       isSelected={isSelected}
+                      isHintSource={isHintSource}
                     />
                   </DraggableCard>
                 ) : (
@@ -139,6 +158,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
                     width={cardWidth}
                     height={cardHeight}
                     isSelected={isSelected}
+                    isHintSource={isHintSource}
                   />
                 )}
               </View>
@@ -209,5 +229,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.overlay.borderWhiteSubtle,
     backgroundColor: colors.overlay.slotFaintBg,
+  },
+  stockHintSource: {
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.hint.sourceBorder,
+    ...shadows.cardHintSource,
+  },
+  emptyStockHintTarget: {
+    borderColor: colors.hint.targetBorder,
+    borderWidth: 2,
+    backgroundColor: colors.hint.targetBg,
   },
 });

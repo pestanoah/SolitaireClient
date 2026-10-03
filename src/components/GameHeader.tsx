@@ -8,9 +8,11 @@ interface GameHeaderProps {
   elapsedSeconds: number;
   drawCount: 1 | 3;
   canUndo: boolean;
+  canHint?: boolean;
   canGiveUp?: boolean;
   soundEnabled?: boolean;
   onUndo: () => void;
+  onHint?: () => void;
   onGiveUp?: () => void;
   onNewGame: () => void;
   onToggleDrawCount: () => void;
@@ -24,9 +26,11 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   elapsedSeconds,
   drawCount,
   canUndo,
+  canHint = true,
   canGiveUp = false,
   soundEnabled = true,
   onUndo,
+  onHint,
   onGiveUp,
   onNewGame,
   onToggleDrawCount,
@@ -78,6 +82,19 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             Undo
           </Text>
         </TouchableOpacity>
+
+        {onHint && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            disabled={!canHint}
+            onPress={onHint}
+            style={[styles.actionBtn, !canHint && styles.btnDisabled]}
+          >
+            <Text style={[styles.actionBtnText, !canHint && styles.btnTextDisabled]}>
+              Hint
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {onGiveUp && (
           <TouchableOpacity
@@ -174,7 +191,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   actionBtn: {
     flex: 1,
