@@ -4,13 +4,13 @@ import {
   AppState,
   Easing,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CardView } from '../components/CardView';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { FoundationPile } from '../components/FoundationPile';
@@ -1328,7 +1328,6 @@ export const GameScreen: React.FC = () => {
           {/* Flying Animated Card Overlay */}
           {animatingCard && (
             <Animated.View
-              pointerEvents="none"
               style={[
                 styles.floatingAnimatedContainer,
                 {
@@ -1441,7 +1440,6 @@ export const GameScreen: React.FC = () => {
           {/* Floating Dragged Card Overlay */}
           {dragState && (
             <Animated.View
-              pointerEvents="none"
               style={[
                 styles.floatingAnimatedContainer,
                 {
@@ -1572,6 +1570,7 @@ const styles = StyleSheet.create({
   },
   floatingAnimatedContainer: {
     position: 'absolute',
+    pointerEvents: 'none',
     zIndex: 9999,
     elevation: 12,
     shadowColor: '#000',
