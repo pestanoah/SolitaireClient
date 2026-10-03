@@ -62,20 +62,40 @@ export function isGameWon(foundations: Card[][]): boolean {
 }
 
 /**
- * Checks if the game is in an "auto-finishable" state:
- * - Stock and waste are completely empty.
- * - Every single card remaining in the tableau columns is face-up.
+ * Checks if all cards remaining in the tableau columns are face-up (uncovered).
  */
-export function canAutoComplete(state: GameState): boolean {
-  if (state.stock.length > 0 || state.waste.length > 0) {
-    return false;
-  }
-
-  for (const col of state.tableau) {
+export function areAllTableauCardsUncovered(tableau: Card[][]): boolean {
+  for (const col of tableau) {
     for (const card of col) {
       if (!card.faceUp) {
         return false;
       }
+    }
+  }
+  return true;
+}
+
+/**
+ * Checks if the game is in an "auto-finishable" state:
+ * - Every single card remaining in the tableau columns is face-up (uncovered).
+ * - The game is active (not won or lost) and not deadlocked.
+ */
+export function canAutoComplete(state: GameState): boolean {
+  if (state.status === 'won' || state.status === 'lost') {
+    return false;
+  }
+  if (isGameWon(state.foundations)) {
+    return false;
+  }
+
+  if (!areAllTableauCardsUncovered(state.tableau)) {
+    return false;
+  }
+
+  // If there are cards remaining in stock or waste, verify there are still available moves
+  if (state.stock.length > 0 || state.waste.length > 0) {
+    if (!hasAvailableMoves(state)) {
+      return false;
     }
   }
 

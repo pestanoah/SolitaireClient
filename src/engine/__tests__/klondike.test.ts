@@ -4,6 +4,7 @@ import {
   canPlaceOnTableau,
   isGameWon,
   canAutoComplete,
+  areAllTableauCardsUncovered,
   hasAvailableMoves,
   hasExhaustedStockCycles,
 } from '../rules';
@@ -308,6 +309,199 @@ describe('State Transitions & Gameplay', () => {
     const totalFoundations = nextState!.foundations.reduce((acc, f) => acc + f.length, 0);
     expect(totalFoundations).toBe(1);
     expect(nextState!.tableau[0].length).toBe(0);
+  });
+
+  test('canAutoComplete returns true when all tableau cards are uncovered even with stock and waste', () => {
+    let state = dealKlondike(1);
+    // All cards in tableau face-up
+    state.tableau = [
+      [{ id: 'c_ace', suit: 'diamonds', rank: 1, faceUp: true }],
+      [{ id: 'c_2', suit: 'diamonds', rank: 2, faceUp: true }],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+    // Stock and waste still have cards
+    state.stock = [{ id: 's_1', suit: 'hearts', rank: 1, faceUp: false }];
+    state.waste = [{ id: 'w_1', suit: 'spades', rank: 1, faceUp: true }];
+
+    expect(areAllTableauCardsUncovered(state.tableau)).toBe(true);
+    expect(canAutoComplete(state)).toBe(true);
+  });
+
+  test('canAutoComplete returns false when any card in tableau is covered (face-down)', () => {
+    let state = dealKlondike(1);
+    state.tableau = [
+      [
+        { id: 'c_down', suit: 'spades', rank: 10, faceUp: false },
+        { id: 'c_up', suit: 'hearts', rank: 9, faceUp: true },
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+    state.stock = [];
+    state.waste = [];
+
+    expect(areAllTableauCardsUncovered(state.tableau)).toBe(false);
+    expect(canAutoComplete(state)).toBe(false);
+  });
+
+  test('canAutoComplete returns false when game is won or lost', () => {
+    let state = dealKlondike(1);
+    state.tableau = [[{ id: 'c_ace', suit: 'diamonds', rank: 1, faceUp: true }], [], [], [], [], [], []];
+    state.stock = [];
+    state.waste = [];
+
+    state.status = 'won';
+    expect(canAutoComplete(state)).toBe(false);
+
+    state.status = 'lost';
+    expect(canAutoComplete(state)).toBe(false);
+  });
+
+  test('autoCompleteStep advances waste card to foundation and draws from stock when needed', () => {
+    let state = dealKlondike(1);
+    state.tableau = [
+      [{ id: 'c_2d', suit: 'diamonds', rank: 2, faceUp: true }],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+    // Diamonds foundation is empty, so 2 of Diamonds cannot move to foundation yet
+    // Waste has Ace of Diamonds
+    state.waste = [{ id: 'c_ad', suit: 'diamonds', rank: 1, faceUp: true }];
+    state.stock = [{ id: 'c_3d', suit: 'diamonds', rank: 3, faceUp: false }];
+
+    expect(canAutoComplete(state)).toBe(true);
+
+    // Step 1: Waste Ace of Diamonds moves to Diamonds foundation (foundation index 2)
+    const step1 = autoCompleteStep(state);
+    expect(step1).not.toBeNull();
+    expect(step1!.foundations[2]).toHaveLength(1);
+    expect(step1!.foundations[2][0].rank).toBe(1);
+    expect(step1!.waste).toHaveLength(0);
+
+    // Step 2: Tableau 2 of Diamonds moves to Diamonds foundation
+    const step2 = autoCompleteStep(step1!);
+    expect(step2).not.toBeNull();
+    expect(step2!.foundations[2]).toHaveLength(2);
+    expect(step2!.foundations[2][1].rank).toBe(2);
+    expect(step2!.tableau[0]).toHaveLength(0);
+
+    // Step 3: Tableau is empty, waste is empty, stock has 3 of Diamonds -> draws from stock
+    const step3 = autoCompleteStep(step2!);
+    expect(step3).not.toBeNull();
+    expect(step3!.waste).toHaveLength(1);
+    expect(step3!.waste[0].id).toBe('c_3d');
+    expect(step3!.stock).toHaveLength(0);
+
+    // Step 4: 3 of Diamonds moves from waste to foundation
+    const step4 = autoCompleteStep(step3!);
+    expect(step4).not.toBeNull();
+    expect(step4!.foundations[2]).toHaveLength(3);
+    expect(step4!.foundations[2][2].rank).toBe(3);
+    expect(step4!.waste).toHaveLength(0);
+  });
+
+  test('autoCompleteStep moves waste card to tableau if it cannot move to foundation', () => {
+    let state = dealKlondike(1);
+    state.tableau = [
+      [{ id: 'c_8h', suit: 'hearts', rank: 8, faceUp: true }],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+    // Waste has 7 of Spades (foundation for spades is at 0, so cannot move to foundation)
+    state.waste = [{ id: 'c_7s', suit: 'spades', rank: 7, faceUp: true }];
+    state.stock = [];
+
+    expect(canAutoComplete(state)).toBe(true);
+
+    const step = autoCompleteStep(state);
+    expect(step).not.toBeNull();
+    // 7 of Spades should be placed onto 8 of Hearts in Tableau column 0
+    expect(step!.tableau[0]).toHaveLength(2);
+    expect(step!.tableau[0][1].id).toBe('c_7s');
+    expect(step!.waste).toHaveLength(0);
+  });
+
+  test('full end-to-end auto-finish completes game when all cards are uncovered', () => {
+    let state = dealKlondike(1);
+    // Setup state where all tableau cards are uncovered, and remaining cards are distributed across tableau, waste, stock
+    state.foundations = [
+      // Spades: A through 11 (Jack)
+      Array.from({ length: 11 }, (_, i) => ({
+        id: `s_${i + 1}`,
+        suit: 'spades' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Hearts: A through 12 (Queen)
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `h_${i + 1}`,
+        suit: 'hearts' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Diamonds: A through 13 (King) - full
+      Array.from({ length: 13 }, (_, i) => ({
+        id: `d_${i + 1}`,
+        suit: 'diamonds' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Clubs: A through 12 (Queen)
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `c_${i + 1}`,
+        suit: 'clubs' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+    ];
+
+    // Total in foundations so far = 11 + 12 + 13 + 12 = 48 cards.
+    // 4 cards remaining:
+    // 1. Spades Queen (rank 12) -> on Tableau
+    // 2. Spades King (rank 13) -> in Stock
+    // 3. Hearts King (rank 13) -> in Waste
+    // 4. Clubs King (rank 13) -> on Tableau
+    state.tableau = [
+      [{ id: 's_12', suit: 'spades', rank: 12, faceUp: true }],
+      [{ id: 'c_13', suit: 'clubs', rank: 13, faceUp: true }],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+    state.waste = [{ id: 'h_13', suit: 'hearts', rank: 13, faceUp: true }];
+    state.stock = [{ id: 's_13', suit: 'spades', rank: 13, faceUp: false }];
+
+    expect(canAutoComplete(state)).toBe(true);
+
+    let activeState: GameState | null = state;
+    let steps = 0;
+    while (activeState && activeState.status === 'playing' && steps < 20) {
+      activeState = autoCompleteStep(activeState);
+      steps++;
+    }
+
+    expect(activeState).not.toBeNull();
+    expect(activeState!.status).toBe('won');
+    expect(isGameWon(activeState!.foundations)).toBe(true);
+    expect(activeState!.foundations.reduce((acc, f) => acc + f.length, 0)).toBe(52);
   });
 
   test('moveCards transfers card from foundation back down to tableau with penalty and undo restores it', () => {
