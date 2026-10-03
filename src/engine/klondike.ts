@@ -1,5 +1,5 @@
 import { Card, FOUNDATION_SUITS, GameState, MoveRecord, PileLocation } from './types';
-import { canPlaceOnFoundation, canPlaceOnTableau, isGameWon } from './rules';
+import { canPlaceOnFoundation, canPlaceOnTableau, isGameWon, hasExhaustedStockCycles } from './rules';
 
 /**
  * Helper to deep clone the mutable piles of GameState.
@@ -402,15 +402,23 @@ export function undo(state: GameState): GameState {
 }
 
 /**
- * Automatically advances one eligible card from tableau to foundation if in auto-finish state.
+ * Automatically advances one eligible card towards completing the game:
+ * 1. Tableau column top card -> foundation
+ * 2. Waste top card -> foundation
+ * 3. Waste top card -> tableau column
+ * 4. Move tableau cards to empty column if King in waste
+ * 5. Stock -> waste (draw)
+ * 6. Waste -> stock (recycle if not exhausted)
  */
 export function autoCompleteStep(state: GameState): GameState | null {
+  if (state.status === 'won' || state.status === 'lost') return null;
+
+  // 1. Try designated foundation for tableau column top cards
   for (let c = 0; c < state.tableau.length; c++) {
     const col = state.tableau[c];
     if (col.length === 0) continue;
     const topCard = col[col.length - 1];
 
-    // 1. Try designated foundation for card's suit
     const suitIndex = FOUNDATION_SUITS.indexOf(topCard.suit);
     if (
       suitIndex >= 0 &&
@@ -422,7 +430,6 @@ export function autoCompleteStep(state: GameState): GameState | null {
       ]);
     }
 
-    // 2. Check remaining foundation piles
     for (let f = 0; f < state.foundations.length; f++) {
       if (f === suitIndex) continue;
       if (canPlaceOnFoundation(topCard, state.foundations[f], f)) {
@@ -432,5 +439,79 @@ export function autoCompleteStep(state: GameState): GameState | null {
       }
     }
   }
+
+  // 2. Try designated foundation for waste top card
+  if (state.waste.length > 0) {
+    const topWaste = state.waste[state.waste.length - 1];
+    const suitIndex = FOUNDATION_SUITS.indexOf(topWaste.suit);
+    if (
+      suitIndex >= 0 &&
+      suitIndex < state.foundations.length &&
+      canPlaceOnFoundation(topWaste, state.foundations[suitIndex], suitIndex)
+    ) {
+      return moveCards(state, { type: 'waste', index: 0 }, { type: 'foundation', index: suitIndex }, [
+        topWaste.id,
+      ]);
+    }
+
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (f === suitIndex) continue;
+      if (canPlaceOnFoundation(topWaste, state.foundations[f], f)) {
+        return moveCards(state, { type: 'waste', index: 0 }, { type: 'foundation', index: f }, [
+          topWaste.id,
+        ]);
+      }
+    }
+  }
+
+  // 3. Try placing waste top card onto tableau
+  if (state.waste.length > 0) {
+    const topWaste = state.waste[state.waste.length - 1];
+    const candidateColumns: number[] = [];
+    for (let t = 0; t < state.tableau.length; t++) {
+      if (canPlaceOnTableau(topWaste, state.tableau[t])) {
+        candidateColumns.push(t);
+      }
+    }
+    if (candidateColumns.length > 0) {
+      // Prefer non-empty columns first
+      candidateColumns.sort(
+        (a, b) => (state.tableau[b].length > 0 ? 1 : 0) - (state.tableau[a].length > 0 ? 1 : 0)
+      );
+      return moveCards(state, { type: 'waste', index: 0 }, { type: 'tableau', index: candidateColumns[0] }, [
+        topWaste.id,
+      ]);
+    }
+  }
+
+  // 4. If waste has a King and no empty column exists, check if moving a tableau stack creates an empty column
+  if (state.waste.length > 0 && state.waste[state.waste.length - 1].rank === 13) {
+    const hasEmpty = state.tableau.some((c) => c.length === 0);
+    if (!hasEmpty) {
+      for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
+        const fromCol = state.tableau[fromIdx];
+        if (fromCol.length === 0) continue;
+        const baseCard = fromCol[0];
+        for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
+          if (toIdx === fromIdx) continue;
+          if (canPlaceOnTableau(baseCard, state.tableau[toIdx])) {
+            const cardIds = fromCol.map((c) => c.id);
+            return moveCards(state, { type: 'tableau', index: fromIdx }, { type: 'tableau', index: toIdx }, cardIds);
+          }
+        }
+      }
+    }
+  }
+
+  // 5. Try drawing from stock
+  if (state.stock.length > 0) {
+    return drawCards(state);
+  }
+
+  // 6. If stock is empty and waste has cards, recycle if cycle not exhausted
+  if (state.waste.length > 0 && !hasExhaustedStockCycles(state)) {
+    return drawCards(state);
+  }
+
   return null;
 }
