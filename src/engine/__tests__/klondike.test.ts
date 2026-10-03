@@ -1,5 +1,12 @@
 import { createStandardDeck, dealKlondike, shuffleCards } from '../deck';
-import { canPlaceOnFoundation, canPlaceOnTableau, isGameWon, canAutoComplete } from '../rules';
+import {
+  canPlaceOnFoundation,
+  canPlaceOnTableau,
+  isGameWon,
+  canAutoComplete,
+  hasAvailableMoves,
+  hasExhaustedStockCycles,
+} from '../rules';
 import { drawCards, moveCards, undo, findSmartMove, autoCompleteStep } from '../klondike';
 import { Card, GameState, getCardColor } from '../types';
 
@@ -364,4 +371,252 @@ describe('State Transitions & Gameplay', () => {
     expect(noMove).toBeNull();
   });
 });
+
+describe('Available Moves & Loss Detection', () => {
+  test('freshly dealt game has available moves', () => {
+    const state = dealKlondike(1, 123);
+    expect(hasAvailableMoves(state)).toBe(true);
+  });
+
+  test('returns false when no moves exist and stock/waste is empty (loss/deadlock)', () => {
+    const deadState: GameState = {
+      version: 1,
+      id: 'test_dead',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: 'c1', suit: 'spades', rank: 2, faceUp: true }],
+        [{ id: 'c2', suit: 'clubs', rank: 4, faceUp: true }],
+        [{ id: 'c3', suit: 'spades', rank: 6, faceUp: true }],
+        [{ id: 'c4', suit: 'clubs', rank: 8, faceUp: true }],
+        [{ id: 'c5', suit: 'spades', rank: 10, faceUp: true }],
+        [{ id: 'c6', suit: 'clubs', rank: 12, faceUp: true }],
+        [],
+      ],
+      score: 0,
+      moves: 5,
+      elapsedSeconds: 30,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(deadState)).toBe(false);
+  });
+
+  test('detects deadlock when cards remaining in stock/waste cannot be placed anywhere', () => {
+    // Foundations are empty (needs Aces)
+    // Tableau columns have black 2, 4, 6, 8, 10, 12
+    // Stock has only black cards that cannot be placed on foundations (rank > 1) or tableau (needs red opposite color)
+    const deadStateWithStock: GameState = {
+      version: 1,
+      id: 'test_dead_stock',
+      drawCount: 1,
+      stock: [
+        { id: 's1', suit: 'spades', rank: 5, faceUp: false },
+        { id: 's2', suit: 'clubs', rank: 7, faceUp: false },
+      ],
+      waste: [{ id: 'w1', suit: 'spades', rank: 9, faceUp: true }],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: 'c1', suit: 'spades', rank: 2, faceUp: true }],
+        [{ id: 'c2', suit: 'clubs', rank: 4, faceUp: true }],
+        [{ id: 'c3', suit: 'spades', rank: 6, faceUp: true }],
+        [{ id: 'c4', suit: 'clubs', rank: 8, faceUp: true }],
+        [{ id: 'c5', suit: 'spades', rank: 10, faceUp: true }],
+        [{ id: 'c6', suit: 'clubs', rank: 12, faceUp: true }],
+        [{ id: 'c7', suit: 'spades', rank: 13, faceUp: true }], // King at base, no empty column
+      ],
+      score: 0,
+      moves: 10,
+      elapsedSeconds: 50,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(deadStateWithStock)).toBe(false);
+  });
+
+  test('does not consider moving a base King to an empty column as a valid move', () => {
+    // Only move theoretically possible by raw rules is King at index 0 moving to empty col 1,
+    // which is an infinite no-op loop and should not prevent loss detection.
+    const kingLoopState: GameState = {
+      version: 1,
+      id: 'test_king_loop',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: 'k1', suit: 'spades', rank: 13, faceUp: true }], // King at index 0
+        [], // empty column
+        [{ id: 'c1', suit: 'spades', rank: 2, faceUp: true }],
+        [{ id: 'c2', suit: 'spades', rank: 4, faceUp: true }],
+        [{ id: 'c3', suit: 'spades', rank: 6, faceUp: true }],
+        [{ id: 'c4', suit: 'spades', rank: 8, faceUp: true }],
+        [{ id: 'c5', suit: 'spades', rank: 10, faceUp: true }],
+      ],
+      score: 0,
+      moves: 5,
+      elapsedSeconds: 20,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(kingLoopState)).toBe(false);
+  });
+
+  test('detects available move from waste to tableau', () => {
+    const state: GameState = {
+      version: 1,
+      id: 'test_waste_move',
+      drawCount: 1,
+      stock: [],
+      waste: [{ id: 'w1', suit: 'hearts', rank: 5, faceUp: true }],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: 'c1', suit: 'spades', rank: 6, faceUp: true }],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+      score: 0,
+      moves: 2,
+      elapsedSeconds: 10,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(state)).toBe(true);
+  });
+
+  test('detects available move from tableau to foundation', () => {
+    const state: GameState = {
+      version: 1,
+      id: 'test_ace_move',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: 'c1', suit: 'spades', rank: 1, faceUp: true }], // Ace of Spades!
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+      score: 0,
+      moves: 1,
+      elapsedSeconds: 5,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(state)).toBe(true);
+  });
+
+  test('hasExhaustedStockCycles detects exhausted cycles after recycling without board moves', () => {
+    let state = dealKlondike(1, 99);
+    // Simulate drawing all stock cards
+    while (state.stock.length > 0) {
+      state = drawCards(state);
+    }
+    expect(state.stock.length).toBe(0);
+    expect(hasExhaustedStockCycles(state)).toBe(false);
+
+    // Recycle waste back to stock
+    state = drawCards(state);
+    expect(state.stock.length).toBe(24);
+
+    // Draw all stock cards again without any board moves
+    while (state.stock.length > 0) {
+      state = drawCards(state);
+    }
+    expect(state.stock.length).toBe(0);
+    // In Draw 1, 1 full pass after recycle means cycles are exhausted
+    expect(hasExhaustedStockCycles(state)).toBe(true);
+  });
+
+  test('game operations respect lost status and undo restores playing', () => {
+    const state = dealKlondike(1);
+    const lostState: GameState = {
+      ...state,
+      status: 'lost',
+      history: [
+        {
+          from: { type: 'stock', index: 0 },
+          to: { type: 'waste', index: 0 },
+          cardIds: ['c1'],
+          pointsEarned: 0,
+        },
+      ],
+    };
+
+    // drawCards and moveCards reject actions when lost
+    expect(drawCards(lostState).status).toBe('lost');
+    expect(
+      moveCards(
+        lostState,
+        { type: 'tableau', index: 0 },
+        { type: 'foundation', index: 0 },
+        ['c1']
+      )
+    ).toBeNull();
+    expect(findSmartMove(lostState, 'c1')).toBeNull();
+
+    // Undo restores status to playing
+    const undone = undo(lostState);
+    expect(undone.status).toBe('playing');
+  });
+
+  test('returns false when trapped face-down cards cannot be reached', () => {
+    const trappedState: GameState = {
+      version: 1,
+      id: 'test_trapped',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [[], [], [], []],
+      tableau: [
+        [
+          { id: 'fd_1', suit: 'hearts', rank: 1, faceUp: false }, // Trapped Ace of Hearts!
+          { id: 'fu_1', suit: 'spades', rank: 2, faceUp: true },
+        ],
+        [{ id: 'c2', suit: 'spades', rank: 4, faceUp: true }],
+        [{ id: 'c3', suit: 'spades', rank: 6, faceUp: true }],
+        [{ id: 'c4', suit: 'spades', rank: 8, faceUp: true }],
+        [{ id: 'c5', suit: 'spades', rank: 10, faceUp: true }],
+        [{ id: 'c6', suit: 'spades', rank: 12, faceUp: true }],
+        [],
+      ],
+      score: 0,
+      moves: 12,
+      elapsedSeconds: 45,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(trappedState)).toBe(false);
+  });
+
+  test('returns false when game is already won', () => {
+    const wonState = dealKlondike(1);
+    wonState.status = 'won';
+    expect(hasAvailableMoves(wonState)).toBe(false);
+  });
+});
+
+
 

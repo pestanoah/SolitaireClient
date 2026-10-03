@@ -50,7 +50,7 @@ export interface GameState {
   score: number;
   moves: number;
   elapsedSeconds: number;
-  status: 'playing' | 'paused' | 'won';
+  status: 'playing' | 'paused' | 'won' | 'lost';
   history: MoveRecord[];
   createdAt: number;
 }

@@ -12,8 +12,10 @@ import {
   View,
 } from 'react-native';
 import { CardView } from '../components/CardView';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { FoundationPile } from '../components/FoundationPile';
 import { GameHeader } from '../components/GameHeader';
+import { GameOverModal } from '../components/GameOverModal';
 import { StatsModal } from '../components/StatsModal';
 import { StockWaste } from '../components/StockWaste';
 import { TableauColumn } from '../components/TableauColumn';
@@ -26,7 +28,13 @@ import {
   moveCards,
   undo,
 } from '../engine/klondike';
-import { canAutoComplete, canPlaceOnFoundation, canPlaceOnTableau } from '../engine/rules';
+import {
+  canAutoComplete,
+  canPlaceOnFoundation,
+  canPlaceOnTableau,
+  hasAvailableMoves,
+  isGameWon,
+} from '../engine/rules';
 import { Card, FOUNDATION_SUITS, GameState, PileLocation, PlayerStats, UserSettings } from '../engine/types';
 import {
   clearGameState,
@@ -40,6 +48,7 @@ import {
 import {
   playCardMoveSound,
   playDealSound,
+  playGameOverSound,
   playResetSound,
   setSoundEnabled,
 } from '../utils/sound';
@@ -83,6 +92,15 @@ export const GameScreen: React.FC = () => {
     from: PileLocation;
     cardIds: string[];
   } | null>(null);
+  const [lossReason, setLossReason] = useState<'no_moves' | 'forfeit'>('no_moves');
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+  } | null>(null);
+  const recordedGameIdsRef = useRef<Set<string>>(new Set());
 
   // Animation State
   const animProgress = useRef(new Animated.Value(0)).current;
@@ -180,7 +198,7 @@ export const GameScreen: React.FC = () => {
   useEffect(() => {
     if (!isHydratedRef.current) return;
 
-    if (gameState.status === 'won') {
+    if (gameState.status === 'won' || gameState.status === 'lost') {
       clearGameState();
       lastSavedGameRef.current = null;
       return;
@@ -203,7 +221,7 @@ export const GameScreen: React.FC = () => {
     const handleFlush = () => {
       if (!isHydratedRef.current) return;
       const current = latestGameStateRef.current;
-      if (current.status !== 'won') {
+      if (current.status === 'playing') {
         saveGameState(current);
       }
     };
@@ -249,15 +267,44 @@ export const GameScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, [gameState.status]);
 
-  // Handle victory recording
+  // Handle victory and loss recording
   useEffect(() => {
-    if (gameState.status === 'won') {
-      (async () => {
-        const updated = await recordGameEnd(true, gameState.score, gameState.elapsedSeconds);
-        setStats(updated);
-      })();
+    if (gameState.status === 'won' || gameState.status === 'lost') {
+      const isWon = gameState.status === 'won';
+      if (!recordedGameIdsRef.current.has(gameState.id)) {
+        recordedGameIdsRef.current.add(gameState.id);
+        (async () => {
+          const updated = await recordGameEnd(isWon, gameState.score, gameState.elapsedSeconds);
+          setStats(updated);
+        })();
+      }
     }
-  }, [gameState.status]);
+  }, [gameState.status, gameState.id, gameState.score, gameState.elapsedSeconds]);
+
+  // Check for game over (no legal moves left)
+  useEffect(() => {
+    if (
+      gameState.status === 'playing' &&
+      !canAutoComplete(gameState) &&
+      !isGameWon(gameState.foundations)
+    ) {
+      const timer = setTimeout(() => {
+        const current = latestGameStateRef.current;
+        if (
+          current.status === 'playing' &&
+          !isAnimatingRef.current &&
+          !canAutoComplete(current) &&
+          !isGameWon(current.foundations) &&
+          !hasAvailableMoves(current)
+        ) {
+          playGameOverSound();
+          setLossReason('no_moves');
+          setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState]);
 
   // Calculate card screen position in board coordinates
   const getPileCardPosition = useCallback(
@@ -843,29 +890,97 @@ export const GameScreen: React.FC = () => {
     }
   }, [gameState.id, gameState.history, gameState.status]);
 
-  // Start new game
+  // Internal helper to deal a new game and reset animation/selection states
+  const startNewGame = useCallback(
+    (count?: 1 | 3) => {
+      setSelectedCards(null);
+      setAnimatingCard(null);
+      isAnimatingRef.current = false;
+      setLossReason('no_moves');
+      playDealSound();
+      const newGame = dealKlondike(count ?? settings.drawCount);
+      setGameState(newGame);
+    },
+    [settings.drawCount]
+  );
+
+  // Start new game (prompts if active game has moves)
   const handleNewGame = useCallback(() => {
-    setSelectedCards(null);
-    setAnimatingCard(null);
-    isAnimatingRef.current = false;
-    playDealSound();
-    const newGame = dealKlondike(settings.drawCount);
-    setGameState(newGame);
-  }, [settings.drawCount]);
+    if (gameState.status === 'playing' && gameState.moves > 0) {
+      setConfirmModal({
+        visible: true,
+        title: 'Abandon Game?',
+        message: 'Starting a new game will record the current game as a loss in your stats.',
+        confirmLabel: 'Abandon & Deal',
+        onConfirm: async () => {
+          setConfirmModal(null);
+          if (!recordedGameIdsRef.current.has(gameState.id)) {
+            recordedGameIdsRef.current.add(gameState.id);
+            const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
+            setStats(updated);
+          }
+          startNewGame();
+        },
+      });
+      return;
+    }
+
+    startNewGame();
+  }, [gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]);
+
+  // Give up / forfeit game
+  const handleGiveUp = useCallback(() => {
+    if (gameState.status !== 'playing' || gameState.moves === 0) return;
+    setConfirmModal({
+      visible: true,
+      title: 'Give Up Game?',
+      message: 'Are you sure you want to end this game? It will be recorded as a loss in your stats.',
+      confirmLabel: 'Give Up',
+      onConfirm: () => {
+        setConfirmModal(null);
+        playGameOverSound();
+        setLossReason('forfeit');
+        setGameState((prev) => ({ ...prev, status: 'lost' }));
+      },
+    });
+  }, [gameState.status, gameState.moves]);
 
   // Toggle Draw Mode (Turn 1 vs Turn 3)
   const handleToggleDrawCount = useCallback(() => {
     const nextCount = settings.drawCount === 1 ? 3 : 1;
     const nextSettings = { ...settings, drawCount: nextCount as 1 | 3 };
-    setSettings(nextSettings);
-    saveSettings(nextSettings);
-    setSelectedCards(null);
-    setAnimatingCard(null);
-    isAnimatingRef.current = false;
-    playDealSound();
-    const newGame = dealKlondike(nextCount as 1 | 3);
-    setGameState(newGame);
-  }, [settings]);
+
+    const proceedWithToggle = async () => {
+      if (
+        gameState.status === 'playing' &&
+        gameState.moves > 0 &&
+        !recordedGameIdsRef.current.has(gameState.id)
+      ) {
+        recordedGameIdsRef.current.add(gameState.id);
+        const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
+        setStats(updated);
+      }
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+      startNewGame(nextCount as 1 | 3);
+    };
+
+    if (gameState.status === 'playing' && gameState.moves > 0) {
+      setConfirmModal({
+        visible: true,
+        title: 'Change Draw Mode?',
+        message: 'Changing draw mode will abandon the current game and record it as a loss.',
+        confirmLabel: 'Change Mode',
+        onConfirm: () => {
+          setConfirmModal(null);
+          proceedWithToggle();
+        },
+      });
+      return;
+    }
+
+    proceedWithToggle();
+  }, [settings, gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]);
 
   // Toggle Sound Effects (Mute / Unmute)
   const handleToggleSound = useCallback(() => {
@@ -1065,8 +1180,10 @@ export const GameScreen: React.FC = () => {
         elapsedSeconds={gameState.elapsedSeconds}
         drawCount={gameState.drawCount}
         canUndo={gameState.history.length > 0}
+        canGiveUp={gameState.status === 'playing' && gameState.moves > 0}
         soundEnabled={settings.soundEnabled !== false}
         onUndo={handleUndo}
+        onGiveUp={handleGiveUp}
         onNewGame={handleNewGame}
         onToggleDrawCount={handleToggleDrawCount}
         onToggleSound={handleToggleSound}
@@ -1370,8 +1487,30 @@ export const GameScreen: React.FC = () => {
         score={gameState.score}
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
-        onNewGame={handleNewGame}
+        onNewGame={() => startNewGame()}
       />
+
+      <GameOverModal
+        visible={gameState.status === 'lost'}
+        score={gameState.score}
+        moves={gameState.moves}
+        elapsedSeconds={gameState.elapsedSeconds}
+        reason={lossReason}
+        canUndo={gameState.history.length > 0}
+        onUndo={handleUndo}
+        onNewGame={() => startNewGame()}
+      />
+
+      {confirmModal && (
+        <ConfirmModal
+          visible={confirmModal.visible}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
     </SafeAreaView>
   );
 };
