@@ -61,10 +61,38 @@ describe('Local Storage Persistence', () => {
     expect(afterLoss.bestTimeSeconds).toBe(120); // Unchanged
   });
 
-  test('saves and loads user settings', async () => {
-    await saveSettings({ drawCount: 3, autoMoveOnTap: false });
+  test('loads default settings when none are stored', async () => {
+    const loaded = await loadSettings();
+    expect(loaded.drawCount).toBe(1);
+    expect(loaded.autoMoveOnTap).toBe(true);
+    expect(loaded.soundEnabled).toBe(true);
+    expect(loaded.rightHanded).toBe(false);
+  });
+
+  test('saves and loads user settings including soundEnabled and rightHanded', async () => {
+    await saveSettings({ drawCount: 3, autoMoveOnTap: false, soundEnabled: false, rightHanded: true });
     const loaded = await loadSettings();
     expect(loaded.drawCount).toBe(3);
     expect(loaded.autoMoveOnTap).toBe(false);
+    expect(loaded.soundEnabled).toBe(false);
+    expect(loaded.rightHanded).toBe(true);
+  });
+
+  test('toggles rightHanded setting and persists independently', async () => {
+    let settings = await loadSettings();
+    expect(settings.rightHanded).toBe(false);
+
+    settings = { ...settings, rightHanded: true };
+    await saveSettings(settings);
+
+    let loaded = await loadSettings();
+    expect(loaded.rightHanded).toBe(true);
+    expect(loaded.drawCount).toBe(1);
+
+    settings = { ...loaded, rightHanded: false };
+    await saveSettings(settings);
+
+    loaded = await loadSettings();
+    expect(loaded.rightHanded).toBe(false);
   });
 });

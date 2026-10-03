@@ -18,9 +18,12 @@ interface StockWasteProps {
   isStockHintSource?: boolean;
   isStockHintTarget?: boolean;
   hintWasteCardId?: string | null;
+  rightHanded?: boolean;
   onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
   onDragMove?: (dx: number, dy: number) => void;
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
+  onStockLayout?: (x: number, y: number) => void;
+  onWasteLayout?: (x: number, y: number) => void;
 }
 
 export const StockWaste: React.FC<StockWasteProps> = React.memo(({
@@ -29,6 +32,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   drawCount,
   cardWidth,
   cardHeight,
+  rightHanded = false,
   onStockPress,
   onWasteCardPress,
   selectedCardId,
@@ -39,6 +43,8 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onStockLayout,
+  onWasteLayout,
 }) => {
   const hasStock = stock.length > 0;
   const hasWaste = waste.length > 0;
@@ -52,11 +58,12 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   const isUnderlyingHidden = underlyingCard ? hiddenCardIds.includes(underlyingCard.id) : false;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, rightHanded && styles.containerRightHanded]}>
       {/* Stock Pile */}
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={onStockPress}
+        onLayout={(e) => onStockLayout?.(e.nativeEvent.layout.x, e.nativeEvent.layout.y)}
         style={[
           styles.pile,
           { width: cardWidth, height: cardHeight },
@@ -91,6 +98,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
 
       {/* Waste Pile */}
       <View
+        onLayout={(e) => onWasteLayout?.(e.nativeEvent.layout.x, e.nativeEvent.layout.y)}
         style={[
           styles.wasteArea,
           {
@@ -174,6 +182,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.lg,
+  },
+  containerRightHanded: {
+    flexDirection: 'row-reverse',
   },
   pile: {
     borderRadius: borderRadius.md,

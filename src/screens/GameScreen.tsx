@@ -16,6 +16,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { FoundationPile } from '../components/FoundationPile';
 import { GameHeader } from '../components/GameHeader';
 import { GameOverModal } from '../components/GameOverModal';
+import { SettingsModal } from '../components/SettingsModal';
 import { StatsModal } from '../components/StatsModal';
 import { StockWaste } from '../components/StockWaste';
 import { TableauColumn } from '../components/TableauColumn';
@@ -78,7 +79,12 @@ export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   // Settings & Stats
-  const [settings, setSettings] = useState<UserSettings>({ drawCount: 1, autoMoveOnTap: true });
+  const [settings, setSettings] = useState<UserSettings>({
+    drawCount: 1,
+    autoMoveOnTap: true,
+    rightHanded: false,
+  });
+  const isRightHanded = settings.rightHanded === true;
   const [stats, setStats] = useState<PlayerStats>({
     gamesPlayed: 0,
     gamesWon: 0,
@@ -86,6 +92,7 @@ export const GameScreen: React.FC = () => {
     bestTimeSeconds: null,
   });
   const [statsVisible, setStatsVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
 
   // Active Game State
   const [gameState, setGameState] = useState<GameState>(() => dealKlondike(1));
@@ -171,10 +178,30 @@ export const GameScreen: React.FC = () => {
   const tableauRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const foundationsRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  const stockWasteWrapperPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const stockRelativePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const wasteRelativePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const stockLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const wasteLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const foundationLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const tableauLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  const handleStockLayout = useCallback((x: number, y: number) => {
+    stockRelativePos.current = { x, y };
+    stockLayoutRef.current = {
+      x: topRowLayoutRef.current.x + stockWasteWrapperPos.current.x + x,
+      y: topRowLayoutRef.current.y + stockWasteWrapperPos.current.y + y,
+    };
+  }, []);
+
+  const handleWasteLayout = useCallback((x: number, y: number) => {
+    wasteRelativePos.current = { x, y };
+    wasteLayoutRef.current = {
+      x: topRowLayoutRef.current.x + stockWasteWrapperPos.current.x + x,
+      y: topRowLayoutRef.current.y + stockWasteWrapperPos.current.y + y,
+    };
+  }, []);
 
   // Calculate responsive dimensions
   const { maxBoardWidth, gap, cardWidth, cardHeight, downOffset, upOffset, fanOffset } =
@@ -359,7 +386,7 @@ export const GameScreen: React.FC = () => {
       if (pile.type === 'stock') {
         return {
           x: stockLayoutRef.current.x,
-          y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+          y: stockLayoutRef.current.y,
         };
       }
 
@@ -373,14 +400,14 @@ export const GameScreen: React.FC = () => {
         const hOffset = Math.max(0, visibleCount - 1) * fanOffset;
         return {
           x: wasteLayoutRef.current.x + hOffset,
-          y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+          y: wasteLayoutRef.current.y,
         };
       }
 
       if (pile.type === 'foundation') {
         const fLayout = foundationLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
         return {
-          x: foundationsRowLayoutRef.current.x + fLayout.x,
+          x: topRowLayoutRef.current.x + foundationsRowLayoutRef.current.x + fLayout.x,
           y: topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y,
         };
       }
@@ -419,11 +446,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
       const endPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -462,11 +489,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
       const endPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -579,7 +606,7 @@ export const GameScreen: React.FC = () => {
         for (let f = 0; f < gameState.foundations.length; f++) {
           if (from.type === 'foundation' && from.index === f) continue;
           const fLayout = foundationLayoutsRef.current.get(f) ?? { x: 0, y: 0 };
-          const fx = foundationsRowLayoutRef.current.x + fLayout.x;
+          const fx = topRowLayoutRef.current.x + foundationsRowLayoutRef.current.x + fLayout.x;
           const fy = topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y;
 
           const inBounds =
@@ -756,11 +783,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
       const endPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -796,11 +823,11 @@ export const GameScreen: React.FC = () => {
 
     const startPos = {
       x: stockLayoutRef.current.x,
-      y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      y: stockLayoutRef.current.y,
     };
     const endPos = {
       x: wasteLayoutRef.current.x,
-      y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      y: wasteLayoutRef.current.y,
     };
 
     isAnimatingRef.current = true;
@@ -1070,54 +1097,90 @@ export const GameScreen: React.FC = () => {
     });
   }, [gameState.status, gameState.moves]);
 
+  // Change Draw Mode (Turn 1 vs Turn 3)
+  const handleChangeDrawCount = useCallback(
+    (newCount: 1 | 3) => {
+      if (newCount === settings.drawCount) return;
+
+      const nextSettings = { ...settings, drawCount: newCount };
+
+      const proceedWithChange = async () => {
+        if (
+          gameState.status === 'playing' &&
+          gameState.moves > 0 &&
+          !recordedGameIdsRef.current.has(gameState.id)
+        ) {
+          recordedGameIdsRef.current.add(gameState.id);
+          const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
+          setStats(updated);
+        }
+        setSettings(nextSettings);
+        saveSettings(nextSettings);
+        startNewGame(newCount);
+      };
+
+      if (gameState.status === 'playing' && gameState.moves > 0) {
+        setSettingsVisible(false);
+        setConfirmModal({
+          visible: true,
+          title: 'Change Draw Mode?',
+          message: 'Changing draw mode will abandon the current game and record it as a loss.',
+          confirmLabel: 'Change Mode',
+          onConfirm: () => {
+            setConfirmModal(null);
+            proceedWithChange();
+          },
+        });
+        return;
+      }
+
+      proceedWithChange();
+    },
+    [settings, gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]
+  );
+
   // Toggle Draw Mode (Turn 1 vs Turn 3)
   const handleToggleDrawCount = useCallback(() => {
     const nextCount = settings.drawCount === 1 ? 3 : 1;
-    const nextSettings = { ...settings, drawCount: nextCount as 1 | 3 };
-
-    const proceedWithToggle = async () => {
-      if (
-        gameState.status === 'playing' &&
-        gameState.moves > 0 &&
-        !recordedGameIdsRef.current.has(gameState.id)
-      ) {
-        recordedGameIdsRef.current.add(gameState.id);
-        const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
-        setStats(updated);
-      }
-      setSettings(nextSettings);
-      saveSettings(nextSettings);
-      startNewGame(nextCount as 1 | 3);
-    };
-
-    if (gameState.status === 'playing' && gameState.moves > 0) {
-      setConfirmModal({
-        visible: true,
-        title: 'Change Draw Mode?',
-        message: 'Changing draw mode will abandon the current game and record it as a loss.',
-        confirmLabel: 'Change Mode',
-        onConfirm: () => {
-          setConfirmModal(null);
-          proceedWithToggle();
-        },
-      });
-      return;
-    }
-
-    proceedWithToggle();
-  }, [settings, gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]);
+    handleChangeDrawCount(nextCount as 1 | 3);
+  }, [settings.drawCount, handleChangeDrawCount]);
 
   // Toggle Sound Effects (Mute / Unmute)
-  const handleToggleSound = useCallback(() => {
-    const nextSound = settings.soundEnabled === false ? true : false;
-    const nextSettings = { ...settings, soundEnabled: nextSound };
-    setSettings(nextSettings);
-    saveSettings(nextSettings);
-    setSoundEnabled(nextSound);
-    if (nextSound) {
-      playCardMoveSound();
-    }
-  }, [settings]);
+  const handleToggleSound = useCallback(
+    (enabled?: boolean) => {
+      const nextSound = typeof enabled === 'boolean' ? enabled : settings.soundEnabled === false;
+      const nextSettings = { ...settings, soundEnabled: nextSound };
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+      setSoundEnabled(nextSound);
+      if (nextSound) {
+        playCardMoveSound();
+      }
+    },
+    [settings]
+  );
+
+  // Toggle Auto-Move on Tap
+  const handleToggleAutoMove = useCallback(
+    (enabled?: boolean) => {
+      const nextAutoMove = typeof enabled === 'boolean' ? enabled : !settings.autoMoveOnTap;
+      const nextSettings = { ...settings, autoMoveOnTap: nextAutoMove };
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+    },
+    [settings]
+  );
+
+  // Toggle Right-Handed Mode
+  const handleToggleRightHanded = useCallback(
+    (enabled?: boolean) => {
+      const nextRightHanded = typeof enabled === 'boolean' ? enabled : !settings.rightHanded;
+      const nextSettings = { ...settings, rightHanded: nextRightHanded };
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+    },
+    [settings]
+  );
 
   // Undo move with animation
   const handleUndo = useCallback(() => {
@@ -1138,11 +1201,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
       const endPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -1179,11 +1242,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
       const endPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -1293,9 +1356,10 @@ export const GameScreen: React.FC = () => {
         onHint={handleHint}
         onGiveUp={handleGiveUp}
         onNewGame={handleNewGame}
+        onOpenStats={() => setStatsVisible(true)}
+        onOpenSettings={() => setSettingsVisible(true)}
         onToggleDrawCount={handleToggleDrawCount}
         onToggleSound={handleToggleSound}
-        onOpenStats={() => setStatsVisible(true)}
       />
 
       {hintMessage && (
@@ -1309,25 +1373,37 @@ export const GameScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.board, { maxWidth: maxBoardWidth }]}>
-          {/* Top Row: Stock + Waste on Left, 4 Foundations on Right */}
+          {/* Top Row: Stock + Waste on Left (or Right if Right-Handed), 4 Foundations on Right (or Left if Right-Handed) */}
           <View
             onLayout={(e) => {
               topRowLayoutRef.current = {
                 x: e.nativeEvent.layout.x,
                 y: e.nativeEvent.layout.y,
               };
+              stockLayoutRef.current = {
+                x: e.nativeEvent.layout.x + stockWasteWrapperPos.current.x + stockRelativePos.current.x,
+                y: e.nativeEvent.layout.y + stockWasteWrapperPos.current.y + stockRelativePos.current.y,
+              };
+              wasteLayoutRef.current = {
+                x: e.nativeEvent.layout.x + stockWasteWrapperPos.current.x + wasteRelativePos.current.x,
+                y: e.nativeEvent.layout.y + stockWasteWrapperPos.current.y + wasteRelativePos.current.y,
+              };
             }}
-            style={[styles.topRow, { gap }]}
+            style={[styles.topRow, { gap }, isRightHanded && styles.topRowRightHanded]}
           >
             <View
               onLayout={(e) => {
-                stockLayoutRef.current = {
+                stockWasteWrapperPos.current = {
                   x: e.nativeEvent.layout.x,
                   y: e.nativeEvent.layout.y,
                 };
+                stockLayoutRef.current = {
+                  x: topRowLayoutRef.current.x + e.nativeEvent.layout.x + stockRelativePos.current.x,
+                  y: topRowLayoutRef.current.y + e.nativeEvent.layout.y + stockRelativePos.current.y,
+                };
                 wasteLayoutRef.current = {
-                  x: e.nativeEvent.layout.x + cardWidth + 10,
-                  y: e.nativeEvent.layout.y,
+                  x: topRowLayoutRef.current.x + e.nativeEvent.layout.x + wasteRelativePos.current.x,
+                  y: topRowLayoutRef.current.y + e.nativeEvent.layout.y + wasteRelativePos.current.y,
                 };
               }}
             >
@@ -1337,6 +1413,7 @@ export const GameScreen: React.FC = () => {
                 drawCount={gameState.drawCount}
                 cardWidth={cardWidth}
                 cardHeight={cardHeight}
+                rightHanded={isRightHanded}
                 onStockPress={handleStockPress}
                 onWasteCardPress={handleWasteCardPress}
                 selectedCardId={
@@ -1351,6 +1428,8 @@ export const GameScreen: React.FC = () => {
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
+                onStockLayout={handleStockLayout}
+                onWasteLayout={handleWasteLayout}
               />
             </View>
 
@@ -1406,7 +1485,7 @@ export const GameScreen: React.FC = () => {
                 y: e.nativeEvent.layout.y,
               };
             }}
-            style={[styles.tableauRow, { gap }]}
+            style={[styles.tableauRow, { gap }, isRightHanded && styles.tableauRowRightHanded]}
           >
             {gameState.tableau.map((col, idx) => {
               const isSelectedCol =
@@ -1598,6 +1677,16 @@ export const GameScreen: React.FC = () => {
         visible={statsVisible}
         stats={stats}
         onClose={() => setStatsVisible(false)}
+      />
+
+      <SettingsModal
+        visible={settingsVisible}
+        settings={settings}
+        onClose={() => setSettingsVisible(false)}
+        onChangeDrawCount={handleChangeDrawCount}
+        onToggleSound={handleToggleSound}
+        onToggleAutoMove={handleToggleAutoMove}
+        onToggleRightHanded={handleToggleRightHanded}
       />
 
       <WinModal

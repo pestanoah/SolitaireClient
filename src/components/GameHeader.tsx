@@ -15,9 +15,10 @@ interface GameHeaderProps {
   onHint?: () => void;
   onGiveUp?: () => void;
   onNewGame: () => void;
-  onToggleDrawCount: () => void;
-  onToggleSound?: () => void;
   onOpenStats: () => void;
+  onOpenSettings: () => void;
+  onToggleDrawCount?: () => void;
+  onToggleSound?: () => void;
 }
 
 export const GameHeader: React.FC<GameHeaderProps> = ({
@@ -33,13 +34,16 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   onHint,
   onGiveUp,
   onNewGame,
+  onOpenStats,
+  onOpenSettings,
   onToggleDrawCount,
   onToggleSound,
-  onOpenStats,
 }) => {
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+  const handleOpenSettings = onOpenSettings || onToggleDrawCount || (() => {});
 
   return (
     <View style={styles.header}>
@@ -62,8 +66,10 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
         <TouchableOpacity
           activeOpacity={0.7}
-          onPress={onToggleDrawCount}
+          onPress={handleOpenSettings}
           style={styles.modeBadge}
+          accessibilityLabel={`Draw mode: Draw ${drawCount}. Tap to open settings.`}
+          accessibilityRole="button"
         >
           <Text style={styles.modeLabel}>Draw Mode</Text>
           <Text style={styles.modeValue}>Draw {drawCount}</Text>
@@ -77,6 +83,8 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           disabled={!canUndo}
           onPress={onUndo}
           style={[styles.actionBtn, !canUndo && styles.btnDisabled]}
+          accessibilityLabel="Undo move"
+          accessibilityRole="button"
         >
           <Text style={[styles.actionBtnText, !canUndo && styles.btnTextDisabled]}>
             Undo
@@ -89,6 +97,8 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             disabled={!canHint}
             onPress={onHint}
             style={[styles.actionBtn, !canHint && styles.btnDisabled]}
+            accessibilityLabel="Show hint"
+            accessibilityRole="button"
           >
             <Text style={[styles.actionBtnText, !canHint && styles.btnTextDisabled]}>
               Hint
@@ -102,6 +112,8 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             disabled={!canGiveUp}
             onPress={onGiveUp}
             style={[styles.actionBtn, !canGiveUp && styles.btnDisabled]}
+            accessibilityLabel="Give up game"
+            accessibilityRole="button"
           >
             <Text style={[styles.actionBtnText, !canGiveUp && styles.btnTextDisabled]}>
               Give Up
@@ -113,25 +125,28 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           activeOpacity={0.7}
           onPress={onOpenStats}
           style={styles.actionBtn}
+          accessibilityLabel="View statistics"
+          accessibilityRole="button"
         >
           <Text style={styles.actionBtnText}>Stats</Text>
         </TouchableOpacity>
 
-        {onToggleSound && (
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={onToggleSound}
-            style={[styles.actionBtn, styles.soundBtn]}
-            accessibilityLabel={soundEnabled ? 'Mute sound' : 'Unmute sound'}
-          >
-            <Text style={styles.actionBtnText}>{soundEnabled ? '🔊' : '🔇'}</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleOpenSettings}
+          style={[styles.actionBtn, styles.settingsBtn]}
+          accessibilityLabel="Open settings"
+          accessibilityRole="button"
+        >
+          <Text style={styles.actionBtnText}>⚙️</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={onNewGame}
           style={[styles.actionBtn, styles.newGameBtn]}
+          accessibilityLabel="Deal new game"
+          accessibilityRole="button"
         >
           <Text style={[styles.actionBtnText, styles.newGameText]}>New Game</Text>
         </TouchableOpacity>
@@ -203,6 +218,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.overlay.borderWhiteMedium,
+  },
+  settingsBtn: {
+    flex: 0,
+    minWidth: 36,
+    paddingHorizontal: spacing.sm,
   },
   soundBtn: {
     flex: 0,
