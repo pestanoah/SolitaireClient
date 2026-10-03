@@ -7,8 +7,10 @@ interface GameHeaderProps {
   elapsedSeconds: number;
   drawCount: 1 | 3;
   canUndo: boolean;
+  canGiveUp?: boolean;
   soundEnabled?: boolean;
   onUndo: () => void;
+  onGiveUp?: () => void;
   onNewGame: () => void;
   onToggleDrawCount: () => void;
   onToggleSound?: () => void;
@@ -21,8 +23,10 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   elapsedSeconds,
   drawCount,
   canUndo,
+  canGiveUp = false,
   soundEnabled = true,
   onUndo,
+  onGiveUp,
   onNewGame,
   onToggleDrawCount,
   onToggleSound,
@@ -74,6 +78,19 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           </Text>
         </TouchableOpacity>
 
+        {onGiveUp && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            disabled={!canGiveUp}
+            onPress={onGiveUp}
+            style={[styles.actionBtn, !canGiveUp && styles.btnDisabled]}
+          >
+            <Text style={[styles.actionBtnText, !canGiveUp && styles.btnTextDisabled]}>
+              Give Up
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={onOpenStats}
@@ -86,7 +103,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={onToggleSound}
-            style={styles.actionBtn}
+            style={[styles.actionBtn, styles.soundBtn]}
             accessibilityLabel={soundEnabled ? 'Mute sound' : 'Unmute sound'}
           >
             <Text style={styles.actionBtnText}>{soundEnabled ? '🔊' : '🔇'}</Text>
@@ -156,20 +173,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   actionBtn: {
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
     paddingVertical: 6,
+    paddingHorizontal: 4,
     borderRadius: 6,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
+  soundBtn: {
+    flex: 0,
+    minWidth: 36,
+    paddingHorizontal: 6,
+  },
   actionBtnText: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   btnDisabled: {

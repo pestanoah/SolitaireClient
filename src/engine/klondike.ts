@@ -23,7 +23,7 @@ function clonePiles(state: GameState): {
  * If stock is empty, recycles waste back into stock with penalty.
  */
 export function drawCards(state: GameState): GameState {
-  if (state.status === 'won') return state;
+  if (state.status === 'won' || state.status === 'lost') return state;
 
   const { stock, waste, foundations, tableau } = clonePiles(state);
   let points = 0;
@@ -92,7 +92,7 @@ export function moveCards(
   cardIds: string[],
   allowAnyCardOnEmpty = false
 ): GameState | null {
-  if (state.status === 'won' || cardIds.length === 0) return null;
+  if (state.status === 'won' || state.status === 'lost' || cardIds.length === 0) return null;
   if (from.type === to.type && from.index === to.index) return null;
 
   const { stock, waste, foundations, tableau } = clonePiles(state);
@@ -204,7 +204,7 @@ export function findSmartMove(
   cardId: string,
   allowAnyCardOnEmpty = false
 ): { from: PileLocation; to: PileLocation; cardIds: string[] } | null {
-  if (state.status === 'won') return null;
+  if (state.status === 'won' || state.status === 'lost') return null;
 
   // Locate card
   let from: PileLocation | null = null;
@@ -334,6 +334,7 @@ export function undo(state: GameState): GameState {
       stock,
       waste,
       moves: state.moves + 1,
+      status: 'playing',
       history: remainingHistory,
     };
   }
@@ -352,6 +353,7 @@ export function undo(state: GameState): GameState {
       waste,
       score: Math.max(0, state.score - lastMove.pointsEarned),
       moves: state.moves + 1,
+      status: 'playing',
       history: remainingHistory,
     };
   }

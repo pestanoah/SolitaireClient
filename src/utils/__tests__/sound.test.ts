@@ -4,6 +4,7 @@ import {
   isSoundEnabled,
   playCardMoveSound,
   playDealSound,
+  playGameOverSound,
   playResetSound,
   playWebCardSlide,
   resetCachedNoiseBufferForTesting,
@@ -109,6 +110,7 @@ describe('Sound Utility', () => {
       playDealSound();
       playCardMoveSound();
       playResetSound();
+      playGameOverSound();
     }).not.toThrow();
 
     setSoundEnabled(false);
@@ -116,6 +118,7 @@ describe('Sound Utility', () => {
       playDealSound();
       playCardMoveSound();
       playResetSound();
+      playGameOverSound();
     }).not.toThrow();
   });
 
