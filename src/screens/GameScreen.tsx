@@ -16,6 +16,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { FoundationPile } from '../components/FoundationPile';
 import { GameHeader } from '../components/GameHeader';
 import { GameOverModal } from '../components/GameOverModal';
+import { SettingsModal } from '../components/SettingsModal';
 import { StatsModal } from '../components/StatsModal';
 import { StockWaste } from '../components/StockWaste';
 import { TableauColumn } from '../components/TableauColumn';
@@ -86,6 +87,7 @@ export const GameScreen: React.FC = () => {
     bestTimeSeconds: null,
   });
   const [statsVisible, setStatsVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
 
   // Active Game State
   const [gameState, setGameState] = useState<GameState>(() => dealKlondike(1));
@@ -1070,54 +1072,79 @@ export const GameScreen: React.FC = () => {
     });
   }, [gameState.status, gameState.moves]);
 
+  // Change Draw Mode (Turn 1 vs Turn 3)
+  const handleChangeDrawCount = useCallback(
+    (newCount: 1 | 3) => {
+      if (newCount === settings.drawCount) return;
+
+      const nextSettings = { ...settings, drawCount: newCount };
+
+      const proceedWithChange = async () => {
+        if (
+          gameState.status === 'playing' &&
+          gameState.moves > 0 &&
+          !recordedGameIdsRef.current.has(gameState.id)
+        ) {
+          recordedGameIdsRef.current.add(gameState.id);
+          const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
+          setStats(updated);
+        }
+        setSettings(nextSettings);
+        saveSettings(nextSettings);
+        startNewGame(newCount);
+      };
+
+      if (gameState.status === 'playing' && gameState.moves > 0) {
+        setSettingsVisible(false);
+        setConfirmModal({
+          visible: true,
+          title: 'Change Draw Mode?',
+          message: 'Changing draw mode will abandon the current game and record it as a loss.',
+          confirmLabel: 'Change Mode',
+          onConfirm: () => {
+            setConfirmModal(null);
+            proceedWithChange();
+          },
+        });
+        return;
+      }
+
+      proceedWithChange();
+    },
+    [settings, gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]
+  );
+
   // Toggle Draw Mode (Turn 1 vs Turn 3)
   const handleToggleDrawCount = useCallback(() => {
     const nextCount = settings.drawCount === 1 ? 3 : 1;
-    const nextSettings = { ...settings, drawCount: nextCount as 1 | 3 };
-
-    const proceedWithToggle = async () => {
-      if (
-        gameState.status === 'playing' &&
-        gameState.moves > 0 &&
-        !recordedGameIdsRef.current.has(gameState.id)
-      ) {
-        recordedGameIdsRef.current.add(gameState.id);
-        const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
-        setStats(updated);
-      }
-      setSettings(nextSettings);
-      saveSettings(nextSettings);
-      startNewGame(nextCount as 1 | 3);
-    };
-
-    if (gameState.status === 'playing' && gameState.moves > 0) {
-      setConfirmModal({
-        visible: true,
-        title: 'Change Draw Mode?',
-        message: 'Changing draw mode will abandon the current game and record it as a loss.',
-        confirmLabel: 'Change Mode',
-        onConfirm: () => {
-          setConfirmModal(null);
-          proceedWithToggle();
-        },
-      });
-      return;
-    }
-
-    proceedWithToggle();
-  }, [settings, gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]);
+    handleChangeDrawCount(nextCount as 1 | 3);
+  }, [settings.drawCount, handleChangeDrawCount]);
 
   // Toggle Sound Effects (Mute / Unmute)
-  const handleToggleSound = useCallback(() => {
-    const nextSound = settings.soundEnabled === false ? true : false;
-    const nextSettings = { ...settings, soundEnabled: nextSound };
-    setSettings(nextSettings);
-    saveSettings(nextSettings);
-    setSoundEnabled(nextSound);
-    if (nextSound) {
-      playCardMoveSound();
-    }
-  }, [settings]);
+  const handleToggleSound = useCallback(
+    (enabled?: boolean) => {
+      const nextSound = typeof enabled === 'boolean' ? enabled : settings.soundEnabled === false;
+      const nextSettings = { ...settings, soundEnabled: nextSound };
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+      setSoundEnabled(nextSound);
+      if (nextSound) {
+        playCardMoveSound();
+      }
+    },
+    [settings]
+  );
+
+  // Toggle Auto-Move on Tap
+  const handleToggleAutoMove = useCallback(
+    (enabled?: boolean) => {
+      const nextAutoMove = typeof enabled === 'boolean' ? enabled : !settings.autoMoveOnTap;
+      const nextSettings = { ...settings, autoMoveOnTap: nextAutoMove };
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+    },
+    [settings]
+  );
 
   // Undo move with animation
   const handleUndo = useCallback(() => {
@@ -1293,9 +1320,10 @@ export const GameScreen: React.FC = () => {
         onHint={handleHint}
         onGiveUp={handleGiveUp}
         onNewGame={handleNewGame}
+        onOpenStats={() => setStatsVisible(true)}
+        onOpenSettings={() => setSettingsVisible(true)}
         onToggleDrawCount={handleToggleDrawCount}
         onToggleSound={handleToggleSound}
-        onOpenStats={() => setStatsVisible(true)}
       />
 
       {hintMessage && (
@@ -1598,6 +1626,15 @@ export const GameScreen: React.FC = () => {
         visible={statsVisible}
         stats={stats}
         onClose={() => setStatsVisible(false)}
+      />
+
+      <SettingsModal
+        visible={settingsVisible}
+        settings={settings}
+        onClose={() => setSettingsVisible(false)}
+        onChangeDrawCount={handleChangeDrawCount}
+        onToggleSound={handleToggleSound}
+        onToggleAutoMove={handleToggleAutoMove}
       />
 
       <WinModal

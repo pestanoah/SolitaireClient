@@ -61,10 +61,18 @@ describe('Local Storage Persistence', () => {
     expect(afterLoss.bestTimeSeconds).toBe(120); // Unchanged
   });
 
-  test('saves and loads user settings', async () => {
-    await saveSettings({ drawCount: 3, autoMoveOnTap: false });
+  test('loads default settings when none are stored', async () => {
+    const loaded = await loadSettings();
+    expect(loaded.drawCount).toBe(1);
+    expect(loaded.autoMoveOnTap).toBe(true);
+    expect(loaded.soundEnabled).toBe(true);
+  });
+
+  test('saves and loads user settings including soundEnabled', async () => {
+    await saveSettings({ drawCount: 3, autoMoveOnTap: false, soundEnabled: false });
     const loaded = await loadSettings();
     expect(loaded.drawCount).toBe(3);
     expect(loaded.autoMoveOnTap).toBe(false);
+    expect(loaded.soundEnabled).toBe(false);
   });
 });
