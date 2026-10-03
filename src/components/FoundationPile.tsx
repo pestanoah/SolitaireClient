@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Card, FOUNDATION_SUITS, PileLocation, Suit } from '../engine/types';
 import { CardView } from './CardView';
 import { DraggableCard } from './DraggableCard';
+import { colors, borderRadius, fontWeight } from '../theme';
 
 interface FoundationPileProps {
   index: number;
@@ -57,7 +58,7 @@ export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
           style={[
             styles.watermark,
             {
-              color: isRed ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255, 255, 255, 0.25)',
+              color: isRed ? colors.overlay.redWatermark : colors.overlay.whiteWatermark,
               fontSize: Math.floor(width * 0.4),
             },
           ]}
@@ -110,7 +111,7 @@ export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 6,
+    borderRadius: borderRadius.md,
     position: 'relative',
   },
   cardLayer: {
@@ -122,15 +123,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    borderRadius: 6,
+    borderRadius: borderRadius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    borderColor: colors.overlay.borderWhiteStrong,
+    backgroundColor: colors.overlay.slotBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
   watermark: {
-    fontWeight: '300',
+    fontWeight: fontWeight.light,
   },
 });

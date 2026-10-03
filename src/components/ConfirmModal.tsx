@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { colors, modalStyles, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
 export interface ConfirmModalProps {
   visible: boolean;
@@ -26,16 +27,16 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <Text style={styles.title}>{title}</Text>
+      <View style={modalStyles.backdropMedium}>
+        <View style={[modalStyles.cardBase, modalStyles.cardDark]}>
+          <Text style={modalStyles.titleMedium}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
 
-          <View style={styles.buttonRow}>
+          <View style={modalStyles.buttonRow}>
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={onCancel}
-              style={[styles.btn, styles.cancelBtn]}
+              style={[modalStyles.actionBtn, styles.cancelBtn]}
             >
               <Text style={styles.cancelText}>{cancelLabel}</Text>
             </TouchableOpacity>
@@ -44,7 +45,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               activeOpacity={0.8}
               onPress={onConfirm}
               style={[
-                styles.btn,
+                modalStyles.actionBtn,
                 isDestructive ? styles.destructiveBtn : styles.primaryBtn,
               ]}
             >
@@ -58,66 +59,36 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  card: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 360,
-    borderWidth: 1,
-    borderColor: '#334155',
-    alignItems: 'center',
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
   message: {
-    color: '#94a3b8',
-    fontSize: 14,
+    color: colors.slate[400],
+    fontSize: fontSize.body,
     lineHeight: 20,
     textAlign: 'center',
-    marginBottom: 24,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  btn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: spacing.section,
   },
   cancelBtn: {
-    backgroundColor: '#334155',
+    backgroundColor: colors.slate[700],
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
   },
   cancelText: {
-    color: '#e2e8f0',
-    fontSize: 14,
-    fontWeight: '700',
+    color: colors.slate[200],
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.bold,
   },
   primaryBtn: {
-    backgroundColor: '#0284c7',
+    backgroundColor: colors.action.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
   },
   destructiveBtn: {
-    backgroundColor: '#e11d48',
+    backgroundColor: colors.action.destructive,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
   },
   confirmText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
+    color: colors.white,
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.bold,
   },
 });

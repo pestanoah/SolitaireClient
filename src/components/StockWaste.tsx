@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Card, PileLocation } from '../engine/types';
 import { CardView } from './CardView';
 import { DraggableCard } from './DraggableCard';
+import { colors, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
 interface StockWasteProps {
   stock: Card[];
@@ -39,7 +40,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   // In Turn 3 mode, show up to 3 fanned cards from waste
   const visibleWasteCount = drawCount === 3 ? Math.min(3, waste.length) : Math.min(1, waste.length);
   const visibleWaste = waste.slice(-visibleWasteCount);
-  const fanOffset = Math.floor(cardWidth * 0.28);
+  const fanOffset = Math.max(14, Math.floor(cardWidth * 0.30));
   const underlyingCard =
     waste.length > visibleWasteCount ? waste[waste.length - 1 - visibleWasteCount] : null;
   const isUnderlyingHidden = underlyingCard ? hiddenCardIds.includes(underlyingCard.id) : false;
@@ -152,17 +153,17 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.lg,
   },
   pile: {
-    borderRadius: 6,
+    borderRadius: borderRadius.md,
   },
   emptyStock: {
-    borderRadius: 6,
+    borderRadius: borderRadius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+    borderColor: colors.overlay.borderWhiteStrong,
+    backgroundColor: colors.overlay.slotBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -173,25 +174,25 @@ const styles = StyleSheet.create({
   },
   recycleSubtext: {
     color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: '600',
+    fontSize: fontSize.caption,
+    marginTop: spacing.xxs,
+    fontWeight: fontWeight.semibold,
   },
   badge: {
     position: 'absolute',
     bottom: -6,
     right: -6,
-    backgroundColor: '#0f172a',
-    borderRadius: 10,
+    backgroundColor: colors.slate[900],
+    borderRadius: borderRadius.xl,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.card.backBorder,
   },
   badgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
+    color: colors.white,
+    fontSize: fontSize.caption,
+    fontWeight: fontWeight.bold,
   },
   wasteArea: {
     position: 'relative',
@@ -204,9 +205,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    borderRadius: 6,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    borderColor: colors.overlay.borderWhiteSubtle,
+    backgroundColor: colors.overlay.slotFaintBg,
   },
 });

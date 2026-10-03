@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, getCardColor, Rank, Suit } from '../engine/types';
+import { colors, borderRadius, fontSize, fontWeight, shadows } from '../theme';
 
 interface CardViewProps {
   card: Card;
@@ -55,13 +56,15 @@ export const CardView: React.FC<CardViewProps> = React.memo(
     }
 
     const color = getCardColor(card.suit);
-    const textColor = color === 'red' ? '#dc2626' : '#0f172a';
+    const textColor = color === 'red' ? colors.card.redSuit : colors.card.blackSuit;
     const suitSymbol = SUIT_SYMBOLS[card.suit];
     const rankLabel = RANK_LABELS[card.rank];
-    const fontSize = Math.max(11, Math.floor(width * 0.22));
-    const smallSuitSize = Math.max(9, Math.floor(width * 0.17));
-    const centerSymbolSize = Math.max(18, Math.floor(width * 0.42));
-    const rankLineHeight = Math.round(fontSize * 1.05);
+    const isTen = card.rank === 10;
+    const rankScale = isTen ? 0.32 : 0.38;
+    const rankFontSize = Math.max(isTen ? 15 : 17, Math.floor(width * rankScale));
+    const smallSuitSize = Math.max(10, Math.floor(width * 0.20));
+    const centerSymbolSize = Math.max(16, Math.floor(width * 0.36));
+    const rankLineHeight = Math.round(rankFontSize * 1.05);
     const suitLineHeight = Math.round(smallSuitSize * 1.05);
 
     return (
@@ -79,7 +82,12 @@ export const CardView: React.FC<CardViewProps> = React.memo(
           <Text
             style={[
               styles.rankText,
-              { color: textColor, fontSize, lineHeight: rankLineHeight },
+              {
+                color: textColor,
+                fontSize: rankFontSize,
+                lineHeight: rankLineHeight,
+                letterSpacing: isTen ? -0.8 : 0,
+              },
             ]}
           >
             {rankLabel}
@@ -106,7 +114,12 @@ export const CardView: React.FC<CardViewProps> = React.memo(
           <Text
             style={[
               styles.rankText,
-              { color: textColor, fontSize, lineHeight: rankLineHeight },
+              {
+                color: textColor,
+                fontSize: rankFontSize,
+                lineHeight: rankLineHeight,
+                letterSpacing: isTen ? -0.8 : 0,
+              },
             ]}
           >
             {rankLabel}
@@ -127,32 +140,29 @@ export const CardView: React.FC<CardViewProps> = React.memo(
 
 const styles = StyleSheet.create({
   cardBase: {
-    borderRadius: 6,
+    borderRadius: borderRadius.md,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#94a3b8',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2.5,
+    borderColor: colors.card.border,
+    ...shadows.card,
   },
   cardFront: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card.frontBg,
     justifyContent: 'space-between',
-    padding: 3,
+    paddingHorizontal: 3,
+    paddingVertical: 2,
   },
   cardBack: {
-    backgroundColor: '#1e3a8a',
-    borderColor: '#e2e8f0',
+    backgroundColor: colors.card.backBg,
+    borderColor: colors.card.backBorder,
     padding: 3,
   },
   cardBackInner: {
     flex: 1,
-    borderRadius: 4,
+    borderRadius: borderRadius.sm,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    backgroundColor: '#172554',
+    borderColor: colors.overlay.borderWhiteHigh,
+    backgroundColor: colors.card.backInnerBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -160,34 +170,35 @@ const styles = StyleSheet.create({
     width: '80%',
     height: '80%',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 3,
+    borderColor: colors.overlay.borderWhiteMedium,
+    borderRadius: borderRadius.xs,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1e40af',
+    backgroundColor: colors.card.backPatternBg,
   },
   cardBackEmblem: {
-    color: '#93c5fd',
-    fontSize: 14,
+    color: colors.card.backEmblem,
+    fontSize: fontSize.body,
     opacity: 0.8,
   },
   cornerTopLeft: {
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 1,
+    gap: 0,
   },
   cornerBottomRight: {
     alignItems: 'center',
     alignSelf: 'flex-end',
     transform: [{ rotate: '180deg' }],
-    gap: 1,
+    gap: 0,
   },
   rankText: {
-    fontWeight: '800',
+    fontWeight: fontWeight.black,
     textAlign: 'center',
   },
   smallSuit: {
     textAlign: 'center',
+    fontWeight: fontWeight.bold,
   },
   centerContainer: {
     position: 'absolute',
@@ -197,21 +208,18 @@ const styles = StyleSheet.create({
     right: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    pointerEvents: 'none',
   },
   centerSymbol: {
-    opacity: 0.9,
+    opacity: 0.85,
   },
   selected: {
-    borderColor: '#3b82f6',
+    borderColor: colors.card.selectedBorder,
     borderWidth: 2,
-    shadowColor: '#3b82f6',
-    shadowOpacity: 0.6,
-    shadowRadius: 5,
+    ...shadows.cardSelected,
   },
   dragging: {
     opacity: 0.85,
-    elevation: 8,
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
+    ...shadows.cardDragging,
   },
 });
