@@ -79,7 +79,12 @@ export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   // Settings & Stats
-  const [settings, setSettings] = useState<UserSettings>({ drawCount: 1, autoMoveOnTap: true });
+  const [settings, setSettings] = useState<UserSettings>({
+    drawCount: 1,
+    autoMoveOnTap: true,
+    rightHanded: false,
+  });
+  const isRightHanded = settings.rightHanded === true;
   const [stats, setStats] = useState<PlayerStats>({
     gamesPlayed: 0,
     gamesWon: 0,
@@ -173,10 +178,30 @@ export const GameScreen: React.FC = () => {
   const tableauRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const foundationsRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  const stockWasteWrapperPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const stockRelativePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const wasteRelativePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const stockLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const wasteLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const foundationLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const tableauLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+
+  const handleStockLayout = useCallback((x: number, y: number) => {
+    stockRelativePos.current = { x, y };
+    stockLayoutRef.current = {
+      x: topRowLayoutRef.current.x + stockWasteWrapperPos.current.x + x,
+      y: topRowLayoutRef.current.y + stockWasteWrapperPos.current.y + y,
+    };
+  }, []);
+
+  const handleWasteLayout = useCallback((x: number, y: number) => {
+    wasteRelativePos.current = { x, y };
+    wasteLayoutRef.current = {
+      x: topRowLayoutRef.current.x + stockWasteWrapperPos.current.x + x,
+      y: topRowLayoutRef.current.y + stockWasteWrapperPos.current.y + y,
+    };
+  }, []);
 
   // Calculate responsive dimensions
   const { maxBoardWidth, gap, cardWidth, cardHeight, downOffset, upOffset, fanOffset } =
@@ -361,7 +386,7 @@ export const GameScreen: React.FC = () => {
       if (pile.type === 'stock') {
         return {
           x: stockLayoutRef.current.x,
-          y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+          y: stockLayoutRef.current.y,
         };
       }
 
@@ -375,14 +400,14 @@ export const GameScreen: React.FC = () => {
         const hOffset = Math.max(0, visibleCount - 1) * fanOffset;
         return {
           x: wasteLayoutRef.current.x + hOffset,
-          y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+          y: wasteLayoutRef.current.y,
         };
       }
 
       if (pile.type === 'foundation') {
         const fLayout = foundationLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
         return {
-          x: foundationsRowLayoutRef.current.x + fLayout.x,
+          x: topRowLayoutRef.current.x + foundationsRowLayoutRef.current.x + fLayout.x,
           y: topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y,
         };
       }
@@ -421,11 +446,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
       const endPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -464,11 +489,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
       const endPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -581,7 +606,7 @@ export const GameScreen: React.FC = () => {
         for (let f = 0; f < gameState.foundations.length; f++) {
           if (from.type === 'foundation' && from.index === f) continue;
           const fLayout = foundationLayoutsRef.current.get(f) ?? { x: 0, y: 0 };
-          const fx = foundationsRowLayoutRef.current.x + fLayout.x;
+          const fx = topRowLayoutRef.current.x + foundationsRowLayoutRef.current.x + fLayout.x;
           const fy = topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y;
 
           const inBounds =
@@ -758,11 +783,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
       const endPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -798,11 +823,11 @@ export const GameScreen: React.FC = () => {
 
     const startPos = {
       x: stockLayoutRef.current.x,
-      y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+      y: stockLayoutRef.current.y,
     };
     const endPos = {
       x: wasteLayoutRef.current.x,
-      y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+      y: wasteLayoutRef.current.y,
     };
 
     isAnimatingRef.current = true;
@@ -1146,6 +1171,17 @@ export const GameScreen: React.FC = () => {
     [settings]
   );
 
+  // Toggle Right-Handed Mode
+  const handleToggleRightHanded = useCallback(
+    (enabled?: boolean) => {
+      const nextRightHanded = typeof enabled === 'boolean' ? enabled : !settings.rightHanded;
+      const nextSettings = { ...settings, rightHanded: nextRightHanded };
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+    },
+    [settings]
+  );
+
   // Undo move with animation
   const handleUndo = useCallback(() => {
     if (isAnimatingRef.current || canAutoComplete(gameState)) return;
@@ -1165,11 +1201,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
       const endPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -1206,11 +1242,11 @@ export const GameScreen: React.FC = () => {
 
       const startPos = {
         x: stockLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + stockLayoutRef.current.y,
+        y: stockLayoutRef.current.y,
       };
       const endPos = {
         x: wasteLayoutRef.current.x,
-        y: topRowLayoutRef.current.y + wasteLayoutRef.current.y,
+        y: wasteLayoutRef.current.y,
       };
 
       isAnimatingRef.current = true;
@@ -1337,25 +1373,37 @@ export const GameScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.board, { maxWidth: maxBoardWidth }]}>
-          {/* Top Row: Stock + Waste on Left, 4 Foundations on Right */}
+          {/* Top Row: Stock + Waste on Left (or Right if Right-Handed), 4 Foundations on Right (or Left if Right-Handed) */}
           <View
             onLayout={(e) => {
               topRowLayoutRef.current = {
                 x: e.nativeEvent.layout.x,
                 y: e.nativeEvent.layout.y,
               };
+              stockLayoutRef.current = {
+                x: e.nativeEvent.layout.x + stockWasteWrapperPos.current.x + stockRelativePos.current.x,
+                y: e.nativeEvent.layout.y + stockWasteWrapperPos.current.y + stockRelativePos.current.y,
+              };
+              wasteLayoutRef.current = {
+                x: e.nativeEvent.layout.x + stockWasteWrapperPos.current.x + wasteRelativePos.current.x,
+                y: e.nativeEvent.layout.y + stockWasteWrapperPos.current.y + wasteRelativePos.current.y,
+              };
             }}
-            style={[styles.topRow, { gap }]}
+            style={[styles.topRow, { gap }, isRightHanded && styles.topRowRightHanded]}
           >
             <View
               onLayout={(e) => {
-                stockLayoutRef.current = {
+                stockWasteWrapperPos.current = {
                   x: e.nativeEvent.layout.x,
                   y: e.nativeEvent.layout.y,
                 };
+                stockLayoutRef.current = {
+                  x: topRowLayoutRef.current.x + e.nativeEvent.layout.x + stockRelativePos.current.x,
+                  y: topRowLayoutRef.current.y + e.nativeEvent.layout.y + stockRelativePos.current.y,
+                };
                 wasteLayoutRef.current = {
-                  x: e.nativeEvent.layout.x + cardWidth + 10,
-                  y: e.nativeEvent.layout.y,
+                  x: topRowLayoutRef.current.x + e.nativeEvent.layout.x + wasteRelativePos.current.x,
+                  y: topRowLayoutRef.current.y + e.nativeEvent.layout.y + wasteRelativePos.current.y,
                 };
               }}
             >
@@ -1365,6 +1413,7 @@ export const GameScreen: React.FC = () => {
                 drawCount={gameState.drawCount}
                 cardWidth={cardWidth}
                 cardHeight={cardHeight}
+                rightHanded={isRightHanded}
                 onStockPress={handleStockPress}
                 onWasteCardPress={handleWasteCardPress}
                 selectedCardId={
@@ -1379,6 +1428,8 @@ export const GameScreen: React.FC = () => {
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
+                onStockLayout={handleStockLayout}
+                onWasteLayout={handleWasteLayout}
               />
             </View>
 
@@ -1434,7 +1485,7 @@ export const GameScreen: React.FC = () => {
                 y: e.nativeEvent.layout.y,
               };
             }}
-            style={[styles.tableauRow, { gap }]}
+            style={[styles.tableauRow, { gap }, isRightHanded && styles.tableauRowRightHanded]}
           >
             {gameState.tableau.map((col, idx) => {
               const isSelectedCol =
@@ -1635,6 +1686,7 @@ export const GameScreen: React.FC = () => {
         onChangeDrawCount={handleChangeDrawCount}
         onToggleSound={handleToggleSound}
         onToggleAutoMove={handleToggleAutoMove}
+        onToggleRightHanded={handleToggleRightHanded}
       />
 
       <WinModal

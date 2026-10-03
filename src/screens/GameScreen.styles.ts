@@ -35,6 +35,9 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
   },
+  topRowRightHanded: {
+    flexDirection: 'row-reverse',
+  },
   spacer: {
     flex: 1,
     minWidth: spacing.lg,
@@ -48,6 +51,9 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
     paddingBottom: spacing.bottomBarPadding,
+  },
+  tableauRowRightHanded: {
+    flexDirection: 'row-reverse',
   },
   floatingAnimatedContainer: {
     position: 'absolute',

@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   drawCount: 1,
   autoMoveOnTap: true,
   soundEnabled: true,
+  rightHanded: false,
 };
 
 export async function saveGameState(state: GameState): Promise<void> {

@@ -66,4 +66,5 @@ export interface UserSettings {
   drawCount: 1 | 3;
   autoMoveOnTap: boolean;
   soundEnabled?: boolean;
+  rightHanded?: boolean;
 }

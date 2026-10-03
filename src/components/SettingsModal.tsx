@@ -24,6 +24,7 @@ export interface SettingsModalProps {
   onChangeDrawCount: (drawCount: 1 | 3) => void;
   onToggleSound: (enabled: boolean) => void;
   onToggleAutoMove: (enabled: boolean) => void;
+  onToggleRightHanded: (enabled: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -33,6 +34,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChangeDrawCount,
   onToggleSound,
   onToggleAutoMove,
+  onToggleRightHanded,
 }) => {
   const isSoundOn = settings.soundEnabled !== false;
 
@@ -172,6 +174,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 thumbColor={colors.white}
                 ios_backgroundColor={colors.slate[700]}
                 accessibilityLabel="Toggle tap to move"
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* 4. Right-Handed Mode */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingRowText}>
+                <Text style={styles.settingTitle}>Right-Handed Mode</Text>
+                <Text style={styles.settingDescription}>
+                  Invert board layout for easier right-hand reach
+                </Text>
+              </View>
+              <Switch
+                value={settings.rightHanded === true}
+                onValueChange={onToggleRightHanded}
+                trackColor={{
+                  false: colors.slate[700],
+                  true: colors.action.success,
+                }}
+                thumbColor={colors.white}
+                ios_backgroundColor={colors.slate[700]}
+                accessibilityLabel="Toggle right-handed mode"
               />
             </View>
           </View>
