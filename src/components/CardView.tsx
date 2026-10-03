@@ -9,6 +9,8 @@ interface CardViewProps {
   height: number;
   isDragging?: boolean;
   isSelected?: boolean;
+  isHintSource?: boolean;
+  isHintTarget?: boolean;
 }
 
 const SUIT_SYMBOLS: Record<Suit, string> = {
@@ -35,7 +37,7 @@ const RANK_LABELS: Record<Rank, string> = {
 };
 
 export const CardView: React.FC<CardViewProps> = React.memo(
-  ({ card, width, height, isDragging, isSelected }) => {
+  ({ card, width, height, isDragging, isSelected, isHintSource, isHintTarget }) => {
     if (!card.faceUp) {
       return (
         <View
@@ -43,6 +45,8 @@ export const CardView: React.FC<CardViewProps> = React.memo(
             styles.cardBase,
             styles.cardBack,
             { width, height },
+            isHintSource && styles.hintSource,
+            isHintTarget && styles.hintTarget,
             isDragging && styles.dragging,
           ]}
         >
@@ -74,6 +78,8 @@ export const CardView: React.FC<CardViewProps> = React.memo(
           styles.cardFront,
           { width, height },
           isSelected && styles.selected,
+          isHintSource && styles.hintSource,
+          isHintTarget && styles.hintTarget,
           isDragging && styles.dragging,
         ]}
       >
@@ -217,6 +223,16 @@ const styles = StyleSheet.create({
     borderColor: colors.card.selectedBorder,
     borderWidth: 2,
     ...shadows.cardSelected,
+  },
+  hintSource: {
+    borderColor: colors.hint.sourceBorder,
+    borderWidth: 2.5,
+    ...shadows.cardHintSource,
+  },
+  hintTarget: {
+    borderColor: colors.hint.targetBorder,
+    borderWidth: 2.5,
+    ...shadows.cardHintTarget,
   },
   dragging: {
     opacity: 0.85,

@@ -21,6 +21,7 @@ import { StockWaste } from '../components/StockWaste';
 import { TableauColumn } from '../components/TableauColumn';
 import { WinModal } from '../components/WinModal';
 import { dealKlondike } from '../engine/deck';
+import { findAvailableHints, Hint } from '../engine/hints';
 import {
   autoCompleteStep,
   drawCards,
@@ -111,17 +112,59 @@ export const GameScreen: React.FC = () => {
   const dragPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const isAnimatingRef = useRef(false);
 
-  // Toast / Hint for empty column
+  // Toast / Hint Banner
   const [hintMessage, setHintMessage] = useState<string | null>(null);
   const hintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showHint = (msg: string) => {
+  // Active Hint State (Highlighting)
+  const [activeHint, setActiveHint] = useState<Hint | null>(null);
+  const hintIndexRef = useRef<number>(0);
+  const hintHighlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearActiveHint = useCallback(() => {
+    if (hintHighlightTimeoutRef.current) {
+      clearTimeout(hintHighlightTimeoutRef.current);
+      hintHighlightTimeoutRef.current = null;
+    }
+    setActiveHint(null);
+  }, []);
+
+  const showHint = useCallback((msg: string, duration = 2800) => {
     if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
     setHintMessage(msg);
     hintTimeoutRef.current = setTimeout(() => {
       setHintMessage(null);
-    }, 2400);
-  };
+    }, duration);
+  }, []);
+
+  const handleHint = useCallback(() => {
+    if (isAnimatingRef.current) return;
+    if (gameState.status !== 'playing') return;
+
+    const hints = findAvailableHints(gameState);
+    if (hints.length === 0) {
+      showHint('No valid moves available.');
+      clearActiveHint();
+      return;
+    }
+
+    let nextIndex = 0;
+    if (activeHint) {
+      nextIndex = (hintIndexRef.current + 1) % hints.length;
+    }
+    hintIndexRef.current = nextIndex;
+    const hint = hints[nextIndex];
+
+    setActiveHint(hint);
+    showHint(`💡 ${hint.message}`, 4000);
+
+    if (hintHighlightTimeoutRef.current) {
+      clearTimeout(hintHighlightTimeoutRef.current);
+    }
+    hintHighlightTimeoutRef.current = setTimeout(() => {
+      setActiveHint(null);
+    }, 4000);
+  }, [gameState, activeHint, clearActiveHint, showHint]);
 
   // Measured Board Layout Positions (Relative to styles.board)
   const topRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -512,6 +555,7 @@ export const GameScreen: React.FC = () => {
   const handleDragStart = useCallback(
     (from: PileLocation, card: Card, cardIndex: number) => {
       if (isAnimatingRef.current) return;
+      clearActiveHint();
       setSelectedCards(null);
 
       let movingCards: Card[] = [];
@@ -539,7 +583,7 @@ export const GameScreen: React.FC = () => {
         startPos,
       });
     },
-    [gameState, getPileCardPosition, dragPan]
+    [gameState, getPileCardPosition, dragPan, clearActiveHint]
   );
 
   const handleDragMove = useCallback(
@@ -612,6 +656,7 @@ export const GameScreen: React.FC = () => {
   // Stock press with draw animation
   const handleStockPress = useCallback(() => {
     if (isAnimatingRef.current) return;
+    clearActiveHint();
     setSelectedCards(null);
 
     if (gameState.stock.length === 0) {
@@ -695,12 +740,13 @@ export const GameScreen: React.FC = () => {
       setAnimatingCard(null);
       isAnimatingRef.current = false;
     });
-  }, [gameState]);
+  }, [gameState, clearActiveHint]);
 
   // Waste card press
   const handleWasteCardPress = useCallback(
     (card: Card) => {
       if (isAnimatingRef.current) return;
+      clearActiveHint();
 
       if (settings.autoMoveOnTap) {
         const smart = findSmartMove(gameState, card.id);
@@ -720,13 +766,14 @@ export const GameScreen: React.FC = () => {
         setSelectedCards({ from: { type: 'waste', index: 0 }, cardIds: [card.id] });
       }
     },
-    [gameState, selectedCards, settings.autoMoveOnTap]
+    [gameState, selectedCards, settings.autoMoveOnTap, clearActiveHint]
   );
 
   // Tableau card press
   const handleTableauCardPress = useCallback(
     (card: Card, colIndex: number) => {
       if (isAnimatingRef.current) return;
+      clearActiveHint();
 
       // If we already have selected cards, try to move onto this tableau column
       if (selectedCards) {
@@ -764,33 +811,16 @@ export const GameScreen: React.FC = () => {
         setSelectedCards({ from: { type: 'tableau', index: colIndex }, cardIds });
       }
     },
-    [gameState, selectedCards, settings.autoMoveOnTap]
+    [gameState, selectedCards, settings.autoMoveOnTap, clearActiveHint]
   );
 
   // Empty tableau column press (e.g. King target)
   const handleEmptyColumnPress = useCallback(
     (colIndex: number) => {
       if (isAnimatingRef.current) return;
+      clearActiveHint();
 
       if (selectedCards) {
-        const leadCardId = selectedCards.cardIds[0];
-        // Check if lead card is a King
-        let leadCard: Card | undefined;
-        if (selectedCards.from.type === 'waste') {
-          leadCard = gameState.waste[gameState.waste.length - 1];
-        } else if (selectedCards.from.type === 'tableau') {
-          const col = gameState.tableau[selectedCards.from.index];
-          leadCard = col.find((c) => c.id === leadCardId);
-        } else if (selectedCards.from.type === 'foundation') {
-          const f = gameState.foundations[selectedCards.from.index];
-          leadCard = f[f.length - 1];
-        }
-
-        if (leadCard && leadCard.rank !== 13) {
-          showHint('In Klondike, only Kings can be placed on empty tableau spaces.');
-          return;
-        }
-
         const success = executeMoveWithAnimation(
           selectedCards.from,
           { type: 'tableau', index: colIndex },
@@ -798,16 +828,19 @@ export const GameScreen: React.FC = () => {
         );
         if (success) {
           setSelectedCards(null);
+        } else {
+          showHint('In Klondike, only Kings can be placed on empty tableau spaces.');
         }
       }
     },
-    [gameState, selectedCards]
+    [selectedCards, clearActiveHint, showHint]
   );
 
   // Foundation pile press
   const handleFoundationPress = useCallback(
     (fIndex: number) => {
       if (isAnimatingRef.current) return;
+      clearActiveHint();
 
       const pile = gameState.foundations[fIndex];
       const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
@@ -862,7 +895,7 @@ export const GameScreen: React.FC = () => {
         });
       }
     },
-    [gameState, selectedCards, settings.autoMoveOnTap]
+    [gameState, selectedCards, settings.autoMoveOnTap, clearActiveHint, showHint]
   );
 
   const handleFoundation0Press = useCallback(() => handleFoundationPress(0), [handleFoundationPress]);
@@ -893,6 +926,7 @@ export const GameScreen: React.FC = () => {
   // Internal helper to deal a new game and reset animation/selection states
   const startNewGame = useCallback(
     (count?: 1 | 3) => {
+      clearActiveHint();
       setSelectedCards(null);
       setAnimatingCard(null);
       isAnimatingRef.current = false;
@@ -901,7 +935,7 @@ export const GameScreen: React.FC = () => {
       const newGame = dealKlondike(count ?? settings.drawCount);
       setGameState(newGame);
     },
-    [settings.drawCount]
+    [settings.drawCount, clearActiveHint]
   );
 
   // Start new game (prompts if active game has moves)
@@ -999,6 +1033,7 @@ export const GameScreen: React.FC = () => {
     if (isAnimatingRef.current) return;
     if (gameState.history.length === 0) return;
 
+    clearActiveHint();
     setSelectedCards(null);
 
     const lastMove = gameState.history[gameState.history.length - 1];
@@ -1148,27 +1183,7 @@ export const GameScreen: React.FC = () => {
       setAnimatingCard(null);
       isAnimatingRef.current = false;
     });
-  }, [gameState]);
-
-  // Check if selected card is King (for highlighting empty columns)
-  const isSelectedKing = (() => {
-    if (!selectedCards) return false;
-    const leadId = selectedCards.cardIds[0];
-    if (selectedCards.from.type === 'waste') {
-      const c = gameState.waste[gameState.waste.length - 1];
-      return c?.rank === 13;
-    }
-    if (selectedCards.from.type === 'tableau') {
-      const col = gameState.tableau[selectedCards.from.index];
-      const c = col.find((item) => item.id === leadId);
-      return c?.rank === 13;
-    }
-    if (selectedCards.from.type === 'foundation') {
-      const f = gameState.foundations[selectedCards.from.index];
-      return f[f.length - 1]?.rank === 13;
-    }
-    return false;
-  })();
+  }, [gameState, clearActiveHint]);
 
   const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : dragState ? dragState.cardIds : EMPTY_CARD_IDS;
 
@@ -1180,9 +1195,11 @@ export const GameScreen: React.FC = () => {
         elapsedSeconds={gameState.elapsedSeconds}
         drawCount={gameState.drawCount}
         canUndo={gameState.history.length > 0}
+        canHint={gameState.status === 'playing'}
         canGiveUp={gameState.status === 'playing' && gameState.moves > 0}
         soundEnabled={settings.soundEnabled !== false}
         onUndo={handleUndo}
+        onHint={handleHint}
         onGiveUp={handleGiveUp}
         onNewGame={handleNewGame}
         onToggleDrawCount={handleToggleDrawCount}
@@ -1235,6 +1252,11 @@ export const GameScreen: React.FC = () => {
                   selectedCards?.from.type === 'waste' ? selectedCards.cardIds[0] : null
                 }
                 hiddenCardIds={hiddenIds}
+                isStockHintSource={activeHint?.type === 'draw' && activeHint.from.type === 'stock'}
+                isStockHintTarget={activeHint?.type === 'recycle' && activeHint.to?.type === 'stock'}
+                hintWasteCardId={
+                  activeHint?.from.type === 'waste' ? activeHint.cardIds?.[0] ?? null : null
+                }
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
@@ -1274,6 +1296,8 @@ export const GameScreen: React.FC = () => {
                         : null
                     }
                     hiddenCardIds={hiddenIds}
+                    isHintSource={activeHint?.from.type === 'foundation' && activeHint.from.index === idx}
+                    isHintTarget={activeHint?.to?.type === 'foundation' && activeHint.to.index === idx}
                     onDragStart={handleDragStart}
                     onDragMove={handleDragMove}
                     onDragEnd={handleDragEnd}
@@ -1305,7 +1329,6 @@ export const GameScreen: React.FC = () => {
                       y: e.nativeEvent.layout.y,
                     });
                   }}
-                  style={isSelectedKing && col.length === 0 ? styles.emptyColumnHighlight : null}
                 >
                   <TableauColumn
                     columnIndex={idx}
@@ -1314,6 +1337,12 @@ export const GameScreen: React.FC = () => {
                     cardHeight={cardHeight}
                     selectedCardIds={isSelectedCol ? selectedCards.cardIds : EMPTY_CARD_IDS}
                     hiddenCardIds={hiddenIds}
+                    hintSourceCardIds={
+                      activeHint?.from.type === 'tableau' && activeHint.from.index === idx
+                        ? activeHint.cardIds
+                        : undefined
+                    }
+                    isHintTargetColumn={activeHint?.to?.type === 'tableau' && activeHint.to.index === idx}
                     onCardPress={handleTableauCardPress}
                     onEmptyColumnPress={handleEmptyColumnPress}
                     onDragStart={handleDragStart}

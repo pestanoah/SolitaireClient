@@ -49,13 +49,6 @@ export const styles = StyleSheet.create({
     width: '100%',
     paddingBottom: spacing.bottomBarPadding,
   },
-  emptyColumnHighlight: {
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.overlay.highlightDashed,
-    borderWidth: 1.5,
-    borderColor: colors.action.info,
-    borderStyle: 'dashed',
-  },
   floatingAnimatedContainer: {
     position: 'absolute',
     pointerEvents: 'none',

@@ -51,6 +51,16 @@ export const colors = {
     info: '#38bdf8',
   },
 
+  // Hint Palette
+  hint: {
+    sourceBorder: '#f59e0b',
+    sourceShadow: '#f59e0b',
+    sourceBg: 'rgba(245, 158, 11, 0.2)',
+    targetBorder: '#38bdf8',
+    targetShadow: '#38bdf8',
+    targetBg: 'rgba(56, 189, 248, 0.2)',
+  },
+
   // Translucent Overlays & Watermarks
   overlay: {
     backdropDark: 'rgba(0, 0, 0, 0.75)',

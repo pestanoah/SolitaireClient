@@ -13,6 +13,8 @@ interface FoundationPileProps {
   onPress?: () => void;
   selectedCardId?: string | null;
   hiddenCardIds?: string[];
+  isHintSource?: boolean;
+  isHintTarget?: boolean;
   onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
   onDragMove?: (dx: number, dy: number) => void;
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
@@ -33,6 +35,8 @@ export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
   onPress,
   selectedCardId,
   hiddenCardIds = [],
+  isHintSource = false,
+  isHintTarget = false,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -52,7 +56,11 @@ export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
         activeOpacity={0.8}
         onPress={onPress}
         disabled={topCard !== null}
-        style={[styles.emptySlot, { width, height }]}
+        style={[
+          styles.emptySlot,
+          { width, height },
+          isHintTarget && styles.emptySlotHintTarget,
+        ]}
       >
         <Text
           style={[
@@ -101,6 +109,8 @@ export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
               width={width}
               height={height}
               isSelected={isSelected}
+              isHintSource={isHintSource}
+              isHintTarget={isHintTarget}
             />
           </DraggableCard>
         </View>
@@ -130,6 +140,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay.slotBg,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptySlotHintTarget: {
+    borderColor: colors.hint.targetBorder,
+    borderWidth: 2,
+    backgroundColor: colors.hint.targetBg,
   },
   watermark: {
     fontWeight: fontWeight.light,
