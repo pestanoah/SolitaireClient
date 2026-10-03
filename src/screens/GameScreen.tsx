@@ -5,12 +5,12 @@ import {
   Easing,
   Platform,
   ScrollView,
-  StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { styles } from './GameScreen.styles';
 import { CardView } from '../components/CardView';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { FoundationPile } from '../components/FoundationPile';
@@ -142,8 +142,8 @@ export const GameScreen: React.FC = () => {
       const cardHeight = Math.floor(cardWidth * 1.4);
 
       const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
-      const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
-      const fanOffset = Math.floor(cardWidth * 0.28);
+      const upOffset = Math.max(28, Math.floor(cardHeight * 0.32));
+      const fanOffset = Math.max(14, Math.floor(cardWidth * 0.30));
 
       return {
         maxBoardWidth,
@@ -1512,70 +1512,3 @@ export const GameScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#064e3b',
-  },
-  hintBanner: {
-    backgroundColor: '#0f766e',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#14b8a6',
-  },
-  hintText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  boardContent: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  board: {
-    width: '100%',
-    gap: 16,
-    position: 'relative',
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  spacer: {
-    flex: 1,
-    minWidth: 10,
-  },
-  foundationsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tableauRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingBottom: 40,
-  },
-  emptyColumnHighlight: {
-    borderRadius: 8,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    borderWidth: 1.5,
-    borderColor: '#38bdf8',
-    borderStyle: 'dashed',
-  },
-  floatingAnimatedContainer: {
-    position: 'absolute',
-    pointerEvents: 'none',
-    zIndex: 9999,
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-  },
-});

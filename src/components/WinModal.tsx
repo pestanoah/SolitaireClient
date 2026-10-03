@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
 interface WinModalProps {
   visible: boolean;
@@ -39,25 +40,25 @@ export const WinModal: React.FC<WinModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
+      <View style={modalStyles.backdropDark}>
+        <View style={[modalStyles.cardBase, modalStyles.cardFelt, styles.card]}>
           <Text style={styles.celebrationIcon}>🎉</Text>
-          <Text style={styles.title}>Victory!</Text>
+          <Text style={modalStyles.title}>Victory!</Text>
           <Text style={styles.subtitle}>You completed the game!</Text>
 
           <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{score}</Text>
+            <View style={modalStyles.statItem}>
+              <Text style={modalStyles.statValue}>{score}</Text>
               <Text style={styles.statLabel}>Final Score</Text>
             </View>
 
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{moves}</Text>
+            <View style={modalStyles.statItem}>
+              <Text style={modalStyles.statValue}>{moves}</Text>
               <Text style={styles.statLabel}>Moves</Text>
             </View>
 
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{timeFormatted}</Text>
+            <View style={modalStyles.statItem}>
+              <Text style={modalStyles.statValue}>{timeFormatted}</Text>
               <Text style={styles.statLabel}>Time</Text>
             </View>
           </View>
@@ -76,83 +77,49 @@ export const WinModal: React.FC<WinModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
   card: {
-    backgroundColor: '#064e3b',
-    borderRadius: 20,
-    padding: 28,
-    width: '100%',
-    maxWidth: 360,
-    borderWidth: 2,
-    borderColor: '#34d399',
-    alignItems: 'center',
-    shadowColor: '#10b981',
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
+    borderRadius: borderRadius.modalLg,
+    padding: spacing.modalPadding,
+    ...shadows.modalWin,
   },
   celebrationIcon: {
     fontSize: 54,
-    marginBottom: 8,
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+    marginBottom: spacing.md,
   },
   subtitle: {
-    color: '#a7f3d0',
-    fontSize: 14,
-    marginTop: 4,
-    marginBottom: 20,
+    color: colors.felt.textMuted,
+    fontSize: fontSize.body,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xxxl,
+    textAlign: 'center',
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
+    backgroundColor: colors.overlay.panelMedium,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.xxl,
+    marginBottom: spacing.section,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '800',
+    borderColor: colors.overlay.borderWhiteSubtle,
   },
   statLabel: {
-    color: '#6ee7b7',
-    fontSize: 11,
-    marginTop: 4,
-    fontWeight: '600',
+    color: colors.felt.accent,
+    fontSize: fontSize.subtext,
+    marginTop: spacing.xs,
+    fontWeight: fontWeight.semibold,
   },
   playAgainBtn: {
-    backgroundColor: '#10b981',
-    paddingVertical: 12,
+    backgroundColor: colors.action.success,
+    paddingVertical: spacing.xl,
     paddingHorizontal: 36,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    borderRadius: borderRadius.xl,
+    ...shadows.button,
   },
   playAgainText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.heavy,
   },
 });

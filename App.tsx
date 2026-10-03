@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GameScreen } from './src/screens/GameScreen';
+import { colors } from './src/theme';
 
 export default function App() {
   return (
@@ -18,6 +19,6 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#064e3b',
+    backgroundColor: colors.felt.background,
   },
 });

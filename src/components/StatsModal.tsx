@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { PlayerStats } from '../engine/types';
+import { colors, modalStyles, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
 interface StatsModalProps {
   visible: boolean;
@@ -23,8 +24,8 @@ export const StatsModal: React.FC<StatsModalProps> = ({ visible, stats, onClose 
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
+      <View style={modalStyles.backdropMedium}>
+        <View style={[modalStyles.cardBase, modalStyles.cardDark]}>
           <Text style={styles.title}>Statistics</Text>
 
           <View style={styles.grid}>
@@ -64,70 +65,53 @@ export const StatsModal: React.FC<StatsModalProps> = ({ visible, stats, onClose 
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  card: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 360,
-    borderWidth: 1,
-    borderColor: '#334155',
-    alignItems: 'center',
-  },
   title: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 20,
+    color: colors.white,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.heavy,
+    marginBottom: spacing.xxxl,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: spacing.xl,
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 24,
+    marginBottom: spacing.section,
   },
   statBox: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
+    backgroundColor: colors.slate[800],
+    borderRadius: borderRadius.xl,
     paddingVertical: 14,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.md,
     width: '47%',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.slate[700],
   },
   wideBox: {
     width: '100%',
   },
   statValue: {
-    color: '#38bdf8',
-    fontSize: 22,
-    fontWeight: '800',
+    color: colors.action.info,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.heavy,
   },
   statLabel: {
-    color: '#94a3b8',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '600',
+    color: colors.slate[400],
+    fontSize: fontSize.sm,
+    marginTop: spacing.xs,
+    fontWeight: fontWeight.semibold,
   },
   closeBtn: {
-    backgroundColor: '#0284c7',
-    paddingVertical: 10,
+    backgroundColor: colors.action.primary,
+    paddingVertical: spacing.lg,
     paddingHorizontal: 32,
-    borderRadius: 8,
+    borderRadius: borderRadius.lg,
   },
   closeText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
+    color: colors.white,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
   },
 });

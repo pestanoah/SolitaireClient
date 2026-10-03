@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Card, PileLocation } from '../engine/types';
 import { CardView } from './CardView';
 import { DraggableCard } from './DraggableCard';
+import { colors, borderRadius, fontWeight } from '../theme';
 
 interface TableauColumnProps {
   columnIndex: number;
@@ -37,7 +38,7 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
 
   const { offsets, columnHeight } = useMemo(() => {
     const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
-    const upOffset = Math.max(22, Math.floor(cardHeight * 0.28));
+    const upOffset = Math.max(28, Math.floor(cardHeight * 0.32));
 
     // Compute vertical offset positions for each card
     const offsets: number[] = [];
@@ -127,16 +128,16 @@ const styles = StyleSheet.create({
     left: 0,
   },
   emptySlot: {
-    borderRadius: 6,
+    borderRadius: borderRadius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+    borderColor: colors.overlay.whiteWatermark,
+    backgroundColor: colors.overlay.slotSubtleBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyK: {
-    color: 'rgba(255, 255, 255, 0.2)',
-    fontWeight: '700',
+    color: colors.overlay.borderWhiteMedium,
+    fontWeight: fontWeight.bold,
   },
 });

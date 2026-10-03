@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { colors, spacing, borderRadius, fontSize, fontWeight, letterSpacing } from '../theme';
 
 interface GameHeaderProps {
   score: number;
@@ -124,12 +125,12 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#064e3b',
+    backgroundColor: colors.felt.background,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
+    borderBottomColor: colors.felt.border,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -140,73 +141,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricLabel: {
-    color: '#a7f3d0',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    color: colors.felt.textMuted,
+    fontSize: fontSize.micro,
+    fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.wide,
   },
   metricValue: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.heavy,
   },
   modeBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: colors.overlay.panelMedium,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs - 1,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: colors.overlay.borderWhiteMedium,
   },
   modeLabel: {
-    color: '#6ee7b7',
-    fontSize: 8,
-    fontWeight: '700',
+    color: colors.felt.accent,
+    fontSize: fontSize.tiny,
+    fontWeight: fontWeight.bold,
   },
   modeValue: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
   },
   actionsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.sm,
   },
   actionBtn: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderRadius: 6,
+    backgroundColor: colors.overlay.whiteFillSubtle,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: colors.overlay.borderWhiteMedium,
   },
   soundBtn: {
     flex: 0,
     minWidth: 36,
-    paddingHorizontal: 6,
+    paddingHorizontal: spacing.sm,
   },
   actionBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
   btnDisabled: {
     opacity: 0.4,
   },
   btnTextDisabled: {
-    color: '#94a3b8',
+    color: colors.slate[400],
   },
   newGameBtn: {
-    backgroundColor: '#047857',
-    borderColor: '#10b981',
+    backgroundColor: colors.felt.surface,
+    borderColor: colors.action.success,
   },
   newGameText: {
-    fontWeight: '700',
+    fontWeight: fontWeight.bold,
   },
 });
