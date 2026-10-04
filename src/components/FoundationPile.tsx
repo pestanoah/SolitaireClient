@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, FOUNDATION_SUITS, PileLocation, Suit } from '../engine/types';
 import { CardView } from './CardView';
 import { DraggableCard } from './DraggableCard';
@@ -52,13 +52,13 @@ export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
   return (
     <View style={[styles.container, { width, height }]}>
       {/* Base empty slot watermark */}
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={onPress}
+      <Pressable
+        onPress={topCard !== null ? undefined : onPress}
         disabled={topCard !== null}
-        style={[
+        style={({ pressed }) => [
           styles.emptySlot,
           { width, height },
+          pressed && topCard === null && { opacity: 0.8 },
           isHintTarget && styles.emptySlotHintTarget,
         ]}
       >
@@ -73,7 +73,7 @@ export const FoundationPile: React.FC<FoundationPileProps> = React.memo(({
         >
           {SUIT_SYMBOLS[suit]}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
 
       {/* Card immediately underneath top card (revealed while top card is animating away) */}
       {previousCard && (

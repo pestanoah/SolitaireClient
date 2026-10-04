@@ -150,8 +150,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.card.border,
+    touchAction: 'none',
+    userSelect: 'none',
     ...shadows.card,
-  },
+  } as any,
   cardFront: {
     backgroundColor: colors.card.frontBg,
     justifyContent: 'space-between',
