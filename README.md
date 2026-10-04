@@ -4,7 +4,7 @@
 [![React Native](https://img.shields.io/badge/React%20Native-0.86-61dafb.svg)](https://reactnative.dev/)
 [![React 19](https://img.shields.io/badge/React-19.2-61dafb.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6.svg)](https://www.typescriptlang.org/)
-[![Jest Tests](https://img.shields.io/badge/Tests-54%20passed-brightgreen.svg)](https://jestjs.io/)
+[![Jest Tests](https://img.shields.io/badge/Tests-61%20passed-brightgreen.svg)](https://jestjs.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Demo-Play%20Online-emerald.svg)](https://pestanoah.github.io/SolitaireClient)
 
