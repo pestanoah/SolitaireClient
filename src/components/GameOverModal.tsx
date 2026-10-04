@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
 export interface GameOverModalProps {
@@ -11,6 +11,7 @@ export interface GameOverModalProps {
   canUndo?: boolean;
   onUndo?: () => void;
   onNewGame: () => void;
+  onClose?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -22,6 +23,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   canUndo = false,
   onUndo,
   onNewGame,
+  onClose,
 }) => {
   if (!visible) return null;
 
@@ -30,8 +32,16 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={modalStyles.backdropDark}>
+        {onClose && (
+          <Pressable
+            style={modalStyles.backdropPressable}
+            onPress={onClose}
+            accessibilityLabel="Close game over modal"
+            accessibilityRole="button"
+          />
+        )}
         <View style={[modalStyles.cardBase, modalStyles.cardGameOver, styles.card]}>
           <Text style={modalStyles.headerIcon}>💔</Text>
           <Text style={modalStyles.title}>Game Over</Text>

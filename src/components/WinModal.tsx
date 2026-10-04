@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 import { triggerWinConfetti } from '../utils/confetti';
 
@@ -9,6 +9,7 @@ interface WinModalProps {
   moves: number;
   elapsedSeconds: number;
   onNewGame: () => void;
+  onClose?: () => void;
 }
 
 export const WinModal: React.FC<WinModalProps> = ({
@@ -17,6 +18,7 @@ export const WinModal: React.FC<WinModalProps> = ({
   moves,
   elapsedSeconds,
   onNewGame,
+  onClose,
 }) => {
   useEffect(() => {
     if (visible) {
@@ -34,8 +36,16 @@ export const WinModal: React.FC<WinModalProps> = ({
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={modalStyles.backdropDark}>
+        {onClose && (
+          <Pressable
+            style={modalStyles.backdropPressable}
+            onPress={onClose}
+            accessibilityLabel="Close victory modal"
+            accessibilityRole="button"
+          />
+        )}
         <View style={[modalStyles.cardBase, modalStyles.cardFelt, styles.card]}>
           <Text style={styles.celebrationIcon}>🎉</Text>
           <Text style={modalStyles.title}>Victory!</Text>

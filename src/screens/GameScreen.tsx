@@ -101,6 +101,8 @@ export const GameScreen: React.FC = () => {
     cardIds: string[];
   } | null>(null);
   const [lossReason, setLossReason] = useState<'no_moves' | 'forfeit'>('no_moves');
+  const [gameOverDismissed, setGameOverDismissed] = useState(false);
+  const [winDismissed, setWinDismissed] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;
     title: string;
@@ -335,6 +337,14 @@ export const GameScreen: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
+  }, [gameState.status]);
+
+  // Reset modal dismissal state when a game is in progress
+  useEffect(() => {
+    if (gameState.status === 'playing') {
+      setGameOverDismissed(false);
+      setWinDismissed(false);
+    }
   }, [gameState.status]);
 
   // Handle victory and loss recording
@@ -1049,6 +1059,8 @@ export const GameScreen: React.FC = () => {
       setAnimatingCard(null);
       isAnimatingRef.current = false;
       setLossReason('no_moves');
+      setGameOverDismissed(false);
+      setWinDismissed(false);
       playDealSound();
       const newGame = dealKlondike(count ?? settings.drawCount);
       setGameState(newGame);
@@ -1693,15 +1705,16 @@ export const GameScreen: React.FC = () => {
       />
 
       <WinModal
-        visible={gameState.status === 'won'}
+        visible={gameState.status === 'won' && !winDismissed}
         score={gameState.score}
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
         onNewGame={() => startNewGame()}
+        onClose={() => setWinDismissed(true)}
       />
 
       <GameOverModal
-        visible={gameState.status === 'lost'}
+        visible={gameState.status === 'lost' && !gameOverDismissed}
         score={gameState.score}
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
@@ -1709,6 +1722,7 @@ export const GameScreen: React.FC = () => {
         canUndo={gameState.history.length > 0}
         onUndo={handleUndo}
         onNewGame={() => startNewGame()}
+        onClose={() => setGameOverDismissed(true)}
       />
 
       {confirmModal && (

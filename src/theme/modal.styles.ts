@@ -18,12 +18,18 @@ export const modalStyles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xxxl,
   },
+  backdropPressable: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'transparent',
+  },
   cardBase: {
     borderRadius: borderRadius.modal,
     padding: spacing.section,
     width: '100%',
     maxWidth: 360,
     alignItems: 'center',
+    zIndex: 1,
+    elevation: 2,
   },
   cardDark: {
     backgroundColor: colors.slate[900],

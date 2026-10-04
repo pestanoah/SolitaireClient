@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, modalStyles, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
 export interface ConfirmModalProps {
@@ -28,6 +28,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={modalStyles.backdropMedium}>
+        <Pressable
+          style={modalStyles.backdropPressable}
+          onPress={onCancel}
+          accessibilityLabel="Cancel confirmation"
+          accessibilityRole="button"
+        />
         <View style={[modalStyles.cardBase, modalStyles.cardDark]}>
           <Text style={modalStyles.titleMedium}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
