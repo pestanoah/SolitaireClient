@@ -1369,8 +1369,11 @@ export const GameScreen: React.FC = () => {
       )}
 
       <ScrollView
+        scrollEnabled={!dragState}
         contentContainerStyle={[styles.boardContent, { minHeight: windowHeight - 90 }]}
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
       >
         <View style={[styles.board, { maxWidth: maxBoardWidth }]}>
           {/* Top Row: Stock + Waste on Left (or Right if Right-Handed), 4 Foundations on Right (or Left if Right-Handed) */}

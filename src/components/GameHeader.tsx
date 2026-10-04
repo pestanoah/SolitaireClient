@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, borderRadius, fontSize, fontWeight, letterSpacing } from '../theme';
 
 interface GameHeaderProps {
@@ -64,92 +64,85 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           <Text style={styles.metricValue}>{timeFormatted}</Text>
         </View>
 
-        <TouchableOpacity
-          activeOpacity={0.7}
+        <Pressable
           onPress={handleOpenSettings}
-          style={styles.modeBadge}
+          style={({ pressed }) => [styles.modeBadge, pressed && { opacity: 0.7 }]}
           accessibilityLabel={`Draw mode: Draw ${drawCount}. Tap to open settings.`}
           accessibilityRole="button"
         >
           <Text style={styles.modeLabel}>Draw Mode</Text>
           <Text style={styles.modeValue}>Draw {drawCount}</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* Actions Row */}
       <View style={styles.actionsRow}>
-        <TouchableOpacity
-          activeOpacity={0.7}
+        <Pressable
           disabled={!canUndo}
           onPress={onUndo}
-          style={[styles.actionBtn, !canUndo && styles.btnDisabled]}
+          style={({ pressed }) => [styles.actionBtn, !canUndo && styles.btnDisabled, pressed && canUndo && { opacity: 0.7 }]}
           accessibilityLabel="Undo move"
           accessibilityRole="button"
         >
           <Text style={[styles.actionBtnText, !canUndo && styles.btnTextDisabled]}>
             Undo
           </Text>
-        </TouchableOpacity>
+        </Pressable>
 
         {onHint && (
-          <TouchableOpacity
-            activeOpacity={0.7}
+          <Pressable
             disabled={!canHint}
             onPress={onHint}
-            style={[styles.actionBtn, !canHint && styles.btnDisabled]}
+            style={({ pressed }) => [styles.actionBtn, !canHint && styles.btnDisabled, pressed && canHint && { opacity: 0.7 }]}
             accessibilityLabel="Show hint"
             accessibilityRole="button"
           >
             <Text style={[styles.actionBtnText, !canHint && styles.btnTextDisabled]}>
               Hint
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
 
         {onGiveUp && (
-          <TouchableOpacity
-            activeOpacity={0.7}
+          <Pressable
             disabled={!canGiveUp}
             onPress={onGiveUp}
-            style={[styles.actionBtn, !canGiveUp && styles.btnDisabled]}
+            style={({ pressed }) => [styles.actionBtn, !canGiveUp && styles.btnDisabled, pressed && canGiveUp && { opacity: 0.7 }]}
             accessibilityLabel="Give up game"
             accessibilityRole="button"
           >
             <Text style={[styles.actionBtnText, !canGiveUp && styles.btnTextDisabled]}>
               Give Up
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
 
-        <TouchableOpacity
-          activeOpacity={0.7}
+        <Pressable
           onPress={onOpenStats}
-          style={styles.actionBtn}
+          style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
           accessibilityLabel="View statistics"
           accessibilityRole="button"
         >
           <Text style={styles.actionBtnText}>Stats</Text>
-        </TouchableOpacity>
+        </Pressable>
 
-        <TouchableOpacity
-          activeOpacity={0.7}
+        <Pressable
           onPress={handleOpenSettings}
-          style={[styles.actionBtn, styles.settingsBtn]}
+          style={({ pressed }) => [styles.actionBtn, styles.settingsBtn, pressed && { opacity: 0.7 }]}
           accessibilityLabel="Open settings"
           accessibilityRole="button"
         >
           <Text style={styles.actionBtnText}>⚙️</Text>
-        </TouchableOpacity>
+        </Pressable>
 
-        <TouchableOpacity
-          activeOpacity={0.7}
+        <Pressable
           onPress={onNewGame}
-          style={[styles.actionBtn, styles.newGameBtn]}
+          style={({ pressed }) => [styles.actionBtn, styles.newGameBtn, pressed && { opacity: 0.7 }]}
           accessibilityLabel="Deal new game"
           accessibilityRole="button"
         >
           <Text style={[styles.actionBtnText, styles.newGameText]}>New Game</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );

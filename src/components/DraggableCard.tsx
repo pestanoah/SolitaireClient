@@ -60,6 +60,11 @@ export const DraggableCard: React.FC<DraggableCardProps> = React.memo(({
         if (callbacksRef.current.disabled) return false;
         return Math.hypot(gestureState.dx, gestureState.dy) >= 4;
       },
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        if (callbacksRef.current.disabled) return false;
+        return Math.hypot(gestureState.dx, gestureState.dy) >= 4;
+      },
       onPanResponderGrant: () => {
         isDraggingRef.current = false;
         startCalledRef.current = false;
@@ -123,5 +128,6 @@ const styles = StyleSheet.create({
   draggable: {
     userSelect: 'none',
     cursor: 'grab',
+    touchAction: 'none',
   } as any,
 });

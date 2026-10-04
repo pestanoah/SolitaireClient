@@ -1,75 +1,116 @@
 import { Platform, ViewStyle } from 'react-native';
 
+interface ShadowConfig {
+  color: string;
+  x?: number;
+  y: number;
+  radius: number;
+  opacity: number;
+  elevation: number;
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  if (hex.startsWith('#')) {
+    const raw = hex.slice(1);
+    if (raw.length === 6) {
+      const r = parseInt(raw.slice(0, 2), 16);
+      const g = parseInt(raw.slice(2, 4), 16);
+      const b = parseInt(raw.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+  }
+  return hex;
+}
+
+function createShadow(config: ShadowConfig): ViewStyle {
+  const x = config.x ?? 0;
+  const y = config.y;
+  const rgba = hexToRgba(config.color, config.opacity);
+
+  return Platform.select<ViewStyle>({
+    web: {
+      boxShadow: `${x}px ${y}px ${config.radius}px ${rgba}`,
+    } as any,
+    default: {
+      shadowColor: config.color,
+      shadowOffset: { width: x, height: y },
+      shadowOpacity: config.opacity,
+      shadowRadius: config.radius,
+      elevation: config.elevation,
+    },
+  })!;
+}
+
 export const shadows = {
-  card: {
+  card: createShadow({
     elevation: 3,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2.5,
-  } as ViewStyle,
+    color: '#000000',
+    y: 1.5,
+    opacity: 0.2,
+    radius: 2.5,
+  }),
 
-  cardSelected: {
-    shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 5,
+  cardSelected: createShadow({
     elevation: 6,
-  } as ViewStyle,
+    color: '#3b82f6',
+    y: 2,
+    opacity: 0.6,
+    radius: 5,
+  }),
 
-  cardHintSource: {
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
+  cardHintSource: createShadow({
     elevation: 7,
-  } as ViewStyle,
+    color: '#f59e0b',
+    y: 2,
+    opacity: 0.8,
+    radius: 6,
+  }),
 
-  cardHintTarget: {
-    shadowColor: '#38bdf8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
+  cardHintTarget: createShadow({
     elevation: 7,
-  } as ViewStyle,
+    color: '#38bdf8',
+    y: 2,
+    opacity: 0.8,
+    radius: 6,
+  }),
 
-  cardDragging: {
+  cardDragging: createShadow({
     elevation: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-  } as ViewStyle,
+    color: '#000000',
+    y: 4,
+    opacity: 0.45,
+    radius: 8,
+  }),
 
-  floatingDrag: {
+  floatingDrag: createShadow({
     elevation: 12,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-  } as ViewStyle,
+    color: '#000000',
+    y: 6,
+    opacity: 0.4,
+    radius: 10,
+  }),
 
-  button: {
+  button: createShadow({
     elevation: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  } as ViewStyle,
+    color: '#000000',
+    y: 2,
+    opacity: 0.3,
+    radius: 4,
+  }),
 
-  modalWin: {
+  modalWin: createShadow({
     elevation: 10,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-  } as ViewStyle,
+    color: '#10b981',
+    y: 4,
+    opacity: 0.4,
+    radius: 16,
+  }),
 
-  modalLoss: {
+  modalLoss: createShadow({
     elevation: 10,
-    shadowColor: '#f43f5e',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-  } as ViewStyle,
+    color: '#f43f5e',
+    y: 4,
+    opacity: 0.35,
+    radius: 16,
+  }),
 } as const;

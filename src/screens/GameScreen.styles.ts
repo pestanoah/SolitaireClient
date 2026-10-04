@@ -28,7 +28,8 @@ export const styles = StyleSheet.create({
     width: '100%',
     gap: spacing.xxl,
     position: 'relative',
-  },
+    userSelect: 'none',
+  } as any,
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
