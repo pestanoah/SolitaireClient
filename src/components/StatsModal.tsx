@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { PlayerStats } from '../engine/types';
 import { colors, modalStyles, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
@@ -25,6 +25,12 @@ export const StatsModal: React.FC<StatsModalProps> = ({ visible, stats, onClose 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={modalStyles.backdropMedium}>
+        <Pressable
+          style={modalStyles.backdropPressable}
+          onPress={onClose}
+          accessibilityLabel="Close statistics modal"
+          accessibilityRole="button"
+        />
         <View style={[modalStyles.cardBase, modalStyles.cardDark]}>
           <Text style={styles.title}>Statistics</Text>
 

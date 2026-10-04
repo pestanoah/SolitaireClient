@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Modal,
+  Pressable,
   StyleSheet,
   Switch,
   Text,
@@ -46,6 +47,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       onRequestClose={onClose}
     >
       <View style={modalStyles.backdropMedium}>
+        <Pressable
+          style={modalStyles.backdropPressable}
+          onPress={onClose}
+          accessibilityLabel="Close settings modal"
+          accessibilityRole="button"
+        />
         <View style={[modalStyles.cardBase, modalStyles.cardDark, styles.card]}>
           {/* Header */}
           <View style={styles.header}>
