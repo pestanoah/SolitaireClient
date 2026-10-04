@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
+import { triggerWinConfetti } from '../utils/confetti';
 
 interface WinModalProps {
   visible: boolean;
@@ -18,17 +19,11 @@ export const WinModal: React.FC<WinModalProps> = ({
   onNewGame,
 }) => {
   useEffect(() => {
-    if (visible && Platform.OS === 'web') {
-      try {
-        const confetti = require('canvas-confetti');
-        confetti({
-          particleCount: 120,
-          spread: 80,
-          origin: { y: 0.6 },
-        });
-      } catch (e) {
-        // Confetti fallback if canvas not available
-      }
+    if (visible) {
+      const cleanup = triggerWinConfetti();
+      return () => {
+        cleanup();
+      };
     }
   }, [visible]);
 
