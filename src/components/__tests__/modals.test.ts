@@ -170,6 +170,34 @@ describe('Modal Backdrop Dismissal', () => {
 
       expect(element).toBeNull();
     });
+
+    test('renders "No more moves available to advance the game." subtitle and Review Board button', () => {
+      const onClose = jest.fn();
+      const element: any = GameOverModal({
+        visible: true,
+        score: 150,
+        moves: 25,
+        elapsedSeconds: 90,
+        reason: 'no_moves',
+        onNewGame: jest.fn(),
+        onClose,
+      });
+
+      const backdropView = element.props.children;
+      const children: any[] = React.Children.toArray(backdropView.props.children);
+      const card = children[1];
+      const cardChildren: any[] = React.Children.toArray(card.props.children);
+
+      // subtitle is the 3rd child (icon, title, subtitle)
+      const subtitle = cardChildren[2];
+      expect(subtitle.props.children).toBe('No more moves available to advance the game.');
+
+      // Review Board button is the last child when onClose is provided
+      const reviewBoardBtn = cardChildren[cardChildren.length - 1];
+      expect(reviewBoardBtn.props.accessibilityLabel).toBe('Review board');
+      reviewBoardBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('WinModal', () => {

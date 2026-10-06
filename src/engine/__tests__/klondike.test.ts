@@ -810,6 +810,201 @@ describe('Available Moves & Loss Detection', () => {
     wonState.status = 'won';
     expect(hasAvailableMoves(wonState)).toBe(false);
   });
+
+  test('does not consider shuffling cards back and forth between tableau columns as advancing the game', () => {
+    // Column 0 has 8 of Spades and 7 of Hearts (both face up, no face down cards).
+    // Column 1 has 8 of Clubs (face up, no face down cards).
+    // 7 of Hearts can legally move from col 0 to col 1, and back from col 1 to col 0.
+    // However, this merely shuffles cards back and forth without uncovering any cards or advancing foundations.
+    const shuffleState: GameState = {
+      version: 1,
+      id: 'test_tableau_shuffle',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [[], [], [], []],
+      tableau: [
+        [
+          { id: '8_spades', suit: 'spades', rank: 8, faceUp: true },
+          { id: '7_hearts', suit: 'hearts', rank: 7, faceUp: true },
+        ],
+        [{ id: '8_clubs', suit: 'clubs', rank: 8, faceUp: true }],
+        [{ id: 'c2', suit: 'spades', rank: 2, faceUp: true }],
+        [{ id: 'c3', suit: 'spades', rank: 4, faceUp: true }],
+        [{ id: 'c4', suit: 'spades', rank: 6, faceUp: true }],
+        [{ id: 'c5', suit: 'spades', rank: 10, faceUp: true }],
+        [{ id: 'c6', suit: 'spades', rank: 12, faceUp: true }],
+      ],
+      score: 50,
+      moves: 15,
+      elapsedSeconds: 60,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(shuffleState)).toBe(false);
+  });
+
+  test('does not consider moving a foundation card down to tableau as advancing when it only shuffles back and forth', () => {
+    // Foundation has Ace and 2 of Hearts.
+    // Column 0 has 3 of Spades.
+    // 2 of Hearts can legally be placed down on 3 of Spades, and then back up to foundation.
+    // But no face-down cards exist to uncover, so this is pure back-and-forth shuffling.
+    const foundationShuffleState: GameState = {
+      version: 1,
+      id: 'test_foundation_shuffle',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [
+        [
+          { id: 'ah', suit: 'hearts', rank: 1, faceUp: true },
+          { id: '2h', suit: 'hearts', rank: 2, faceUp: true },
+        ],
+        [],
+        [],
+        [],
+      ],
+      tableau: [
+        [{ id: '3s', suit: 'spades', rank: 3, faceUp: true }],
+        [{ id: 'c1', suit: 'spades', rank: 5, faceUp: true }],
+        [{ id: 'c2', suit: 'spades', rank: 7, faceUp: true }],
+        [{ id: 'c3', suit: 'spades', rank: 9, faceUp: true }],
+        [{ id: 'c4', suit: 'spades', rank: 11, faceUp: true }],
+        [{ id: 'c5', suit: 'spades', rank: 13, faceUp: true }],
+        [],
+      ],
+      score: 20,
+      moves: 8,
+      elapsedSeconds: 40,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(foundationShuffleState)).toBe(false);
+  });
+
+  test('considers moving foundation card down to tableau as valid when it unlocks uncovering a face-down card', () => {
+    // Foundation has Hearts up to 4.
+    // Column 0 has 5 of Spades.
+    // Column 1 has a face-down card underneath a 3 of Spades.
+    // Moving 4 of Hearts down to 5 of Spades allows 3 of Spades to move onto 4 of Hearts,
+    // which uncovers the face-down card!
+    const productiveFoundationState: GameState = {
+      version: 1,
+      id: 'test_productive_foundation',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [
+        [
+          { id: 'ah', suit: 'hearts', rank: 1, faceUp: true },
+          { id: '2h', suit: 'hearts', rank: 2, faceUp: true },
+          { id: '3h', suit: 'hearts', rank: 3, faceUp: true },
+          { id: '4h', suit: 'hearts', rank: 4, faceUp: true },
+        ],
+        [],
+        [],
+        [],
+      ],
+      tableau: [
+        [{ id: '5s', suit: 'spades', rank: 5, faceUp: true }],
+        [
+          { id: 'hidden_1', suit: 'clubs', rank: 9, faceUp: false },
+          { id: '3s', suit: 'spades', rank: 3, faceUp: true },
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+      score: 40,
+      moves: 12,
+      elapsedSeconds: 50,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(productiveFoundationState)).toBe(true);
+  });
+
+  test('considers emptying a column as valid when it allows a King covering face-down cards to move', () => {
+    // Column 0 has only a 7 of Hearts at base (empties col 0).
+    // Column 1 has an 8 of Spades.
+    // Column 2 has a face-down card underneath a King of Diamonds.
+    // Moving 7 of Hearts to 8 of Spades empties Column 0, allowing King of Diamonds
+    // to move into the empty space and uncover the hidden card!
+    const productiveEmptyColumnState: GameState = {
+      version: 1,
+      id: 'test_productive_empty_col',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: '7h', suit: 'hearts', rank: 7, faceUp: true }],
+        [{ id: '8s', suit: 'spades', rank: 8, faceUp: true }],
+        [
+          { id: 'hidden_king_parent', suit: 'clubs', rank: 2, faceUp: false },
+          { id: 'kd', suit: 'diamonds', rank: 13, faceUp: true },
+        ],
+        [],
+        [],
+        [],
+        [],
+      ],
+      score: 15,
+      moves: 5,
+      elapsedSeconds: 25,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(productiveEmptyColumnState)).toBe(true);
+  });
+
+  test('detects deadlock in Draw 3 mode when stock cards cannot be reached', () => {
+    // In Draw 3 mode with 6 stock cards, only cards 1, 3, 4, 6 can ever appear at the top of waste.
+    // Cards 2 and 5 are completely trapped.
+    // If cards 1, 3, 4, 6 are unplayable, the game is deadlocked even though cards 2 and 5 match the tableau.
+    const draw3TrappedState: GameState = {
+      version: 1,
+      id: 'test_draw3_trapped',
+      drawCount: 3,
+      stock: [
+        { id: 's1', suit: 'spades', rank: 3, faceUp: false }, // top in pass 2, draw 2 (unplayable)
+        { id: 's2', suit: 'hearts', rank: 7, faceUp: false }, // trapped! matches spades 8
+        { id: 's3', suit: 'spades', rank: 5, faceUp: false }, // top in pass 1, draw 2 (unplayable)
+        { id: 's4', suit: 'spades', rank: 7, faceUp: false }, // top in pass 2, draw 1 (unplayable)
+        { id: 's5', suit: 'hearts', rank: 11, faceUp: false }, // trapped! matches spades 12
+        { id: 's6', suit: 'spades', rank: 9, faceUp: false }, // top in pass 1, draw 1 (unplayable)
+      ],
+      waste: [],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: 'c1', suit: 'spades', rank: 2, faceUp: true }],
+        [{ id: 'c2', suit: 'spades', rank: 4, faceUp: true }],
+        [{ id: 'c3', suit: 'spades', rank: 6, faceUp: true }],
+        [{ id: 'c4', suit: 'spades', rank: 8, faceUp: true }],
+        [{ id: 'c5', suit: 'spades', rank: 10, faceUp: true }],
+        [{ id: 'c6', suit: 'spades', rank: 12, faceUp: true }],
+        [{ id: 'c7', suit: 'spades', rank: 13, faceUp: true }],
+      ],
+      score: 0,
+      moves: 10,
+      elapsedSeconds: 45,
+      status: 'playing',
+      history: [],
+      createdAt: Date.now(),
+    };
+
+    expect(hasAvailableMoves(draw3TrappedState)).toBe(false);
+  });
 });
 
 
