@@ -270,6 +270,11 @@ export function findSmartMove(
     }
   }
 
+  // Foundation cards with rank <= 2 (Aces and Twos) should never be moved down to tableau
+  if (from.type === 'foundation' && card.rank <= 2) {
+    return null;
+  }
+
   // Try tableau columns (prefer non-empty columns before placing King on an empty column)
   const candidateIndices: number[] = [];
   for (let t = 0; t < state.tableau.length; t++) {

@@ -1,4 +1,12 @@
-import { canPlaceOnFoundation, canPlaceOnTableau, hasExhaustedStockCycles, isGameWon } from './rules';
+import {
+  canMoveUnlockAdvancement,
+  canPlaceOnFoundation,
+  canPlaceOnTableau,
+  getAccessibleDeckCards,
+  hasAvailableMoves,
+  hasExhaustedStockCycles,
+  isGameWon,
+} from './rules';
 import { Card, FOUNDATION_SUITS, GameState, PileLocation } from './types';
 
 export interface Hint {
@@ -35,19 +43,35 @@ export function formatCardShort(card: Card): string {
 }
 
 /**
- * Evaluates the current game state and returns all legal hints,
+ * Evaluates the current game state and returns all legal hints that ADVANCE the game,
  * ordered by strategic priority (e.g. unblocking face-down cards and
  * building foundations ranked ahead of drawing from stock).
+ * Does not suggest moves that merely shuffle cards back and forth without unlocking progress.
  */
 export function findAvailableHints(
   state: GameState,
   allowAnyCardOnEmpty = false
 ): Hint[] {
-  if (state.status === 'won' || state.status === 'lost' || isGameWon(state.foundations)) {
+  if (
+    state.status === 'won' ||
+    state.status === 'lost' ||
+    isGameWon(state.foundations) ||
+    !hasAvailableMoves(state, allowAnyCardOnEmpty)
+  ) {
     return [];
   }
 
   const scored: ScoredHint[] = [];
+  const accessibleDeckCards = getAccessibleDeckCards(state);
+  const anyDeckCardPlayable = accessibleDeckCards.some((card) => {
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (canPlaceOnFoundation(card, state.foundations[f], f)) return true;
+    }
+    for (let t = 0; t < state.tableau.length; t++) {
+      if (canPlaceOnTableau(card, state.tableau[t], allowAnyCardOnEmpty)) return true;
+    }
+    return false;
+  });
 
   // 1. Tableau cards to Foundation
   for (let t = 0; t < state.tableau.length; t++) {
@@ -120,7 +144,21 @@ export function findAvailableHints(
           const uncoversCard = cardIdx > 0 && !fromCol[cardIdx - 1].faceUp;
           const targetCard = toCol.length > 0 ? toCol[toCol.length - 1] : null;
 
-          // Priority: unblocking face-down card > building on tableau > moving King to empty
+          // Only include if this move directly uncovers a card OR unlocks a subsequent advancement
+          if (
+            !uncoversCard &&
+            !canMoveUnlockAdvancement(
+              state,
+              { type: 'tableau', index: fromIdx },
+              { type: 'tableau', index: toIdx },
+              [card.id],
+              accessibleDeckCards,
+              allowAnyCardOnEmpty
+            )
+          ) {
+            continue;
+          }
+
           let score = 50;
           if (uncoversCard) {
             score = 85;
@@ -170,17 +208,33 @@ export function findAvailableHints(
     }
   }
 
-  // 5. Foundation down to Tableau
+  // 5. Foundation down to Tableau (only if it unlocks uncovering a card or playing deck cards)
   for (let f = 0; f < state.foundations.length; f++) {
     const pile = state.foundations[f];
     if (pile.length === 0) continue;
     const topCard = pile[pile.length - 1];
+
+    // Aces and Twos should NEVER be moved down from foundation
+    if (topCard.rank <= 2) continue;
 
     for (let t = 0; t < state.tableau.length; t++) {
       const toCol = state.tableau[t];
       if (topCard.rank === 13 && toCol.length === 0) continue;
 
       if (canPlaceOnTableau(topCard, toCol, allowAnyCardOnEmpty)) {
+        if (
+          !canMoveUnlockAdvancement(
+            state,
+            { type: 'foundation', index: f },
+            { type: 'tableau', index: t },
+            [topCard.id],
+            accessibleDeckCards,
+            allowAnyCardOnEmpty
+          )
+        ) {
+          continue;
+        }
+
         const targetDesc = toCol.length > 0 ? formatCardShort(toCol[toCol.length - 1]) : 'empty column';
         scored.push({
           score: 30,
@@ -196,8 +250,8 @@ export function findAvailableHints(
     }
   }
 
-  // 6. Draw from Stock
-  if (state.stock.length > 0) {
+  // 6. Draw from Stock (only if accessible deck cards can advance the game)
+  if (state.stock.length > 0 && anyDeckCardPlayable) {
     scored.push({
       score: 20,
       hint: {
@@ -208,8 +262,13 @@ export function findAvailableHints(
     });
   }
 
-  // 7. Recycle Waste into Stock
-  if (state.stock.length === 0 && state.waste.length > 0 && !hasExhaustedStockCycles(state)) {
+  // 7. Recycle Waste into Stock (only if accessible deck cards can advance the game)
+  if (
+    state.stock.length === 0 &&
+    state.waste.length > 0 &&
+    !hasExhaustedStockCycles(state) &&
+    anyDeckCardPlayable
+  ) {
     scored.push({
       score: 10,
       hint: {
@@ -229,7 +288,7 @@ export function findAvailableHints(
 
 /**
  * Returns the highest-priority legal hint for the current game state,
- * or null if no legal moves exist.
+ * or null if no legal moves exist that advance the game.
  */
 export function findHint(
   state: GameState,

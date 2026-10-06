@@ -48,7 +48,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
           <Text style={styles.subtitle}>
             {reason === 'forfeit'
               ? 'You surrendered this game.'
-              : 'No more legal moves available.'}
+              : 'No more moves available to advance the game.'}
           </Text>
 
           <View style={modalStyles.statsContainer}>
@@ -87,6 +87,18 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <Text style={styles.newGameBtnText}>New Game</Text>
             </TouchableOpacity>
           </View>
+
+          {onClose && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onClose}
+              style={styles.reviewBoardBtn}
+              accessibilityLabel="Review board"
+              accessibilityRole="button"
+            >
+              <Text style={styles.reviewBoardText}>Review Board</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -125,5 +137,18 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.base,
     fontWeight: fontWeight.heavy,
+  },
+  reviewBoardBtn: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewBoardText: {
+    color: colors.slate[400],
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    textDecorationLine: 'underline',
   },
 });
