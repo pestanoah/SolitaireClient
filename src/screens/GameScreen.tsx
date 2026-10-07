@@ -75,6 +75,10 @@ interface DragState {
 
 const EMPTY_CARD_IDS: string[] = [];
 
+// Auto-complete speed configuration (2x speed: 80ms delay, 100ms move animation)
+export const AUTO_COMPLETE_DELAY_MS = 80;
+export const AUTO_COMPLETE_ANIMATION_DURATION_MS = 100;
+
 export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
@@ -443,7 +447,8 @@ export const GameScreen: React.FC = () => {
   const executeMoveWithAnimation = (
     from: PileLocation,
     to: PileLocation,
-    cardIds: string[]
+    cardIds: string[],
+    durationOverride?: number
   ): boolean => {
     if (isAnimatingRef.current) return false;
 
@@ -478,7 +483,7 @@ export const GameScreen: React.FC = () => {
       animProgress.setValue(0);
       Animated.timing(animProgress, {
         toValue: 1,
-        duration: 180,
+        duration: durationOverride !== undefined ? durationOverride : 180,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }).start(() => {
@@ -522,7 +527,7 @@ export const GameScreen: React.FC = () => {
       animProgress.setValue(0);
       Animated.timing(animProgress, {
         toValue: 1,
-        duration: 200,
+        duration: durationOverride !== undefined ? durationOverride : 200,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }).start(() => {
@@ -586,7 +591,7 @@ export const GameScreen: React.FC = () => {
     animProgress.setValue(0);
     Animated.timing(animProgress, {
       toValue: 1,
-      duration: 200,
+      duration: durationOverride !== undefined ? durationOverride : 200,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start(() => {
@@ -1030,7 +1035,7 @@ export const GameScreen: React.FC = () => {
     [handleFoundation0Press, handleFoundation1Press, handleFoundation2Press, handleFoundation3Press]
   );
 
-  // Auto-complete runner with animation
+  // Auto-complete runner with animation (2x speed)
   useEffect(() => {
     const currentState = latestGameStateRef.current;
     if (currentState.status === 'playing' && canAutoComplete(currentState) && !isAnimatingRef.current) {
@@ -1044,9 +1049,14 @@ export const GameScreen: React.FC = () => {
         const next = autoCompleteStep(activeState);
         if (next && next.history.length > activeState.history.length) {
           const lastMove = next.history[next.history.length - 1];
-          executeMoveWithAnimation(lastMove.from, lastMove.to, lastMove.cardIds);
+          executeMoveWithAnimation(
+            lastMove.from,
+            lastMove.to,
+            lastMove.cardIds,
+            AUTO_COMPLETE_ANIMATION_DURATION_MS
+          );
         }
-      }, 160);
+      }, AUTO_COMPLETE_DELAY_MS);
       return () => clearTimeout(timer);
     }
   }, [gameState.id, gameState.history, gameState.status, clearActiveHint]);
