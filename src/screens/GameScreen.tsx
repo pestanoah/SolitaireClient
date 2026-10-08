@@ -215,7 +215,7 @@ export function calculatePileCardPosition(
 }
 
 export const GameScreen: React.FC = () => {
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
 
   // Settings & Stats
   const [settings, setSettings] = useState<UserSettings>({
@@ -1485,8 +1485,9 @@ export const GameScreen: React.FC = () => {
       )}
 
       <ScrollView
+        style={styles.scrollView}
         scrollEnabled={!dragState}
-        contentContainerStyle={[styles.boardContent, { minHeight: windowHeight - 90 }]}
+        contentContainerStyle={styles.boardContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"

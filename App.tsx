@@ -10,6 +10,10 @@ export default function App() {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.style.overscrollBehavior = 'none';
       document.body.style.overscrollBehavior = 'none';
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.height = '100%';
+      document.body.style.height = '100%';
     }
   }, []);
 
@@ -26,7 +30,9 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height: '100%',
     backgroundColor: colors.felt.background,
+    overflow: 'hidden',
     overscrollBehavior: 'none',
   } as any,
 });
