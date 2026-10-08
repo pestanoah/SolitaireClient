@@ -102,7 +102,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
         style={[
           styles.wasteArea,
           {
-            width: cardWidth + (visibleWasteCount - 1) * fanOffset,
+            width: cardWidth + Math.max(0, visibleWasteCount - 1) * fanOffset,
             height: cardHeight,
           },
         ]}

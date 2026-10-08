@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { spacing } from '../theme';
 import { styles } from './GameScreen.styles';
 import { CardView } from '../components/CardView';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -37,7 +38,7 @@ import {
   hasAvailableMoves,
   isGameWon,
 } from '../engine/rules';
-import { Card, FOUNDATION_SUITS, GameState, PileLocation, PlayerStats, UserSettings } from '../engine/types';
+import { Card, FOUNDATION_SUITS, GameState, PileLocation, PileType, PlayerStats, UserSettings } from '../engine/types';
 import {
   clearGameState,
   loadGameState,
@@ -78,6 +79,140 @@ const EMPTY_CARD_IDS: string[] = [];
 // Auto-complete speed configuration (2x speed: 80ms delay, 100ms move animation)
 export const AUTO_COMPLETE_DELAY_MS = 80;
 export const AUTO_COMPLETE_ANIMATION_DURATION_MS = 100;
+
+export interface PilePositionParams {
+  boardWidth: number;
+  cardWidth: number;
+  cardHeight: number;
+  gap: number;
+  fanOffset: number;
+  upOffset: number;
+  downOffset: number;
+  isRightHanded: boolean;
+  drawCount: 1 | 3;
+  wasteCount: number;
+  topRowY?: number;
+  tableauRowY?: number;
+}
+
+export function calculatePileBasePosition(
+  pile: { type: PileType; index?: number },
+  params: PilePositionParams
+): { x: number; y: number } {
+  const {
+    boardWidth,
+    cardWidth,
+    cardHeight,
+    gap,
+    fanOffset,
+    isRightHanded,
+    drawCount,
+    wasteCount,
+    topRowY = 0,
+    tableauRowY = cardHeight + spacing.xxl,
+  } = params;
+
+  if (pile.type === 'stock') {
+    if (isRightHanded) {
+      return {
+        x: boardWidth - cardWidth,
+        y: topRowY,
+      };
+    }
+    return {
+      x: 0,
+      y: topRowY,
+    };
+  }
+
+  if (pile.type === 'waste') {
+    const visibleCount = drawCount === 3 ? Math.min(3, wasteCount) : Math.min(1, wasteCount);
+    const currentWasteWidth = cardWidth + Math.max(0, visibleCount - 1) * fanOffset;
+
+    if (isRightHanded) {
+      return {
+        x: boardWidth - cardWidth - spacing.lg - currentWasteWidth,
+        y: topRowY,
+      };
+    }
+    return {
+      x: cardWidth + spacing.lg,
+      y: topRowY,
+    };
+  }
+
+  if (pile.type === 'foundation') {
+    const fIndex = pile.index ?? 0;
+    if (isRightHanded) {
+      return {
+        x: fIndex * (cardWidth + gap),
+        y: topRowY,
+      };
+    }
+    const foundationsStartX = boardWidth - (4 * cardWidth + 3 * gap);
+    return {
+      x: foundationsStartX + fIndex * (cardWidth + gap),
+      y: topRowY,
+    };
+  }
+
+  // Tableau column
+  const tIndex = pile.index ?? 0;
+  const tableauGap = (boardWidth - 7 * cardWidth) / 6;
+  const colX = isRightHanded
+    ? (6 - tIndex) * (cardWidth + tableauGap)
+    : tIndex * (cardWidth + tableauGap);
+
+  return {
+    x: colX,
+    y: tableauRowY,
+  };
+}
+
+export function calculatePileCardPosition(
+  pile: { type: PileType; index?: number },
+  cardIndexInPile: number,
+  state: GameState,
+  params: PilePositionParams
+): { x: number; y: number } {
+  const basePos = calculatePileBasePosition(pile, {
+    ...params,
+    wasteCount: state.waste.length,
+    drawCount: state.drawCount,
+  });
+
+  if (pile.type === 'stock' || pile.type === 'foundation') {
+    return basePos;
+  }
+
+  if (pile.type === 'waste') {
+    const effectiveCount = Math.max(
+      1,
+      cardIndexInPile !== undefined && cardIndexInPile >= 0 ? cardIndexInPile + 1 : state.waste.length
+    );
+    const visibleCount =
+      state.drawCount === 3 ? Math.min(3, effectiveCount) : Math.min(1, effectiveCount);
+    const hOffset = Math.max(0, visibleCount - 1) * params.fanOffset;
+    return {
+      x: basePos.x + hOffset,
+      y: basePos.y,
+    };
+  }
+
+  // Tableau column
+  const tIndex = pile.index ?? 0;
+  const col = state.tableau[tIndex] ?? [];
+  let vertOffset = 0;
+  const limit = Math.min(cardIndexInPile, col.length);
+  for (let i = 0; i < limit; i++) {
+    vertOffset += col[i].faceUp ? params.upOffset : params.downOffset;
+  }
+
+  return {
+    x: basePos.x,
+    y: basePos.y + vertOffset,
+  };
+}
 
 export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -184,30 +319,15 @@ export const GameScreen: React.FC = () => {
   const tableauRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const foundationsRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  const stockWasteWrapperPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const stockRelativePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const wasteRelativePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
   const stockLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const wasteLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const foundationLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const tableauLayoutsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
 
-  const handleStockLayout = useCallback((x: number, y: number) => {
-    stockRelativePos.current = { x, y };
-    stockLayoutRef.current = {
-      x: topRowLayoutRef.current.x + stockWasteWrapperPos.current.x + x,
-      y: topRowLayoutRef.current.y + stockWasteWrapperPos.current.y + y,
-    };
-  }, []);
+  const [measuredBoardWidth, setMeasuredBoardWidth] = useState<number>(0);
 
-  const handleWasteLayout = useCallback((x: number, y: number) => {
-    wasteRelativePos.current = { x, y };
-    wasteLayoutRef.current = {
-      x: topRowLayoutRef.current.x + stockWasteWrapperPos.current.x + x,
-      y: topRowLayoutRef.current.y + stockWasteWrapperPos.current.y + y,
-    };
-  }, []);
+  const handleStockLayout = useCallback((_x: number, _y: number) => {}, []);
+  const handleWasteLayout = useCallback((_x: number, _y: number) => {}, []);
 
   // Calculate responsive dimensions
   const { maxBoardWidth, gap, cardWidth, cardHeight, downOffset, upOffset, fanOffset } =
@@ -390,58 +510,68 @@ export const GameScreen: React.FC = () => {
     }
   }, [gameState]);
 
-  // Calculate card screen position in board coordinates
+  const boardWidth = measuredBoardWidth > 0 ? measuredBoardWidth : maxBoardWidth;
+
+  const pilePositionParams = useMemo<PilePositionParams>(
+    () => ({
+      boardWidth,
+      cardWidth,
+      cardHeight,
+      gap,
+      fanOffset,
+      upOffset,
+      downOffset,
+      isRightHanded,
+      drawCount: gameState.drawCount,
+      wasteCount: gameState.waste.length,
+      topRowY: topRowLayoutRef.current.y,
+      tableauRowY: tableauRowLayoutRef.current.y || (cardHeight + spacing.xxl),
+    }),
+    [
+      boardWidth,
+      cardWidth,
+      cardHeight,
+      gap,
+      fanOffset,
+      upOffset,
+      downOffset,
+      isRightHanded,
+      gameState.drawCount,
+      gameState.waste.length,
+    ]
+  );
+
+  const getPileBasePosition = useCallback(
+    (pile: { type: PileType; index?: number }, wasteCountOverride?: number): { x: number; y: number } => {
+      return calculatePileBasePosition(pile, {
+        ...pilePositionParams,
+        wasteCount: wasteCountOverride !== undefined ? wasteCountOverride : gameState.waste.length,
+      });
+    },
+    [pilePositionParams, gameState.waste.length]
+  );
+
   const getPileCardPosition = useCallback(
     (
-      pile: PileLocation,
+      pile: { type: PileType; index?: number },
       cardIndexInPile: number,
       state: GameState
     ): { x: number; y: number } => {
-      if (pile.type === 'stock') {
-        return {
-          x: stockLayoutRef.current.x,
-          y: stockLayoutRef.current.y,
-        };
-      }
-
-      if (pile.type === 'waste') {
-        const effectiveCount = Math.max(
-          1,
-          cardIndexInPile !== undefined && cardIndexInPile >= 0 ? cardIndexInPile + 1 : state.waste.length
-        );
-        const visibleCount =
-          state.drawCount === 3 ? Math.min(3, effectiveCount) : Math.min(1, effectiveCount);
-        const hOffset = Math.max(0, visibleCount - 1) * fanOffset;
-        return {
-          x: wasteLayoutRef.current.x + hOffset,
-          y: wasteLayoutRef.current.y,
-        };
-      }
-
-      if (pile.type === 'foundation') {
-        const fLayout = foundationLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
-        return {
-          x: topRowLayoutRef.current.x + foundationsRowLayoutRef.current.x + fLayout.x,
-          y: topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y,
-        };
-      }
-
-      // Tableau column
-      const tLayout = tableauLayoutsRef.current.get(pile.index) ?? { x: 0, y: 0 };
-      const col = state.tableau[pile.index] ?? [];
-      let vertOffset = 0;
-      const limit = Math.min(cardIndexInPile, col.length);
-      for (let i = 0; i < limit; i++) {
-        vertOffset += col[i].faceUp ? upOffset : downOffset;
-      }
-
-      return {
-        x: tableauRowLayoutRef.current.x + tLayout.x,
-        y: tableauRowLayoutRef.current.y + tLayout.y + vertOffset,
-      };
+      return calculatePileCardPosition(pile, cardIndexInPile, state, pilePositionParams);
     },
-    [fanOffset, upOffset, downOffset]
+    [pilePositionParams]
   );
+
+  useEffect(() => {
+    stockLayoutRef.current = getPileBasePosition({ type: 'stock' });
+    wasteLayoutRef.current = getPileBasePosition({ type: 'waste' });
+    for (let f = 0; f < 4; f++) {
+      foundationLayoutsRef.current.set(f, getPileBasePosition({ type: 'foundation', index: f }));
+    }
+    for (let t = 0; t < 7; t++) {
+      tableauLayoutsRef.current.set(t, getPileBasePosition({ type: 'tableau', index: t }));
+    }
+  }, [getPileBasePosition]);
 
   // Animate and execute move
   const executeMoveWithAnimation = (
@@ -459,14 +589,8 @@ export const GameScreen: React.FC = () => {
       const drawnCards = gameState.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
       const nextState = drawCards(gameState);
 
-      const startPos = {
-        x: stockLayoutRef.current.x,
-        y: stockLayoutRef.current.y,
-      };
-      const endPos = {
-        x: wasteLayoutRef.current.x,
-        y: wasteLayoutRef.current.y,
-      };
+      const startPos = getPileBasePosition({ type: 'stock' });
+      const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
 
       isAnimatingRef.current = true;
       playDealSound();
@@ -502,14 +626,8 @@ export const GameScreen: React.FC = () => {
       const allWasteIds = gameState.waste.map((c) => c.id);
       const nextState = drawCards(gameState);
 
-      const startPos = {
-        x: wasteLayoutRef.current.x,
-        y: wasteLayoutRef.current.y,
-      };
-      const endPos = {
-        x: stockLayoutRef.current.x,
-        y: stockLayoutRef.current.y,
-      };
+      const startPos = getPileBasePosition({ type: 'waste' }, gameState.waste.length);
+      const endPos = getPileBasePosition({ type: 'stock' });
 
       isAnimatingRef.current = true;
       playResetSound();
@@ -620,9 +738,9 @@ export const GameScreen: React.FC = () => {
         let bestFoundation: { index: number; dist: number } | null = null;
         for (let f = 0; f < gameState.foundations.length; f++) {
           if (from.type === 'foundation' && from.index === f) continue;
-          const fLayout = foundationLayoutsRef.current.get(f) ?? { x: 0, y: 0 };
-          const fx = topRowLayoutRef.current.x + foundationsRowLayoutRef.current.x + fLayout.x;
-          const fy = topRowLayoutRef.current.y + foundationsRowLayoutRef.current.y + fLayout.y;
+          const pos = getPileBasePosition({ type: 'foundation', index: f });
+          const fx = pos.x;
+          const fy = pos.y;
 
           const inBounds =
             dropCenterX >= fx - 15 &&
@@ -648,9 +766,9 @@ export const GameScreen: React.FC = () => {
       let bestTableau: { index: number; dist: number } | null = null;
       for (let t = 0; t < gameState.tableau.length; t++) {
         if (from.type === 'tableau' && from.index === t) continue;
-        const tLayout = tableauLayoutsRef.current.get(t) ?? { x: 0, y: 0 };
-        const tx = tableauRowLayoutRef.current.x + tLayout.x;
-        const ty = tableauRowLayoutRef.current.y + tLayout.y;
+        const pos = getPileBasePosition({ type: 'tableau', index: t });
+        const tx = pos.x;
+        const ty = pos.y;
 
         const col = gameState.tableau[t] ?? [];
         const colHeight = Math.max(cardHeight, (col.length - 1) * downOffset + cardHeight + 60);
@@ -676,7 +794,7 @@ export const GameScreen: React.FC = () => {
 
       return null;
     },
-    [gameState, cardWidth, cardHeight, gap, downOffset]
+    [gameState, cardWidth, cardHeight, gap, downOffset, getPileBasePosition]
   );
 
   // Drag-and-drop handlers
@@ -796,14 +914,8 @@ export const GameScreen: React.FC = () => {
       const allWasteIds = gameState.waste.map((c) => c.id);
       const nextState = drawCards(gameState);
 
-      const startPos = {
-        x: wasteLayoutRef.current.x,
-        y: wasteLayoutRef.current.y,
-      };
-      const endPos = {
-        x: stockLayoutRef.current.x,
-        y: stockLayoutRef.current.y,
-      };
+      const startPos = getPileBasePosition({ type: 'waste' }, gameState.waste.length);
+      const endPos = getPileBasePosition({ type: 'stock' });
 
       isAnimatingRef.current = true;
       playResetSound();
@@ -836,14 +948,8 @@ export const GameScreen: React.FC = () => {
     const drawnCards = gameState.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
     const nextState = drawCards(gameState);
 
-    const startPos = {
-      x: stockLayoutRef.current.x,
-      y: stockLayoutRef.current.y,
-    };
-    const endPos = {
-      x: wasteLayoutRef.current.x,
-      y: wasteLayoutRef.current.y,
-    };
+    const startPos = getPileBasePosition({ type: 'stock' });
+    const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
 
     isAnimatingRef.current = true;
     playDealSound();
@@ -868,7 +974,7 @@ export const GameScreen: React.FC = () => {
       setAnimatingCard(null);
       isAnimatingRef.current = false;
     });
-  }, [gameState, clearActiveHint]);
+  }, [gameState, clearActiveHint, getPileBasePosition]);
 
   // Waste card press
   const handleWasteCardPress = useCallback(
@@ -1221,14 +1327,8 @@ export const GameScreen: React.FC = () => {
       const cardsToAnimate = gameState.waste.slice(-count);
       const allUndoneWasteIds = cardsToAnimate.map((c) => c.id);
 
-      const startPos = {
-        x: wasteLayoutRef.current.x,
-        y: wasteLayoutRef.current.y,
-      };
-      const endPos = {
-        x: stockLayoutRef.current.x,
-        y: stockLayoutRef.current.y,
-      };
+      const startPos = getPileBasePosition({ type: 'waste' }, gameState.waste.length);
+      const endPos = getPileBasePosition({ type: 'stock' });
 
       isAnimatingRef.current = true;
       playDealSound();
@@ -1262,14 +1362,8 @@ export const GameScreen: React.FC = () => {
       const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.stock.length);
       const cardsToAnimate = gameState.stock.slice(0, count).map((c) => ({ ...c, faceUp: true }));
 
-      const startPos = {
-        x: stockLayoutRef.current.x,
-        y: stockLayoutRef.current.y,
-      };
-      const endPos = {
-        x: wasteLayoutRef.current.x,
-        y: wasteLayoutRef.current.y,
-      };
+      const startPos = getPileBasePosition({ type: 'stock' });
+      const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
 
       isAnimatingRef.current = true;
       playResetSound();
@@ -1359,7 +1453,7 @@ export const GameScreen: React.FC = () => {
       setAnimatingCard(null);
       isAnimatingRef.current = false;
     });
-  }, [gameState, clearActiveHint]);
+  }, [gameState, clearActiveHint, getPileBasePosition, getPileCardPosition]);
 
   const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : dragState ? dragState.cardIds : EMPTY_CARD_IDS;
 
@@ -1397,41 +1491,27 @@ export const GameScreen: React.FC = () => {
         bounces={false}
         overScrollMode="never"
       >
-        <View style={[styles.board, { maxWidth: maxBoardWidth }]}>
+        <View
+          onLayout={(e) => {
+            const w = Math.round(e.nativeEvent.layout.width);
+            if (w > 0 && w !== measuredBoardWidth) {
+              setMeasuredBoardWidth(w);
+            }
+          }}
+          style={[styles.board, { maxWidth: maxBoardWidth }]}
+        >
           {/* Top Row: Stock + Waste on Left (or Right if Right-Handed), 4 Foundations on Right (or Left if Right-Handed) */}
           <View
+            key={`topRow_${isRightHanded ? 'rh' : 'lh'}`}
             onLayout={(e) => {
               topRowLayoutRef.current = {
                 x: e.nativeEvent.layout.x,
                 y: e.nativeEvent.layout.y,
               };
-              stockLayoutRef.current = {
-                x: e.nativeEvent.layout.x + stockWasteWrapperPos.current.x + stockRelativePos.current.x,
-                y: e.nativeEvent.layout.y + stockWasteWrapperPos.current.y + stockRelativePos.current.y,
-              };
-              wasteLayoutRef.current = {
-                x: e.nativeEvent.layout.x + stockWasteWrapperPos.current.x + wasteRelativePos.current.x,
-                y: e.nativeEvent.layout.y + stockWasteWrapperPos.current.y + wasteRelativePos.current.y,
-              };
             }}
             style={[styles.topRow, { gap }, isRightHanded && styles.topRowRightHanded]}
           >
-            <View
-              onLayout={(e) => {
-                stockWasteWrapperPos.current = {
-                  x: e.nativeEvent.layout.x,
-                  y: e.nativeEvent.layout.y,
-                };
-                stockLayoutRef.current = {
-                  x: topRowLayoutRef.current.x + e.nativeEvent.layout.x + stockRelativePos.current.x,
-                  y: topRowLayoutRef.current.y + e.nativeEvent.layout.y + stockRelativePos.current.y,
-                };
-                wasteLayoutRef.current = {
-                  x: topRowLayoutRef.current.x + e.nativeEvent.layout.x + wasteRelativePos.current.x,
-                  y: topRowLayoutRef.current.y + e.nativeEvent.layout.y + wasteRelativePos.current.y,
-                };
-              }}
-            >
+            <View>
               <StockWaste
                 stock={gameState.stock}
                 waste={gameState.waste}
@@ -1504,6 +1584,7 @@ export const GameScreen: React.FC = () => {
 
           {/* Tableau Row: 7 Cascading Columns */}
           <View
+            key={`tableauRow_${isRightHanded ? 'rh' : 'lh'}`}
             onLayout={(e) => {
               tableauRowLayoutRef.current = {
                 x: e.nativeEvent.layout.x,
