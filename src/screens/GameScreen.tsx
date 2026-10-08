@@ -20,8 +20,10 @@ import { GameOverModal } from '../components/GameOverModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { StatsModal } from '../components/StatsModal';
 import { StockWaste } from '../components/StockWaste';
-import { TableauColumn } from '../components/TableauColumn';
+import { TableauColumn, calculateTableauOffsets } from '../components/TableauColumn';
 import { WinModal } from '../components/WinModal';
+
+export { calculateTableauOffsets };
 import { dealKlondike } from '../engine/deck';
 import { findAvailableHints, Hint } from '../engine/hints';
 import {
@@ -93,6 +95,7 @@ export interface PilePositionParams {
   wasteCount: number;
   topRowY?: number;
   tableauRowY?: number;
+  maxColumnHeight?: number;
 }
 
 export function calculatePileBasePosition(
@@ -202,10 +205,21 @@ export function calculatePileCardPosition(
   // Tableau column
   const tIndex = pile.index ?? 0;
   const col = state.tableau[tIndex] ?? [];
+  const { offsets } = calculateTableauOffsets(
+    col,
+    params.cardHeight,
+    params.upOffset,
+    params.downOffset,
+    params.maxColumnHeight
+  );
+
   let vertOffset = 0;
-  const limit = Math.min(cardIndexInPile, col.length);
-  for (let i = 0; i < limit; i++) {
-    vertOffset += col[i].faceUp ? params.upOffset : params.downOffset;
+  if (cardIndexInPile < offsets.length) {
+    vertOffset = offsets[cardIndexInPile];
+  } else if (offsets.length > 0) {
+    const lastCard = col[col.length - 1];
+    vertOffset =
+      offsets[offsets.length - 1] + (lastCard?.faceUp ? params.upOffset : params.downOffset);
   }
 
   return {
@@ -215,7 +229,8 @@ export function calculatePileCardPosition(
 }
 
 export const GameScreen: React.FC = () => {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
 
   // Settings & Stats
   const [settings, setSettings] = useState<UserSettings>({
@@ -330,27 +345,81 @@ export const GameScreen: React.FC = () => {
   const handleWasteLayout = useCallback((_x: number, _y: number) => {}, []);
 
   // Calculate responsive dimensions
-  const { maxBoardWidth, gap, cardWidth, cardHeight, downOffset, upOffset, fanOffset } =
-    useMemo(() => {
-      const maxBoardWidth = Math.min(windowWidth - 16, 760);
-      const gap = Math.max(4, Math.floor(maxBoardWidth * 0.015));
-      const cardWidth = Math.max(40, Math.floor((maxBoardWidth - gap * 6 - 16) / 7));
-      const cardHeight = Math.floor(cardWidth * 1.4);
+  const {
+    maxBoardWidth,
+    gap,
+    cardWidth,
+    cardHeight,
+    downOffset,
+    upOffset,
+    fanOffset,
+    rowGap,
+    maxColumnHeight,
+  } = useMemo(() => {
+    // Header & paddings based on orientation
+    const headerHeight = isLandscape ? 38 : 95;
+    const boardPaddingVertical = isLandscape ? 6 : spacing.xl;
+    const tableauPaddingBottom = isLandscape ? 0 : spacing.bottomBarPadding;
+    const rowGap = isLandscape
+      ? Math.max(6, Math.min(12, Math.floor(windowHeight * 0.02)))
+      : spacing.xxl;
 
-      const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
-      const upOffset = Math.max(28, Math.floor(cardHeight * 0.32));
-      const fanOffset = Math.max(14, Math.floor(cardWidth * 0.30));
+    // Available width calculation
+    const maxAvailableWidth = Math.min(windowWidth - (isLandscape ? 24 : 16), isLandscape ? 820 : 760);
+    const preliminaryGap = Math.max(4, Math.floor(maxAvailableWidth * 0.015));
+    const cardWidthFromWidth = Math.max(38, Math.floor((maxAvailableWidth - preliminaryGap * 6 - 16) / 7));
+    const cardHeightFromWidth = Math.floor(cardWidthFromWidth * 1.4);
 
-      return {
-        maxBoardWidth,
-        gap,
-        cardWidth,
-        cardHeight,
-        downOffset,
-        upOffset,
-        fanOffset,
-      };
-    }, [windowWidth]);
+    // Available height calculation
+    const availableBoardHeight = Math.max(
+      200,
+      windowHeight - headerHeight - boardPaddingVertical * 2 - tableauPaddingBottom
+    );
+    const heightBudget = Math.max(160, availableBoardHeight - rowGap);
+
+    // Height-constrained card sizing (guarantees top row + tableau fit within available height without scrolling)
+    const cardHeightFromHeight = Math.floor(heightBudget / (isLandscape ? 3.4 : 4.0));
+
+    // Card dimensions respect BOTH width and height constraints
+    const cardHeight = Math.max(
+      48,
+      Math.min(cardHeightFromWidth, isLandscape ? cardHeightFromHeight : cardHeightFromWidth)
+    );
+    const cardWidth = Math.max(34, Math.floor(cardHeight / 1.4));
+
+    // Inter-column gap sized proportionally to card width so columns sit comfortably close together
+    const gap = isLandscape
+      ? Math.max(6, Math.min(10, Math.floor(cardWidth * 0.12)))
+      : preliminaryGap;
+
+    // Precise board width (7 columns + 6 gaps) so tableau columns are never over-spaced
+    const targetBoardWidth = cardWidth * 7 + gap * 6;
+    const maxBoardWidth = Math.min(maxAvailableWidth, targetBoardWidth);
+
+    // Dynamic vertical offsets
+    const downOffset = isLandscape
+      ? Math.max(6, Math.floor(cardHeight * 0.12))
+      : Math.max(12, Math.floor(cardHeight * 0.16));
+    const upOffset = isLandscape
+      ? Math.max(14, Math.floor(cardHeight * 0.24))
+      : Math.max(28, Math.floor(cardHeight * 0.32));
+    const fanOffset = Math.max(10, Math.floor(cardWidth * 0.28));
+
+    // Max allowed tableau column height to guarantee zero vertical scrolling
+    const maxColumnHeight = Math.max(cardHeight + 20, availableBoardHeight - cardHeight - rowGap);
+
+    return {
+      maxBoardWidth,
+      gap,
+      cardWidth,
+      cardHeight,
+      downOffset,
+      upOffset,
+      fanOffset,
+      rowGap,
+      maxColumnHeight,
+    };
+  }, [windowWidth, windowHeight, isLandscape]);
 
   // Persistence and Hydration tracking
   const isHydratedRef = useRef(false);
@@ -525,7 +594,8 @@ export const GameScreen: React.FC = () => {
       drawCount: gameState.drawCount,
       wasteCount: gameState.waste.length,
       topRowY: topRowLayoutRef.current.y,
-      tableauRowY: tableauRowLayoutRef.current.y || (cardHeight + spacing.xxl),
+      tableauRowY: tableauRowLayoutRef.current.y || (cardHeight + rowGap),
+      maxColumnHeight,
     }),
     [
       boardWidth,
@@ -538,6 +608,8 @@ export const GameScreen: React.FC = () => {
       isRightHanded,
       gameState.drawCount,
       gameState.waste.length,
+      rowGap,
+      maxColumnHeight,
     ]
   );
 
@@ -771,13 +843,19 @@ export const GameScreen: React.FC = () => {
         const ty = pos.y;
 
         const col = gameState.tableau[t] ?? [];
-        const colHeight = Math.max(cardHeight, (col.length - 1) * downOffset + cardHeight + 60);
+        const { columnHeight } = calculateTableauOffsets(
+          col,
+          cardHeight,
+          upOffset,
+          downOffset,
+          maxColumnHeight
+        );
 
         const inBounds =
           dropCenterX >= tx - gap &&
           dropCenterX <= tx + cardWidth + gap &&
           dropCenterY >= ty - 30 &&
-          dropCenterY <= ty + colHeight + 80;
+          dropCenterY <= ty + columnHeight + 80;
 
         if (inBounds && canPlaceOnTableau(leadCard, col, false)) {
           const colCenterX = tx + cardWidth / 2;
@@ -794,7 +872,7 @@ export const GameScreen: React.FC = () => {
 
       return null;
     },
-    [gameState, cardWidth, cardHeight, gap, downOffset, getPileBasePosition]
+    [gameState, cardWidth, cardHeight, gap, upOffset, downOffset, maxColumnHeight, getPileBasePosition]
   );
 
   // Drag-and-drop handlers
@@ -1468,6 +1546,7 @@ export const GameScreen: React.FC = () => {
         canHint={gameState.status === 'playing'}
         canGiveUp={gameState.status === 'playing' && gameState.moves > 0}
         soundEnabled={settings.soundEnabled !== false}
+        isLandscape={isLandscape}
         onUndo={handleUndo}
         onHint={handleHint}
         onGiveUp={handleGiveUp}
@@ -1479,15 +1558,18 @@ export const GameScreen: React.FC = () => {
       />
 
       {hintMessage && (
-        <View style={styles.hintBanner}>
+        <View style={[styles.hintBanner, isLandscape && styles.hintBannerLandscape]}>
           <Text style={styles.hintText}>{hintMessage}</Text>
         </View>
       )}
 
       <ScrollView
         style={styles.scrollView}
-        scrollEnabled={!dragState}
-        contentContainerStyle={styles.boardContent}
+        scrollEnabled={!dragState && !isLandscape}
+        contentContainerStyle={[
+          styles.boardContent,
+          isLandscape && styles.boardContentLandscape,
+        ]}
         showsVerticalScrollIndicator={false}
         bounces={false}
         overScrollMode="never"
@@ -1499,7 +1581,12 @@ export const GameScreen: React.FC = () => {
               setMeasuredBoardWidth(w);
             }
           }}
-          style={[styles.board, { maxWidth: maxBoardWidth }]}
+          style={[
+            styles.board,
+            { maxWidth: maxBoardWidth },
+            isLandscape && styles.boardLandscape,
+            { gap: rowGap },
+          ]}
         >
           {/* Top Row: Stock + Waste on Left (or Right if Right-Handed), 4 Foundations on Right (or Left if Right-Handed) */}
           <View
@@ -1519,6 +1606,7 @@ export const GameScreen: React.FC = () => {
                 drawCount={gameState.drawCount}
                 cardWidth={cardWidth}
                 cardHeight={cardHeight}
+                fanOffset={fanOffset}
                 rightHanded={isRightHanded}
                 onStockPress={handleStockPress}
                 onWasteCardPress={handleWasteCardPress}
@@ -1592,7 +1680,12 @@ export const GameScreen: React.FC = () => {
                 y: e.nativeEvent.layout.y,
               };
             }}
-            style={[styles.tableauRow, { gap }, isRightHanded && styles.tableauRowRightHanded]}
+            style={[
+              styles.tableauRow,
+              { gap },
+              isLandscape && styles.tableauRowLandscape,
+              isRightHanded && styles.tableauRowRightHanded,
+            ]}
           >
             {gameState.tableau.map((col, idx) => {
               const isSelectedCol =
@@ -1612,6 +1705,9 @@ export const GameScreen: React.FC = () => {
                     cards={col}
                     cardWidth={cardWidth}
                     cardHeight={cardHeight}
+                    downOffset={downOffset}
+                    upOffset={upOffset}
+                    maxColumnHeight={maxColumnHeight}
                     selectedCardIds={isSelectedCol ? selectedCards.cardIds : EMPTY_CARD_IDS}
                     hiddenCardIds={hiddenIds}
                     hintSourceCardIds={

@@ -19,6 +19,7 @@ interface StockWasteProps {
   isStockHintTarget?: boolean;
   hintWasteCardId?: string | null;
   rightHanded?: boolean;
+  fanOffset?: number;
   onDragStart?: (from: PileLocation, card: Card, cardIndex: number) => void;
   onDragMove?: (dx: number, dy: number) => void;
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
@@ -33,6 +34,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   cardWidth,
   cardHeight,
   rightHanded = false,
+  fanOffset: propFanOffset,
   onStockPress,
   onWasteCardPress,
   selectedCardId,
@@ -52,7 +54,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   // In Turn 3 mode, show up to 3 fanned cards from waste
   const visibleWasteCount = drawCount === 3 ? Math.min(3, waste.length) : Math.min(1, waste.length);
   const visibleWaste = waste.slice(-visibleWasteCount);
-  const fanOffset = Math.max(14, Math.floor(cardWidth * 0.30));
+  const fanOffset = propFanOffset ?? Math.max(10, Math.floor(cardWidth * 0.28));
   const underlyingCard =
     waste.length > visibleWasteCount ? waste[waste.length - 1 - visibleWasteCount] : null;
   const isUnderlyingHidden = underlyingCard ? hiddenCardIds.includes(underlyingCard.id) : false;
