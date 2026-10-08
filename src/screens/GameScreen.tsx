@@ -250,6 +250,8 @@ export const GameScreen: React.FC = () => {
 
   // Active Game State
   const [gameState, setGameState] = useState<GameState>(() => dealKlondike(1));
+  const latestGameStateRef = useRef<GameState>(gameState);
+  latestGameStateRef.current = gameState;
   const [selectedCards, setSelectedCards] = useState<{
     from: PileLocation;
     cardIds: string[];
@@ -301,10 +303,11 @@ export const GameScreen: React.FC = () => {
   }, []);
 
   const handleHint = useCallback(() => {
-    if (isAnimatingRef.current || canAutoComplete(gameState)) return;
-    if (gameState.status !== 'playing') return;
+    const current = latestGameStateRef.current;
+    if (isAnimatingRef.current || canAutoComplete(current)) return;
+    if (current.status !== 'playing') return;
 
-    const hints = findAvailableHints(gameState);
+    const hints = findAvailableHints(current);
     if (hints.length === 0) {
       showHint('No valid moves available.');
       clearActiveHint();
@@ -327,7 +330,7 @@ export const GameScreen: React.FC = () => {
     hintHighlightTimeoutRef.current = setTimeout(() => {
       setActiveHint(null);
     }, 4000);
-  }, [gameState, activeHint, clearActiveHint, showHint]);
+  }, [activeHint, clearActiveHint, showHint]);
 
   // Measured Board Layout Positions (Relative to styles.board)
   const topRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -424,8 +427,6 @@ export const GameScreen: React.FC = () => {
   // Persistence and Hydration tracking
   const isHydratedRef = useRef(false);
   const lastSavedGameRef = useRef<GameState | null>(null);
-  const latestGameStateRef = useRef<GameState>(gameState);
-  latestGameStateRef.current = gameState;
 
   // Load initial saved game and stats
   useEffect(() => {
@@ -556,19 +557,20 @@ export const GameScreen: React.FC = () => {
 
   // Check for game over (no legal moves left)
   useEffect(() => {
+    const current = latestGameStateRef.current;
     if (
-      gameState.status === 'playing' &&
-      !canAutoComplete(gameState) &&
-      !isGameWon(gameState.foundations)
+      current.status === 'playing' &&
+      !canAutoComplete(current) &&
+      !isGameWon(current.foundations)
     ) {
       const timer = setTimeout(() => {
-        const current = latestGameStateRef.current;
+        const activeState = latestGameStateRef.current;
         if (
-          current.status === 'playing' &&
+          activeState.status === 'playing' &&
           !isAnimatingRef.current &&
-          !canAutoComplete(current) &&
-          !isGameWon(current.foundations) &&
-          !hasAvailableMoves(current)
+          !canAutoComplete(activeState) &&
+          !isGameWon(activeState.foundations) &&
+          !hasAvailableMoves(activeState)
         ) {
           playGameOverSound();
           setLossReason('no_moves');
@@ -577,7 +579,7 @@ export const GameScreen: React.FC = () => {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [gameState]);
+  }, [gameState.id, gameState.history.length, gameState.status]);
 
   const boardWidth = measuredBoardWidth > 0 ? measuredBoardWidth : maxBoardWidth;
 
@@ -592,7 +594,7 @@ export const GameScreen: React.FC = () => {
       downOffset,
       isRightHanded,
       drawCount: gameState.drawCount,
-      wasteCount: gameState.waste.length,
+      wasteCount: 0,
       topRowY: topRowLayoutRef.current.y,
       tableauRowY: tableauRowLayoutRef.current.y || (cardHeight + rowGap),
       maxColumnHeight,
@@ -607,7 +609,6 @@ export const GameScreen: React.FC = () => {
       downOffset,
       isRightHanded,
       gameState.drawCount,
-      gameState.waste.length,
       rowGap,
       maxColumnHeight,
     ]
@@ -617,19 +618,23 @@ export const GameScreen: React.FC = () => {
     (pile: { type: PileType; index?: number }, wasteCountOverride?: number): { x: number; y: number } => {
       return calculatePileBasePosition(pile, {
         ...pilePositionParams,
-        wasteCount: wasteCountOverride !== undefined ? wasteCountOverride : gameState.waste.length,
+        wasteCount:
+          wasteCountOverride !== undefined
+            ? wasteCountOverride
+            : latestGameStateRef.current.waste.length,
       });
     },
-    [pilePositionParams, gameState.waste.length]
+    [pilePositionParams]
   );
 
   const getPileCardPosition = useCallback(
     (
       pile: { type: PileType; index?: number },
       cardIndexInPile: number,
-      state: GameState
+      state?: GameState
     ): { x: number; y: number } => {
-      return calculatePileCardPosition(pile, cardIndexInPile, state, pilePositionParams);
+      const activeState = state ?? latestGameStateRef.current;
+      return calculatePileCardPosition(pile, cardIndexInPile, activeState, pilePositionParams);
     },
     [pilePositionParams]
   );
@@ -646,72 +651,138 @@ export const GameScreen: React.FC = () => {
   }, [getPileBasePosition]);
 
   // Animate and execute move
-  const executeMoveWithAnimation = (
-    from: PileLocation,
-    to: PileLocation,
-    cardIds: string[],
-    durationOverride?: number
-  ): boolean => {
-    if (isAnimatingRef.current) return false;
+  const executeMoveWithAnimation = useCallback(
+    (
+      from: PileLocation,
+      to: PileLocation,
+      cardIds: string[],
+      durationOverride?: number
+    ): boolean => {
+      if (isAnimatingRef.current) return false;
+      const current = latestGameStateRef.current;
 
-    // Handle stock draw
-    if (from.type === 'stock' && to.type === 'waste') {
-      if (gameState.stock.length === 0) return false;
-      const count = Math.min(gameState.drawCount, gameState.stock.length);
-      const drawnCards = gameState.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
-      const nextState = drawCards(gameState);
+      // Handle stock draw
+      if (from.type === 'stock' && to.type === 'waste') {
+        if (current.stock.length === 0) return false;
+        const count = Math.min(current.drawCount, current.stock.length);
+        const drawnCards = current.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
+        const nextState = drawCards(current);
 
-      const startPos = getPileBasePosition({ type: 'stock' });
-      const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+        const startPos = getPileBasePosition({ type: 'stock' });
+        const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
 
-      isAnimatingRef.current = true;
-      playDealSound();
-      setAnimatingCard({
-        cards: drawnCards,
-        startX: startPos.x,
-        startY: startPos.y,
-        endX: endPos.x,
-        endY: endPos.y,
-        hiddenCardIds: drawnCards.map((c) => c.id),
-        direction: 'horizontal',
-      });
+        isAnimatingRef.current = true;
+        playDealSound();
+        setAnimatingCard({
+          cards: drawnCards,
+          startX: startPos.x,
+          startY: startPos.y,
+          endX: endPos.x,
+          endY: endPos.y,
+          hiddenCardIds: drawnCards.map((c) => c.id),
+          direction: 'horizontal',
+        });
 
-      animProgress.setValue(0);
-      Animated.timing(animProgress, {
-        toValue: 1,
-        duration: durationOverride !== undefined ? durationOverride : 180,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start(() => {
+        animProgress.setValue(0);
+        Animated.timing(animProgress, {
+          toValue: 1,
+          duration: durationOverride !== undefined ? durationOverride : 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: Platform.OS !== 'web',
+        }).start(() => {
+          setGameState(nextState);
+          setAnimatingCard(null);
+          isAnimatingRef.current = false;
+        });
+        return true;
+      }
+
+      // Handle waste recycle to stock
+      if (from.type === 'waste' && to.type === 'stock') {
+        if (current.waste.length === 0) return false;
+        const count = Math.min(current.drawCount === 3 ? 3 : 1, current.waste.length);
+        const cardsToAnimate = current.waste.slice(-count);
+        const allWasteIds = current.waste.map((c) => c.id);
+        const nextState = drawCards(current);
+
+        const startPos = getPileBasePosition({ type: 'waste' }, current.waste.length);
+        const endPos = getPileBasePosition({ type: 'stock' });
+
+        isAnimatingRef.current = true;
+        playResetSound();
+        setAnimatingCard({
+          cards: cardsToAnimate,
+          startX: startPos.x,
+          startY: startPos.y,
+          endX: endPos.x,
+          endY: endPos.y,
+          hiddenCardIds: allWasteIds,
+          direction: 'horizontal',
+          isReset: true,
+        });
+
+        animProgress.setValue(0);
+        Animated.timing(animProgress, {
+          toValue: 1,
+          duration: durationOverride !== undefined ? durationOverride : 200,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: Platform.OS !== 'web',
+        }).start(() => {
+          setGameState(nextState);
+          setAnimatingCard(null);
+          isAnimatingRef.current = false;
+        });
+        return true;
+      }
+
+      const nextState = moveCards(current, from, to, cardIds);
+      if (!nextState) return false;
+
+      playCardMoveSound();
+
+      // Determine moving cards and initial index
+      let movingCards: Card[] = [];
+      let sourceCardIndex = 0;
+
+      if (from.type === 'waste') {
+        movingCards = [current.waste[current.waste.length - 1]];
+        sourceCardIndex = current.waste.length - 1;
+      } else if (from.type === 'tableau') {
+        const col = current.tableau[from.index];
+        sourceCardIndex = col.findIndex((c) => c.id === cardIds[0]);
+        if (sourceCardIndex !== -1) {
+          movingCards = col.slice(sourceCardIndex);
+        }
+      } else if (from.type === 'foundation') {
+        const f = current.foundations[from.index];
+        movingCards = [f[f.length - 1]];
+        sourceCardIndex = f.length - 1;
+      }
+
+      if (movingCards.length === 0) {
         setGameState(nextState);
-        setAnimatingCard(null);
-        isAnimatingRef.current = false;
-      });
-      return true;
-    }
+        return true;
+      }
 
-    // Handle waste recycle to stock
-    if (from.type === 'waste' && to.type === 'stock') {
-      if (gameState.waste.length === 0) return false;
-      const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.waste.length);
-      const cardsToAnimate = gameState.waste.slice(-count);
-      const allWasteIds = gameState.waste.map((c) => c.id);
-      const nextState = drawCards(gameState);
+      const startPos = getPileCardPosition(from, sourceCardIndex, current);
 
-      const startPos = getPileBasePosition({ type: 'waste' }, gameState.waste.length);
-      const endPos = getPileBasePosition({ type: 'stock' });
+      let destCardIndex = 0;
+      if (to.type === 'tableau') {
+        destCardIndex = current.tableau[to.index].length;
+      } else if (to.type === 'foundation') {
+        destCardIndex = current.foundations[to.index].length;
+      }
+      const endPos = getPileCardPosition(to, destCardIndex, current);
 
+      // Run animation
       isAnimatingRef.current = true;
-      playResetSound();
       setAnimatingCard({
-        cards: cardsToAnimate,
+        cards: movingCards,
         startX: startPos.x,
         startY: startPos.y,
         endX: endPos.x,
         endY: endPos.y,
-        hiddenCardIds: allWasteIds,
-        direction: 'horizontal',
-        isReset: true,
+        hiddenCardIds: cardIds,
       });
 
       animProgress.setValue(0);
@@ -719,79 +790,17 @@ export const GameScreen: React.FC = () => {
         toValue: 1,
         duration: durationOverride !== undefined ? durationOverride : 200,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
         setGameState(nextState);
         setAnimatingCard(null);
         isAnimatingRef.current = false;
       });
+
       return true;
-    }
-
-    const nextState = moveCards(gameState, from, to, cardIds);
-    if (!nextState) return false;
-
-    playCardMoveSound();
-
-    // Determine moving cards and initial index
-    let movingCards: Card[] = [];
-    let sourceCardIndex = 0;
-
-    if (from.type === 'waste') {
-      movingCards = [gameState.waste[gameState.waste.length - 1]];
-      sourceCardIndex = gameState.waste.length - 1;
-    } else if (from.type === 'tableau') {
-      const col = gameState.tableau[from.index];
-      sourceCardIndex = col.findIndex((c) => c.id === cardIds[0]);
-      if (sourceCardIndex !== -1) {
-        movingCards = col.slice(sourceCardIndex);
-      }
-    } else if (from.type === 'foundation') {
-      const f = gameState.foundations[from.index];
-      movingCards = [f[f.length - 1]];
-      sourceCardIndex = f.length - 1;
-    }
-
-    if (movingCards.length === 0) {
-      setGameState(nextState);
-      return true;
-    }
-
-    const startPos = getPileCardPosition(from, sourceCardIndex, gameState);
-
-    let destCardIndex = 0;
-    if (to.type === 'tableau') {
-      destCardIndex = gameState.tableau[to.index].length;
-    } else if (to.type === 'foundation') {
-      destCardIndex = gameState.foundations[to.index].length;
-    }
-    const endPos = getPileCardPosition(to, destCardIndex, gameState);
-
-    // Run animation
-    isAnimatingRef.current = true;
-    setAnimatingCard({
-      cards: movingCards,
-      startX: startPos.x,
-      startY: startPos.y,
-      endX: endPos.x,
-      endY: endPos.y,
-      hiddenCardIds: cardIds,
-    });
-
-    animProgress.setValue(0);
-    Animated.timing(animProgress, {
-      toValue: 1,
-      duration: durationOverride !== undefined ? durationOverride : 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start(() => {
-      setGameState(nextState);
-      setAnimatingCard(null);
-      isAnimatingRef.current = false;
-    });
-
-    return true;
-  };
+    },
+    [getPileBasePosition, getPileCardPosition]
+  );
 
   // Find valid drop target under drop point
   const findDropTarget = useCallback(
@@ -801,6 +810,7 @@ export const GameScreen: React.FC = () => {
       dropX: number,
       dropY: number
     ): PileLocation | null => {
+      const current = latestGameStateRef.current;
       const leadCard = cards[0];
       const dropCenterX = dropX + cardWidth / 2;
       const dropCenterY = dropY + cardHeight / 2;
@@ -808,7 +818,7 @@ export const GameScreen: React.FC = () => {
       // 1. Check Foundations if dragging a single card
       if (cards.length === 1) {
         let bestFoundation: { index: number; dist: number } | null = null;
-        for (let f = 0; f < gameState.foundations.length; f++) {
+        for (let f = 0; f < current.foundations.length; f++) {
           if (from.type === 'foundation' && from.index === f) continue;
           const pos = getPileBasePosition({ type: 'foundation', index: f });
           const fx = pos.x;
@@ -820,7 +830,7 @@ export const GameScreen: React.FC = () => {
             dropCenterY >= fy - 15 &&
             dropCenterY <= fy + cardHeight + 40;
 
-          if (inBounds && canPlaceOnFoundation(leadCard, gameState.foundations[f], f)) {
+          if (inBounds && canPlaceOnFoundation(leadCard, current.foundations[f], f)) {
             const fCenterX = fx + cardWidth / 2;
             const dist = Math.abs(dropCenterX - fCenterX);
             if (!bestFoundation || dist < bestFoundation.dist) {
@@ -836,13 +846,13 @@ export const GameScreen: React.FC = () => {
 
       // 2. Check Tableau columns
       let bestTableau: { index: number; dist: number } | null = null;
-      for (let t = 0; t < gameState.tableau.length; t++) {
+      for (let t = 0; t < current.tableau.length; t++) {
         if (from.type === 'tableau' && from.index === t) continue;
         const pos = getPileBasePosition({ type: 'tableau', index: t });
         const tx = pos.x;
         const ty = pos.y;
 
-        const col = gameState.tableau[t] ?? [];
+        const col = current.tableau[t] ?? [];
         const { columnHeight } = calculateTableauOffsets(
           col,
           cardHeight,
@@ -872,32 +882,33 @@ export const GameScreen: React.FC = () => {
 
       return null;
     },
-    [gameState, cardWidth, cardHeight, gap, upOffset, downOffset, maxColumnHeight, getPileBasePosition]
+    [cardWidth, cardHeight, gap, upOffset, downOffset, maxColumnHeight, getPileBasePosition]
   );
 
   // Drag-and-drop handlers
   const handleDragStart = useCallback(
     (from: PileLocation, card: Card, cardIndex: number) => {
-      if (isAnimatingRef.current || canAutoComplete(gameState)) return;
+      const current = latestGameStateRef.current;
+      if (isAnimatingRef.current || canAutoComplete(current)) return;
       clearActiveHint();
       setSelectedCards(null);
 
       let movingCards: Card[] = [];
       if (from.type === 'tableau') {
-        const col = gameState.tableau[from.index] ?? [];
+        const col = current.tableau[from.index] ?? [];
         movingCards = col.slice(cardIndex);
       } else if (from.type === 'waste') {
-        const top = gameState.waste[gameState.waste.length - 1];
+        const top = current.waste[current.waste.length - 1];
         if (top) movingCards = [top];
       } else if (from.type === 'foundation') {
-        const pile = gameState.foundations[from.index] ?? [];
+        const pile = current.foundations[from.index] ?? [];
         const top = pile[pile.length - 1];
         if (top) movingCards = [top];
       }
 
       if (movingCards.length === 0) return;
 
-      const startPos = getPileCardPosition(from, cardIndex, gameState);
+      const startPos = getPileCardPosition(from, cardIndex, current);
       dragPan.setValue({ x: 0, y: 0 });
 
       setDraggedCard({
@@ -907,7 +918,7 @@ export const GameScreen: React.FC = () => {
         startPos,
       });
     },
-    [gameState, getPileCardPosition, dragPan, clearActiveHint]
+    [getPileCardPosition, dragPan, clearActiveHint]
   );
 
   const handleDragMove = useCallback(
@@ -932,16 +943,17 @@ export const GameScreen: React.FC = () => {
       const target = findDropTarget(dragState.cards, dragState.from, dropX, dropY);
 
       if (target) {
-        const nextState = moveCards(gameState, dragState.from, target, dragState.cardIds);
+        const current = latestGameStateRef.current;
+        const nextState = moveCards(current, dragState.from, target, dragState.cardIds);
         if (nextState) {
           playCardMoveSound();
           let destCardIndex = 0;
           if (target.type === 'tableau') {
-            destCardIndex = gameState.tableau[target.index].length;
+            destCardIndex = current.tableau[target.index].length;
           } else if (target.type === 'foundation') {
-            destCardIndex = gameState.foundations[target.index].length;
+            destCardIndex = current.foundations[target.index].length;
           }
-          const targetPos = getPileCardPosition(target, destCardIndex, gameState);
+          const targetPos = getPileCardPosition(target, destCardIndex, current);
 
           isAnimatingRef.current = true;
           Animated.timing(dragPan, {
@@ -951,7 +963,7 @@ export const GameScreen: React.FC = () => {
             },
             duration: 120,
             easing: Easing.out(Easing.cubic),
-            useNativeDriver: false,
+            useNativeDriver: Platform.OS !== 'web',
           }).start(() => {
             setGameState(nextState);
             setDraggedCard(null);
@@ -968,31 +980,32 @@ export const GameScreen: React.FC = () => {
         toValue: { x: 0, y: 0 },
         duration: 160,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
         setDraggedCard(null);
         isAnimatingRef.current = false;
       });
     },
-    [dragState, gameState, findDropTarget, getPileCardPosition, dragPan]
+    [dragState, findDropTarget, getPileCardPosition, dragPan]
   );
 
   // Stock press with draw animation
   const handleStockPress = useCallback(() => {
-    if (isAnimatingRef.current || canAutoComplete(gameState)) return;
+    const current = latestGameStateRef.current;
+    if (isAnimatingRef.current || canAutoComplete(current)) return;
     clearActiveHint();
     setSelectedCards(null);
 
-    if (gameState.stock.length === 0) {
-      if (gameState.waste.length === 0) return;
+    if (current.stock.length === 0) {
+      if (current.waste.length === 0) return;
 
       // Recycle waste to stock with animation
-      const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.waste.length);
-      const cardsToAnimate = gameState.waste.slice(-count);
-      const allWasteIds = gameState.waste.map((c) => c.id);
-      const nextState = drawCards(gameState);
+      const count = Math.min(current.drawCount === 3 ? 3 : 1, current.waste.length);
+      const cardsToAnimate = current.waste.slice(-count);
+      const allWasteIds = current.waste.map((c) => c.id);
+      const nextState = drawCards(current);
 
-      const startPos = getPileBasePosition({ type: 'waste' }, gameState.waste.length);
+      const startPos = getPileBasePosition({ type: 'waste' }, current.waste.length);
       const endPos = getPileBasePosition({ type: 'stock' });
 
       isAnimatingRef.current = true;
@@ -1013,7 +1026,7 @@ export const GameScreen: React.FC = () => {
         toValue: 1,
         duration: 220,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
         setGameState(nextState);
         setAnimatingCard(null);
@@ -1022,9 +1035,9 @@ export const GameScreen: React.FC = () => {
       return;
     }
 
-    const count = Math.min(gameState.drawCount, gameState.stock.length);
-    const drawnCards = gameState.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
-    const nextState = drawCards(gameState);
+    const count = Math.min(current.drawCount, current.stock.length);
+    const drawnCards = current.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
+    const nextState = drawCards(current);
 
     const startPos = getPileBasePosition({ type: 'stock' });
     const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
@@ -1046,22 +1059,23 @@ export const GameScreen: React.FC = () => {
       toValue: 1,
       duration: 180,
       easing: Easing.out(Easing.quad),
-      useNativeDriver: false,
+      useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
       setGameState(nextState);
       setAnimatingCard(null);
       isAnimatingRef.current = false;
     });
-  }, [gameState, clearActiveHint, getPileBasePosition]);
+  }, [clearActiveHint, getPileBasePosition]);
 
   // Waste card press
   const handleWasteCardPress = useCallback(
     (card: Card) => {
-      if (isAnimatingRef.current || canAutoComplete(gameState)) return;
+      const current = latestGameStateRef.current;
+      if (isAnimatingRef.current || canAutoComplete(current)) return;
       clearActiveHint();
 
       if (settings.autoMoveOnTap) {
-        const smart = findSmartMove(gameState, card.id);
+        const smart = findSmartMove(current, card.id);
         if (smart) {
           const success = executeMoveWithAnimation(smart.from, smart.to, smart.cardIds);
           if (success) {
@@ -1078,13 +1092,14 @@ export const GameScreen: React.FC = () => {
         setSelectedCards({ from: { type: 'waste', index: 0 }, cardIds: [card.id] });
       }
     },
-    [gameState, selectedCards, settings.autoMoveOnTap, clearActiveHint]
+    [settings.autoMoveOnTap, selectedCards, clearActiveHint, executeMoveWithAnimation]
   );
 
   // Tableau card press
   const handleTableauCardPress = useCallback(
     (card: Card, colIndex: number) => {
-      if (isAnimatingRef.current || canAutoComplete(gameState)) return;
+      const current = latestGameStateRef.current;
+      if (isAnimatingRef.current || canAutoComplete(current)) return;
       clearActiveHint();
 
       // If we already have selected cards, try to move onto this tableau column
@@ -1102,7 +1117,7 @@ export const GameScreen: React.FC = () => {
 
       // Tap-to-move smart placement
       if (settings.autoMoveOnTap) {
-        const smart = findSmartMove(gameState, card.id);
+        const smart = findSmartMove(current, card.id);
         if (smart) {
           const success = executeMoveWithAnimation(smart.from, smart.to, smart.cardIds);
           if (success) {
@@ -1113,7 +1128,7 @@ export const GameScreen: React.FC = () => {
       }
 
       // Otherwise select card & its stack
-      const col = gameState.tableau[colIndex];
+      const col = current.tableau[colIndex];
       const cardIdx = col.findIndex((c) => c.id === card.id);
       const cardIds = col.slice(cardIdx).map((c) => c.id);
 
@@ -1123,13 +1138,14 @@ export const GameScreen: React.FC = () => {
         setSelectedCards({ from: { type: 'tableau', index: colIndex }, cardIds });
       }
     },
-    [gameState, selectedCards, settings.autoMoveOnTap, clearActiveHint]
+    [settings.autoMoveOnTap, selectedCards, clearActiveHint, executeMoveWithAnimation]
   );
 
   // Empty tableau column press (e.g. King target)
   const handleEmptyColumnPress = useCallback(
     (colIndex: number) => {
-      if (isAnimatingRef.current || canAutoComplete(gameState)) return;
+      const current = latestGameStateRef.current;
+      if (isAnimatingRef.current || canAutoComplete(current)) return;
       clearActiveHint();
 
       if (selectedCards) {
@@ -1145,16 +1161,17 @@ export const GameScreen: React.FC = () => {
         }
       }
     },
-    [gameState, selectedCards, clearActiveHint, showHint]
+    [selectedCards, clearActiveHint, showHint, executeMoveWithAnimation]
   );
 
   // Foundation pile press
   const handleFoundationPress = useCallback(
     (fIndex: number) => {
-      if (isAnimatingRef.current || canAutoComplete(gameState)) return;
+      const current = latestGameStateRef.current;
+      if (isAnimatingRef.current || canAutoComplete(current)) return;
       clearActiveHint();
 
-      const pile = gameState.foundations[fIndex];
+      const pile = current.foundations[fIndex];
       const topCard = pile.length > 0 ? pile[pile.length - 1] : null;
 
       // 1. If we already have a selection
@@ -1190,7 +1207,7 @@ export const GameScreen: React.FC = () => {
       if (topCard) {
         // Tap-to-move smart placement down from foundation to tableau
         if (settings.autoMoveOnTap) {
-          const smart = findSmartMove(gameState, topCard.id);
+          const smart = findSmartMove(current, topCard.id);
           if (smart) {
             const success = executeMoveWithAnimation(smart.from, smart.to, smart.cardIds);
             if (success) {
@@ -1207,7 +1224,7 @@ export const GameScreen: React.FC = () => {
         });
       }
     },
-    [gameState, selectedCards, settings.autoMoveOnTap, clearActiveHint, showHint]
+    [settings.autoMoveOnTap, selectedCards, clearActiveHint, showHint, executeMoveWithAnimation]
   );
 
   const handleFoundation0Press = useCallback(() => handleFoundationPress(0), [handleFoundationPress]);
@@ -1264,7 +1281,8 @@ export const GameScreen: React.FC = () => {
 
   // Start new game (prompts if active game has moves)
   const handleNewGame = useCallback(() => {
-    if (gameState.status === 'playing' && gameState.moves > 0) {
+    const current = latestGameStateRef.current;
+    if (current.status === 'playing' && current.moves > 0) {
       setConfirmModal({
         visible: true,
         title: 'Abandon Game?',
@@ -1272,9 +1290,9 @@ export const GameScreen: React.FC = () => {
         confirmLabel: 'Abandon & Deal',
         onConfirm: async () => {
           setConfirmModal(null);
-          if (!recordedGameIdsRef.current.has(gameState.id)) {
-            recordedGameIdsRef.current.add(gameState.id);
-            const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
+          if (!recordedGameIdsRef.current.has(current.id)) {
+            recordedGameIdsRef.current.add(current.id);
+            const updated = await recordGameEnd(false, current.score, current.elapsedSeconds);
             setStats(updated);
           }
           startNewGame();
@@ -1284,11 +1302,12 @@ export const GameScreen: React.FC = () => {
     }
 
     startNewGame();
-  }, [gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]);
+  }, [startNewGame]);
 
   // Give up / forfeit game
   const handleGiveUp = useCallback(() => {
-    if (gameState.status !== 'playing' || gameState.moves === 0) return;
+    const current = latestGameStateRef.current;
+    if (current.status !== 'playing' || current.moves === 0) return;
     setConfirmModal({
       visible: true,
       title: 'Give Up Game?',
@@ -1298,26 +1317,27 @@ export const GameScreen: React.FC = () => {
         setConfirmModal(null);
         playGameOverSound();
         setLossReason('forfeit');
-        setGameState((prev) => ({ ...prev, status: 'lost' }));
+        setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
       },
     });
-  }, [gameState.status, gameState.moves]);
+  }, []);
 
   // Change Draw Mode (Turn 1 vs Turn 3)
   const handleChangeDrawCount = useCallback(
     (newCount: 1 | 3) => {
       if (newCount === settings.drawCount) return;
 
+      const current = latestGameStateRef.current;
       const nextSettings = { ...settings, drawCount: newCount };
 
       const proceedWithChange = async () => {
         if (
-          gameState.status === 'playing' &&
-          gameState.moves > 0 &&
-          !recordedGameIdsRef.current.has(gameState.id)
+          current.status === 'playing' &&
+          current.moves > 0 &&
+          !recordedGameIdsRef.current.has(current.id)
         ) {
-          recordedGameIdsRef.current.add(gameState.id);
-          const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
+          recordedGameIdsRef.current.add(current.id);
+          const updated = await recordGameEnd(false, current.score, current.elapsedSeconds);
           setStats(updated);
         }
         setSettings(nextSettings);
@@ -1325,7 +1345,7 @@ export const GameScreen: React.FC = () => {
         startNewGame(newCount);
       };
 
-      if (gameState.status === 'playing' && gameState.moves > 0) {
+      if (current.status === 'playing' && current.moves > 0) {
         setSettingsVisible(false);
         setConfirmModal({
           visible: true,
@@ -1342,7 +1362,7 @@ export const GameScreen: React.FC = () => {
 
       proceedWithChange();
     },
-    [settings, gameState.status, gameState.moves, gameState.id, gameState.score, gameState.elapsedSeconds, startNewGame]
+    [settings, startNewGame]
   );
 
   // Toggle Draw Mode (Turn 1 vs Turn 3)
@@ -1390,22 +1410,23 @@ export const GameScreen: React.FC = () => {
 
   // Undo move with animation
   const handleUndo = useCallback(() => {
-    if (isAnimatingRef.current || canAutoComplete(gameState)) return;
-    if (gameState.history.length === 0) return;
+    const current = latestGameStateRef.current;
+    if (isAnimatingRef.current || canAutoComplete(current)) return;
+    if (current.history.length === 0) return;
 
     clearActiveHint();
     setSelectedCards(null);
 
-    const lastMove = gameState.history[gameState.history.length - 1];
-    const nextState = undo(gameState);
+    const lastMove = current.history[current.history.length - 1];
+    const nextState = undo(current);
 
     // Case 1: Undo draw from stock to waste (return drawn cards to stock)
     if (lastMove.from.type === 'stock' && lastMove.to.type === 'waste') {
       const count = lastMove.cardIds.length;
-      const cardsToAnimate = gameState.waste.slice(-count);
+      const cardsToAnimate = current.waste.slice(-count);
       const allUndoneWasteIds = cardsToAnimate.map((c) => c.id);
 
-      const startPos = getPileBasePosition({ type: 'waste' }, gameState.waste.length);
+      const startPos = getPileBasePosition({ type: 'waste' }, current.waste.length);
       const endPos = getPileBasePosition({ type: 'stock' });
 
       isAnimatingRef.current = true;
@@ -1426,7 +1447,7 @@ export const GameScreen: React.FC = () => {
         toValue: 1,
         duration: 200,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
         setGameState(nextState);
         setAnimatingCard(null);
@@ -1437,8 +1458,8 @@ export const GameScreen: React.FC = () => {
 
     // Case 2: Undo stock recycle (waste -> stock)
     if (lastMove.from.type === 'waste' && lastMove.to.type === 'stock') {
-      const count = Math.min(gameState.drawCount === 3 ? 3 : 1, gameState.stock.length);
-      const cardsToAnimate = gameState.stock.slice(0, count).map((c) => ({ ...c, faceUp: true }));
+      const count = Math.min(current.drawCount === 3 ? 3 : 1, current.stock.length);
+      const cardsToAnimate = current.stock.slice(0, count).map((c) => ({ ...c, faceUp: true }));
 
       const startPos = getPileBasePosition({ type: 'stock' });
       const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
@@ -1460,7 +1481,7 @@ export const GameScreen: React.FC = () => {
         toValue: 1,
         duration: 220,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
         setGameState(nextState);
         setAnimatingCard(null);
@@ -1474,20 +1495,20 @@ export const GameScreen: React.FC = () => {
     let sourceCardIndex = 0;
 
     if (lastMove.to.type === 'tableau') {
-      const col = gameState.tableau[lastMove.to.index];
+      const col = current.tableau[lastMove.to.index];
       const count = lastMove.cardIds.length;
       sourceCardIndex = Math.max(0, col.length - count);
       movingCards = col.slice(sourceCardIndex);
     } else if (lastMove.to.type === 'foundation') {
-      const f = gameState.foundations[lastMove.to.index];
+      const f = current.foundations[lastMove.to.index];
       sourceCardIndex = Math.max(0, f.length - 1);
       if (f.length > 0) {
         movingCards = [f[sourceCardIndex]];
       }
     } else if (lastMove.to.type === 'waste') {
-      sourceCardIndex = Math.max(0, gameState.waste.length - 1);
-      if (gameState.waste.length > 0) {
-        movingCards = [gameState.waste[sourceCardIndex]];
+      sourceCardIndex = Math.max(0, current.waste.length - 1);
+      if (current.waste.length > 0) {
+        movingCards = [current.waste[sourceCardIndex]];
       }
     }
 
@@ -1499,15 +1520,15 @@ export const GameScreen: React.FC = () => {
 
     let destCardIndex = 0;
     if (lastMove.from.type === 'tableau') {
-      destCardIndex = gameState.tableau[lastMove.from.index].length;
+      destCardIndex = current.tableau[lastMove.from.index].length;
     } else if (lastMove.from.type === 'foundation') {
-      destCardIndex = gameState.foundations[lastMove.from.index].length;
+      destCardIndex = current.foundations[lastMove.from.index].length;
     } else if (lastMove.from.type === 'waste') {
-      destCardIndex = gameState.waste.length;
+      destCardIndex = current.waste.length;
     }
 
-    const startPos = getPileCardPosition(lastMove.to, sourceCardIndex, gameState);
-    const endPos = getPileCardPosition(lastMove.from, destCardIndex, gameState);
+    const startPos = getPileCardPosition(lastMove.to, sourceCardIndex, current);
+    const endPos = getPileCardPosition(lastMove.from, destCardIndex, current);
 
     isAnimatingRef.current = true;
     playCardMoveSound();
@@ -1525,13 +1546,13 @@ export const GameScreen: React.FC = () => {
       toValue: 1,
       duration: 200,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
+      useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
       setGameState(nextState);
       setAnimatingCard(null);
       isAnimatingRef.current = false;
     });
-  }, [gameState, clearActiveHint, getPileBasePosition, getPileCardPosition]);
+  }, [clearActiveHint, getPileBasePosition, getPileCardPosition]);
 
   const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : dragState ? dragState.cardIds : EMPTY_CARD_IDS;
 
@@ -1733,15 +1754,19 @@ export const GameScreen: React.FC = () => {
               style={[
                 styles.floatingAnimatedContainer,
                 {
-                  left: animProgress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [animatingCard.startX, animatingCard.endX],
-                  }),
-                  top: animProgress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [animatingCard.startY, animatingCard.endY],
-                  }),
                   transform: [
+                    {
+                      translateX: animProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [animatingCard.startX, animatingCard.endX],
+                      }),
+                    },
+                    {
+                      translateY: animProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [animatingCard.startY, animatingCard.endY],
+                      }),
+                    },
                     {
                       scale: animProgress.interpolate({
                         inputRange: [0, 0.5, 1],
@@ -1769,7 +1794,8 @@ export const GameScreen: React.FC = () => {
                     style={{
                       position: 'absolute',
                       top: animatedTop,
-                      left: animatedLeft,
+                      left: 0,
+                      transform: [{ translateX: animatedLeft }],
                       zIndex: i + 1,
                     }}
                   >
@@ -1845,10 +1871,14 @@ export const GameScreen: React.FC = () => {
               style={[
                 styles.floatingAnimatedContainer,
                 {
-                  left: Animated.add(dragState.startPos.x, dragPan.x),
-                  top: Animated.add(dragState.startPos.y, dragPan.y),
+                  left: 0,
+                  top: 0,
                   zIndex: 10000,
-                  transform: [{ scale: 1.05 }],
+                  transform: [
+                    { translateX: Animated.add(dragState.startPos.x, dragPan.x) },
+                    { translateY: Animated.add(dragState.startPos.y, dragPan.y) },
+                    { scale: 1.05 },
+                  ],
                 },
               ]}
             >

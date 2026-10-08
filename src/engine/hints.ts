@@ -43,6 +43,61 @@ export function formatCardShort(card: Card): string {
 }
 
 /**
+ * Fast-path check for direct advancing moves that require zero search / BFS:
+ * - Waste card directly to foundation or tableau
+ * - Tableau card directly to foundation
+ * - Tableau move that directly uncovers a face-down card
+ */
+function hasDirectAdvancingMove(
+  state: GameState,
+  allowAnyCardOnEmpty = false
+): boolean {
+  // 1. Waste card to foundation or tableau
+  if (state.waste.length > 0) {
+    const topWaste = state.waste[state.waste.length - 1];
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (canPlaceOnFoundation(topWaste, state.foundations[f], f)) return true;
+    }
+    for (let t = 0; t < state.tableau.length; t++) {
+      if (canPlaceOnTableau(topWaste, state.tableau[t], allowAnyCardOnEmpty)) return true;
+    }
+  }
+
+  // 2. Tableau cards to foundation
+  for (let t = 0; t < state.tableau.length; t++) {
+    const col = state.tableau[t];
+    if (col.length === 0) continue;
+    const topCard = col[col.length - 1];
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (canPlaceOnFoundation(topCard, state.foundations[f], f)) return true;
+    }
+  }
+
+  // 3. Tableau move directly uncovering a face-down card
+  for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
+    const fromCol = state.tableau[fromIdx];
+    if (fromCol.length === 0) continue;
+
+    for (let cardIdx = 0; cardIdx < fromCol.length; cardIdx++) {
+      const card = fromCol[cardIdx];
+      if (!card.faceUp) continue;
+
+      const uncoversCard = cardIdx > 0 && !fromCol[cardIdx - 1].faceUp;
+      if (!uncoversCard) continue;
+
+      for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
+        if (toIdx === fromIdx) continue;
+        if (canPlaceOnTableau(card, state.tableau[toIdx], allowAnyCardOnEmpty)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Evaluates the current game state and returns all legal hints that ADVANCE the game,
  * ordered by strategic priority (e.g. unblocking face-down cards and
  * building foundations ranked ahead of drawing from stock).
@@ -55,10 +110,17 @@ export function findAvailableHints(
   if (
     state.status === 'won' ||
     state.status === 'lost' ||
-    isGameWon(state.foundations) ||
-    !hasAvailableMoves(state, allowAnyCardOnEmpty)
+    isGameWon(state.foundations)
   ) {
     return [];
+  }
+
+  // Fast-path: if any direct advancing moves exist, do not call hasAvailableMoves.
+  // Only fall back to hasAvailableMoves when no direct moves are found to determine if non-direct sequences exist.
+  if (!hasDirectAdvancingMove(state, allowAnyCardOnEmpty)) {
+    if (!hasAvailableMoves(state, allowAnyCardOnEmpty)) {
+      return [];
+    }
   }
 
   const scored: ScoredHint[] = [];
