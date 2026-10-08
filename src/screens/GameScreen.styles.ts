@@ -5,6 +5,10 @@ export const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.felt.background,
+    overflow: 'hidden',
+  },
+  scrollView: {
+    flex: 1,
   },
   hintBanner: {
     backgroundColor: colors.felt.banner,
@@ -23,6 +27,7 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.md,
+    flexGrow: 1,
   },
   board: {
     width: '100%',
