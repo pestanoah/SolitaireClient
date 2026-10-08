@@ -65,9 +65,9 @@ export const CardView: React.FC<CardViewProps> = React.memo(
     const rankLabel = RANK_LABELS[card.rank];
     const isTen = card.rank === 10;
     const rankScale = isTen ? 0.32 : 0.38;
-    const rankFontSize = Math.max(isTen ? 15 : 17, Math.floor(width * rankScale));
-    const smallSuitSize = Math.max(10, Math.floor(width * 0.20));
-    const centerSymbolSize = Math.max(16, Math.floor(width * 0.36));
+    const rankFontSize = Math.max(isTen ? 12 : 13, Math.floor(width * rankScale));
+    const smallSuitSize = Math.max(8, Math.floor(width * 0.20));
+    const centerSymbolSize = Math.max(12, Math.floor(width * 0.36));
     const rankLineHeight = Math.round(rankFontSize * 1.05);
     const suitLineHeight = Math.round(smallSuitSize * 1.05);
 
@@ -108,12 +108,14 @@ export const CardView: React.FC<CardViewProps> = React.memo(
           </Text>
         </View>
 
-        {/* Center motif */}
-        <View style={styles.centerContainer}>
-          <Text style={[styles.centerSymbol, { color: textColor, fontSize: centerSymbolSize }]}>
-            {suitSymbol}
-          </Text>
-        </View>
+        {/* Center motif (hidden on very short cards to prevent visual overlap) */}
+        {height >= 55 && (
+          <View style={styles.centerContainer}>
+            <Text style={[styles.centerSymbol, { color: textColor, fontSize: centerSymbolSize }]}>
+              {suitSymbol}
+            </Text>
+          </View>
+        )}
 
         {/* Bottom-right corner (inverted) */}
         <View style={styles.cornerBottomRight}>

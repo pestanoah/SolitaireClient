@@ -18,6 +18,19 @@ export const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.felt.bannerBorder,
   },
+  hintBannerLandscape: {
+    position: 'absolute',
+    top: 42,
+    zIndex: 9999,
+    alignSelf: 'center',
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    borderWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.felt.bannerBorder,
+    ...shadows.cardSelected,
+  },
   hintText: {
     color: colors.white,
     fontSize: fontSize.sm,
@@ -29,12 +42,21 @@ export const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     flexGrow: 1,
   },
+  boardContentLandscape: {
+    paddingVertical: spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+  },
   board: {
     width: '100%',
     gap: spacing.xxl,
     position: 'relative',
     userSelect: 'none',
   } as any,
+  boardLandscape: {
+    gap: spacing.md,
+  },
   topRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -57,6 +79,9 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
     paddingBottom: spacing.bottomBarPadding,
+  },
+  tableauRowLandscape: {
+    paddingBottom: 0,
   },
   tableauRowRightHanded: {
     flexDirection: 'row-reverse',

@@ -5,11 +5,70 @@ import { CardView } from './CardView';
 import { DraggableCard } from './DraggableCard';
 import { colors, borderRadius, fontWeight } from '../theme';
 
+export function calculateTableauOffsets(
+  cards: Card[],
+  cardHeight: number,
+  upOffset: number,
+  downOffset: number,
+  maxColumnHeight?: number
+): { offsets: number[]; columnHeight: number } {
+  if (cards.length === 0) {
+    return { offsets: [], columnHeight: cardHeight };
+  }
+  if (cards.length === 1) {
+    return { offsets: [0], columnHeight: cardHeight };
+  }
+
+  let effectiveDown = downOffset;
+  let effectiveUp = upOffset;
+
+  if (maxColumnHeight && maxColumnHeight > cardHeight) {
+    const availableCascade = maxColumnHeight - cardHeight;
+    let normalCascade = 0;
+    let downSteps = 0;
+    let upSteps = 0;
+
+    for (let i = 0; i < cards.length - 1; i++) {
+      if (cards[i].faceUp) {
+        upSteps++;
+        normalCascade += upOffset;
+      } else {
+        downSteps++;
+        normalCascade += downOffset;
+      }
+    }
+
+    if (normalCascade > availableCascade && normalCascade > 0) {
+      const compression = availableCascade / normalCascade;
+      effectiveDown = Math.max(4, Math.floor(downOffset * compression));
+      const remainingForUp = availableCascade - downSteps * effectiveDown;
+      effectiveUp = upSteps > 0
+        ? Math.max(9, Math.floor(remainingForUp / upSteps))
+        : upOffset;
+    }
+  }
+
+  const offsets: number[] = [];
+  let currentTop = 0;
+  for (let i = 0; i < cards.length; i++) {
+    offsets.push(currentTop);
+    if (i < cards.length - 1) {
+      currentTop += cards[i].faceUp ? effectiveUp : effectiveDown;
+    }
+  }
+
+  const columnHeight = currentTop + cardHeight;
+  return { offsets, columnHeight };
+}
+
 interface TableauColumnProps {
   columnIndex: number;
   cards: Card[];
   cardWidth: number;
   cardHeight: number;
+  downOffset?: number;
+  upOffset?: number;
+  maxColumnHeight?: number;
   selectedCardIds?: string[];
   hiddenCardIds?: string[];
   hintSourceCardIds?: string[];
@@ -28,6 +87,9 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
   cards,
   cardWidth,
   cardHeight,
+  downOffset,
+  upOffset,
+  maxColumnHeight,
   selectedCardIds = EMPTY_STRING_ARRAY,
   hiddenCardIds = EMPTY_STRING_ARRAY,
   hintSourceCardIds = EMPTY_STRING_ARRAY,
@@ -41,24 +103,10 @@ export const TableauColumn: React.FC<TableauColumnProps> = React.memo(({
   const fromLocation: PileLocation = useMemo(() => ({ type: 'tableau', index: columnIndex }), [columnIndex]);
 
   const { offsets, columnHeight } = useMemo(() => {
-    const downOffset = Math.max(12, Math.floor(cardHeight * 0.16));
-    const upOffset = Math.max(28, Math.floor(cardHeight * 0.32));
-
-    // Compute vertical offset positions for each card
-    const offsets: number[] = [];
-    let currentTop = 0;
-    for (let i = 0; i < cards.length; i++) {
-      offsets.push(currentTop);
-      currentTop += cards[i].faceUp ? upOffset : downOffset;
-    }
-
-    const columnHeight =
-      cards.length === 0
-        ? cardHeight
-        : currentTop - (cards[cards.length - 1].faceUp ? upOffset : downOffset) + cardHeight;
-
-    return { offsets, columnHeight };
-  }, [cards, cardHeight]);
+    const dOffset = downOffset ?? Math.max(8, Math.floor(cardHeight * 0.15));
+    const uOffset = upOffset ?? Math.max(16, Math.floor(cardHeight * 0.28));
+    return calculateTableauOffsets(cards, cardHeight, uOffset, dOffset, maxColumnHeight);
+  }, [cards, cardHeight, downOffset, upOffset, maxColumnHeight]);
 
   const handleEmptyPress = useCallback(() => onEmptyColumnPress?.(columnIndex), [onEmptyColumnPress, columnIndex]);
 

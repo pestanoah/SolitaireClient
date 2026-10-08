@@ -7,8 +7,10 @@ import {
   AUTO_COMPLETE_ANIMATION_DURATION_MS,
   calculatePileBasePosition,
   calculatePileCardPosition,
+  calculateTableauOffsets,
   PilePositionParams,
 } from '../GameScreen';
+import { Card } from '../../engine/types';
 import { dealKlondike } from '../../engine/deck';
 
 describe('Auto-complete Speed Timing', () => {
@@ -180,5 +182,128 @@ describe('Right-Handed Mode Pile Positions and Animations', () => {
     // Gap between top card right edge (570 + 60 = 630) and stock (640) is exactly spacing.lg (10)
     expect(topCardPos.x).toBe(570);
     expect(topCardPos.x + baseParams.cardWidth + 10).toBe(700 - baseParams.cardWidth);
+  });
+});
+
+describe('Tableau Offsets and Dynamic Cascade Compression', () => {
+  const cardHeight = 80;
+  const upOffset = 20;
+  const downOffset = 10;
+
+  test('calculates correct offsets for empty and single-card columns', () => {
+    const emptyResult = calculateTableauOffsets([], cardHeight, upOffset, downOffset);
+    expect(emptyResult.offsets).toEqual([]);
+    expect(emptyResult.columnHeight).toBe(cardHeight);
+
+    const singleCard: Card[] = [
+      { id: 'c1', rank: 13, suit: 'spades', faceUp: true },
+    ];
+    const singleResult = calculateTableauOffsets(singleCard, cardHeight, upOffset, downOffset);
+    expect(singleResult.offsets).toEqual([0]);
+    expect(singleResult.columnHeight).toBe(cardHeight);
+  });
+
+  test('calculates standard uncompressed offsets for normal cascade', () => {
+    // 3 face-down, 1 face-up
+    const cards: Card[] = [
+      { id: 'c1', rank: 13, suit: 'spades', faceUp: false },
+      { id: 'c2', rank: 12, suit: 'hearts', faceUp: false },
+      { id: 'c3', rank: 11, suit: 'clubs', faceUp: false },
+      { id: 'c4', rank: 10, suit: 'diamonds', faceUp: true },
+    ];
+
+    const result = calculateTableauOffsets(cards, cardHeight, upOffset, downOffset);
+    // Card 0: 0
+    // Card 1: 0 + 10 = 10
+    // Card 2: 10 + 10 = 20
+    // Card 3: 20 + 10 = 30
+    // Column Height: 30 + 80 = 110
+    expect(result.offsets).toEqual([0, 10, 20, 30]);
+    expect(result.columnHeight).toBe(110);
+  });
+
+  test('dynamically compresses offsets when maxColumnHeight is exceeded', () => {
+    // 6 face-down cards + 6 face-up cards = 12 cards total
+    const cards: Card[] = [
+      { id: 'c1', rank: 13, suit: 'spades', faceUp: false },
+      { id: 'c2', rank: 12, suit: 'hearts', faceUp: false },
+      { id: 'c3', rank: 11, suit: 'clubs', faceUp: false },
+      { id: 'c4', rank: 10, suit: 'diamonds', faceUp: false },
+      { id: 'c5', rank: 9, suit: 'spades', faceUp: false },
+      { id: 'c6', rank: 8, suit: 'hearts', faceUp: false },
+      { id: 'c7', rank: 7, suit: 'clubs', faceUp: true },
+      { id: 'c8', rank: 6, suit: 'diamonds', faceUp: true },
+      { id: 'c9', rank: 5, suit: 'spades', faceUp: true },
+      { id: 'c10', rank: 4, suit: 'hearts', faceUp: true },
+      { id: 'c11', rank: 3, suit: 'clubs', faceUp: true },
+      { id: 'c12', rank: 2, suit: 'diamonds', faceUp: true },
+    ];
+
+    // Uncompressed cascade height would be 6 * 10 + 5 * 20 = 160. Total height = 240.
+    // Constrain maxColumnHeight to 200:
+    const maxColumnHeight = 200;
+    const result = calculateTableauOffsets(cards, cardHeight, upOffset, downOffset, maxColumnHeight);
+
+    // Guaranteed to never exceed maxColumnHeight:
+    expect(result.columnHeight).toBeLessThanOrEqual(maxColumnHeight);
+
+    // Strictly monotonic top positions (each card sits strictly below previous):
+    for (let i = 1; i < result.offsets.length; i++) {
+      expect(result.offsets[i]).toBeGreaterThan(result.offsets[i - 1]);
+    }
+  });
+
+  test('calculatePileCardPosition respects maxColumnHeight in tableau pile', () => {
+    const state = dealKlondike(1);
+    const params: PilePositionParams = {
+      boardWidth: 700,
+      cardWidth: 60,
+      cardHeight: 80,
+      gap: 10,
+      fanOffset: 16,
+      upOffset: 20,
+      downOffset: 10,
+      isRightHanded: false,
+      drawCount: 1,
+      wasteCount: 0,
+      tableauRowY: 90,
+      maxColumnHeight: 180,
+    };
+
+    // Column 6 has 7 cards
+    const cardPos = calculatePileCardPosition({ type: 'tableau', index: 6 }, 6, state, params);
+    expect(cardPos.y).toBeLessThanOrEqual(90 + 180);
+  });
+
+  test('tableau column spacing in landscape maintains tight inter-column gaps', () => {
+    // In landscape on mobile (e.g. 844x390):
+    const cardWidth = 69;
+    const cardHeight = 97;
+    const gap = 8;
+    const boardWidth = cardWidth * 7 + gap * 6; // 531
+
+    const params: PilePositionParams = {
+      boardWidth,
+      cardWidth,
+      cardHeight,
+      gap,
+      fanOffset: 19,
+      upOffset: 23,
+      downOffset: 11,
+      isRightHanded: false,
+      drawCount: 1,
+      wasteCount: 0,
+      topRowY: 0,
+      tableauRowY: 105,
+    };
+
+    // Verify distance between adjacent columns equals gap (8px), NOT massive spaced-apart gaps
+    const col0Pos = calculatePileBasePosition({ type: 'tableau', index: 0 }, params);
+    const col1Pos = calculatePileBasePosition({ type: 'tableau', index: 1 }, params);
+    const col2Pos = calculatePileBasePosition({ type: 'tableau', index: 2 }, params);
+
+    expect(col1Pos.x - (col0Pos.x + cardWidth)).toBe(gap);
+    expect(col2Pos.x - (col1Pos.x + cardWidth)).toBe(gap);
+    expect(col1Pos.x - col0Pos.x).toBe(cardWidth + gap);
   });
 });
