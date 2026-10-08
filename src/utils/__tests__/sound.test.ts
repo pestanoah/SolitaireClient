@@ -12,44 +12,70 @@ import {
 } from '../sound';
 
 function createMockAudioContext(sampleRate = 44100) {
-  const mockGainNode = () => ({
-    gain: {
-      setValueAtTime: jest.fn(),
-      linearRampToValueAtTime: jest.fn(),
-      exponentialRampToValueAtTime: jest.fn(),
-    },
-    connect: jest.fn(),
-  });
+  const createdGains: any[] = [];
+  const mockGainNode = () => {
+    const gain = {
+      gain: {
+        setValueAtTime: jest.fn(),
+        linearRampToValueAtTime: jest.fn(),
+        exponentialRampToValueAtTime: jest.fn(),
+      },
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    };
+    createdGains.push(gain);
+    return gain;
+  };
 
-  const mockFilterNode = () => ({
-    type: 'bandpass',
-    frequency: {
-      setValueAtTime: jest.fn(),
-      exponentialRampToValueAtTime: jest.fn(),
-    },
-    Q: {
-      setValueAtTime: jest.fn(),
-    },
-    connect: jest.fn(),
-  });
+  const createdFilters: any[] = [];
+  const mockFilterNode = () => {
+    const filter = {
+      type: 'bandpass',
+      frequency: {
+        setValueAtTime: jest.fn(),
+        exponentialRampToValueAtTime: jest.fn(),
+      },
+      Q: {
+        setValueAtTime: jest.fn(),
+      },
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    };
+    createdFilters.push(filter);
+    return filter;
+  };
 
-  const mockSourceNode = () => ({
-    buffer: null as any,
-    connect: jest.fn(),
-    start: jest.fn(),
-    stop: jest.fn(),
-  });
+  const createdSources: any[] = [];
+  const mockSourceNode = () => {
+    const src = {
+      buffer: null as any,
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      onended: null as any,
+    };
+    createdSources.push(src);
+    return src;
+  };
 
-  const mockOscNode = () => ({
-    type: 'sine',
-    frequency: {
-      setValueAtTime: jest.fn(),
-      exponentialRampToValueAtTime: jest.fn(),
-    },
-    connect: jest.fn(),
-    start: jest.fn(),
-    stop: jest.fn(),
-  });
+  const createdOscs: any[] = [];
+  const mockOscNode = () => {
+    const osc = {
+      type: 'sine',
+      frequency: {
+        setValueAtTime: jest.fn(),
+        exponentialRampToValueAtTime: jest.fn(),
+      },
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      onended: null as any,
+    };
+    createdOscs.push(osc);
+    return osc;
+  };
 
   const createdBuffers: any[] = [];
   const createBuffer = jest.fn((channels: number, length: number, sr: number) => {
@@ -64,11 +90,8 @@ function createMockAudioContext(sampleRate = 44100) {
     return buf;
   });
 
-  const createdSources: any[] = [];
   const createBufferSource = jest.fn(() => {
-    const src = mockSourceNode();
-    createdSources.push(src);
-    return src;
+    return mockSourceNode();
   });
 
   return {
@@ -81,9 +104,15 @@ function createMockAudioContext(sampleRate = 44100) {
     createOscillator: jest.fn(mockOscNode),
     createdBuffers,
     createdSources,
+    createdGains,
+    createdFilters,
+    createdOscs,
   } as unknown as AudioContext & {
     createdBuffers: any[];
     createdSources: any[];
+    createdGains: any[];
+    createdFilters: any[];
+    createdOscs: any[];
   };
 }
 
@@ -194,6 +223,29 @@ describe('Sound Utility', () => {
       playWebCardSlide(mockCtx, 0, 3400, 800, 1.5, 0.25);
       expect(mockCtx.createBuffer).toHaveBeenCalledTimes(2);
       expect(mockCtx.createBuffer).toHaveBeenLastCalledWith(1, Math.floor(44100 * 1.5), 44100);
+    });
+
+    test('playWebCardSlide registers onended cleanup handlers that disconnect audio nodes', () => {
+      const mockCtx = createMockAudioContext(44100);
+      playWebCardSlide(mockCtx, 0, 3400, 800, 0.1, 0.25);
+
+      const source = mockCtx.createdSources[0];
+      const osc = mockCtx.createdOscs[0];
+      const filter = mockCtx.createdFilters[0];
+      const gains = mockCtx.createdGains;
+
+      expect(typeof source.onended).toBe('function');
+      expect(typeof osc.onended).toBe('function');
+
+      // Trigger onended callbacks
+      source.onended();
+      expect(source.disconnect).toHaveBeenCalled();
+      expect(filter.disconnect).toHaveBeenCalled();
+      expect(gains[0].disconnect).toHaveBeenCalled();
+
+      osc.onended();
+      expect(osc.disconnect).toHaveBeenCalled();
+      expect(gains[1].disconnect).toHaveBeenCalled();
     });
   });
 });

@@ -1007,5 +1007,71 @@ describe('Available Moves & Loss Detection', () => {
   });
 });
 
+describe('Structural Sharing and Immutability', () => {
+  test('drawCards preserves tableau and foundations array references', () => {
+    const state = dealKlondike(1, 42);
+    const nextState = drawCards(state);
+
+    expect(nextState.tableau).toBe(state.tableau);
+    expect(nextState.foundations).toBe(state.foundations);
+    expect(nextState.stock).not.toBe(state.stock);
+    expect(nextState.waste).not.toBe(state.waste);
+  });
+
+  test('moveCards preserves untouched columns, foundations, and stock by reference', () => {
+    const state = dealKlondike(1);
+    state.tableau[0] = [
+      { id: 'down_card', suit: 'clubs', rank: 10, faceUp: false },
+      { id: 'ace_card', suit: 'spades', rank: 1, faceUp: true },
+    ];
+    state.tableau[1] = [{ id: 'other_col', suit: 'hearts', rank: 5, faceUp: true }];
+    state.foundations = [[], [], [], []];
+
+    const nextState = moveCards(
+      state,
+      { type: 'tableau', index: 0 },
+      { type: 'foundation', index: 0 },
+      ['ace_card']
+    )!;
+
+    expect(nextState).not.toBeNull();
+    // Untouched tableau column 1 keeps same reference
+    expect(nextState.tableau[1]).toBe(state.tableau[1]);
+    // Touched column 0 gets a new array reference
+    expect(nextState.tableau[0]).not.toBe(state.tableau[0]);
+    // Untouched foundation piles 1, 2, 3 keep same reference
+    expect(nextState.foundations[1]).toBe(state.foundations[1]);
+    expect(nextState.foundations[2]).toBe(state.foundations[2]);
+    expect(nextState.foundations[3]).toBe(state.foundations[3]);
+    // Touched foundation pile 0 gets a new reference
+    expect(nextState.foundations[0]).not.toBe(state.foundations[0]);
+    // Stock and waste are completely untouched
+    expect(nextState.stock).toBe(state.stock);
+    expect(nextState.waste).toBe(state.waste);
+  });
+
+  test('undo preserves untouched piles by reference', () => {
+    const state = dealKlondike(1);
+    state.tableau[0] = [
+      { id: 'down_card', suit: 'clubs', rank: 10, faceUp: false },
+      { id: 'ace_card', suit: 'spades', rank: 1, faceUp: true },
+    ];
+    state.tableau[1] = [{ id: 'other_col', suit: 'hearts', rank: 5, faceUp: true }];
+    state.foundations = [[], [], [], []];
+
+    const nextState = moveCards(
+      state,
+      { type: 'tableau', index: 0 },
+      { type: 'foundation', index: 0 },
+      ['ace_card']
+    )!;
+
+    const undone = undo(nextState);
+    expect(undone.tableau[1]).toBe(nextState.tableau[1]);
+    expect(undone.foundations[1]).toBe(nextState.foundations[1]);
+    expect(undone.stock).toBe(nextState.stock);
+  });
+});
+
 
 

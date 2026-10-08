@@ -49,6 +49,21 @@ function getWebAudioContext(): AudioContext | null {
 }
 
 /**
+ * Safely disconnects Web Audio nodes to prevent audio graph leaks.
+ */
+export function disconnectAudioNodes(...nodes: any[]): void {
+  for (const node of nodes) {
+    try {
+      if (node && typeof node.disconnect === 'function') {
+        node.disconnect();
+      }
+    } catch {
+      // Ignore disconnect errors
+    }
+  }
+}
+
+/**
  * Synthesizes a resonant card-sliding "shoooooop" friction sound using Web Audio API.
  */
 export function playWebCardSlide(
@@ -96,6 +111,10 @@ export function playWebCardSlide(
     whiteNoise.start(startTime);
     whiteNoise.stop(startTime + duration);
 
+    whiteNoise.onended = () => {
+      disconnectAudioNodes(whiteNoise, filter, noiseGain);
+    };
+
     // Subtle low-body resonance representing card stock friction against felt
     const osc = ctx.createOscillator();
     const oscGain = ctx.createGain();
@@ -114,6 +133,10 @@ export function playWebCardSlide(
 
     osc.start(startTime);
     osc.stop(startTime + bodyDuration);
+
+    osc.onended = () => {
+      disconnectAudioNodes(osc, oscGain);
+    };
   } catch {
     // Ignore audio playback errors
   }
@@ -258,6 +281,9 @@ function playWebSynthesizedGameOver(): void {
     gain1.connect(ctx.destination);
     osc1.start(now);
     osc1.stop(now + 0.25);
+    osc1.onended = () => {
+      disconnectAudioNodes(osc1, gain1);
+    };
 
     const osc2 = ctx.createOscillator();
     const gain2 = ctx.createGain();
@@ -271,6 +297,9 @@ function playWebSynthesizedGameOver(): void {
     gain2.connect(ctx.destination);
     osc2.start(now + 0.18);
     osc2.stop(now + 0.55);
+    osc2.onended = () => {
+      disconnectAudioNodes(osc2, gain2);
+    };
   } catch {
     // Ignore audio failure
   }

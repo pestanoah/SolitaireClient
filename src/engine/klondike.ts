@@ -2,39 +2,20 @@ import { Card, FOUNDATION_SUITS, GameState, MoveRecord, PileLocation } from './t
 import { canPlaceOnFoundation, canPlaceOnTableau, isGameWon, hasExhaustedStockCycles } from './rules';
 
 /**
- * Helper to deep clone the mutable piles of GameState.
- */
-function clonePiles(state: GameState): {
-  stock: Card[];
-  waste: Card[];
-  foundations: Card[][];
-  tableau: Card[][];
-} {
-  return {
-    stock: state.stock.map((c) => ({ ...c })),
-    waste: state.waste.map((c) => ({ ...c })),
-    foundations: state.foundations.map((pile) => pile.map((c) => ({ ...c }))),
-    tableau: state.tableau.map((col) => col.map((c) => ({ ...c }))),
-  };
-}
-
-/**
  * Draws cards from stock into waste according to drawCount (1 or 3).
  * If stock is empty, recycles waste back into stock with penalty.
  */
 export function drawCards(state: GameState): GameState {
   if (state.status === 'won' || state.status === 'lost') return state;
 
-  const { stock, waste, foundations, tableau } = clonePiles(state);
-  let points = 0;
-
-  if (stock.length > 0) {
-    const count = Math.min(state.drawCount, stock.length);
-    const drawn = stock.splice(stock.length - count, count).map((c) => ({
+  if (state.stock.length > 0) {
+    const count = Math.min(state.drawCount, state.stock.length);
+    const stock = state.stock.slice(0, state.stock.length - count);
+    const drawn = state.stock.slice(state.stock.length - count).map((c) => ({
       ...c,
       faceUp: true,
     }));
-    waste.push(...drawn);
+    const waste = [...state.waste, ...drawn];
 
     const moveRecord: MoveRecord = {
       from: { type: 'stock', index: 0 },
@@ -53,12 +34,13 @@ export function drawCards(state: GameState): GameState {
   }
 
   // Recycle waste back to stock
-  if (waste.length > 0) {
+  if (state.waste.length > 0) {
     const penalty = state.drawCount === 1 ? 20 : 50;
-    points = -Math.min(state.score, penalty);
+    const points = -Math.min(state.score, penalty);
 
     // Cards are reversed when turned face-down back into the stock
-    const recycled = waste
+    const recycled = state.waste
+      .slice()
       .reverse()
       .map((c) => ({ ...c, faceUp: false }));
 
@@ -95,15 +77,14 @@ export function moveCards(
   if (state.status === 'won' || state.status === 'lost' || cardIds.length === 0) return null;
   if (from.type === to.type && from.index === to.index) return null;
 
-  const { stock, waste, foundations, tableau } = clonePiles(state);
-
   // 1. Locate source cards
   let sourceCards: Card[] = [];
   if (from.type === 'waste') {
-    if (waste.length === 0 || waste[waste.length - 1].id !== cardIds[0]) return null;
-    sourceCards = [waste[waste.length - 1]];
+    if (state.waste.length === 0 || state.waste[state.waste.length - 1].id !== cardIds[0]) return null;
+    sourceCards = [state.waste[state.waste.length - 1]];
   } else if (from.type === 'tableau') {
-    const col = tableau[from.index];
+    const col = state.tableau[from.index];
+    if (!col) return null;
     const startIndex = col.findIndex((c) => c.id === cardIds[0]);
     if (startIndex === -1) return null;
     sourceCards = col.slice(startIndex);
@@ -113,8 +94,8 @@ export function moveCards(
     }
   } else if (from.type === 'foundation') {
     if (cardIds.length !== 1) return null;
-    const pile = foundations[from.index];
-    if (pile.length === 0 || pile[pile.length - 1].id !== cardIds[0]) return null;
+    const pile = state.foundations[from.index];
+    if (!pile || pile.length === 0 || pile[pile.length - 1].id !== cardIds[0]) return null;
     sourceCards = [pile[pile.length - 1]];
   } else {
     return null; // Cannot move directly out of stock
@@ -123,45 +104,69 @@ export function moveCards(
   // 2. Validate move against destination rules
   const leadCard = sourceCards[0];
   if (to.type === 'tableau') {
-    const targetCol = tableau[to.index];
-    if (!canPlaceOnTableau(leadCard, targetCol, allowAnyCardOnEmpty)) return null;
+    const targetCol = state.tableau[to.index];
+    if (!targetCol || !canPlaceOnTableau(leadCard, targetCol, allowAnyCardOnEmpty)) return null;
   } else if (to.type === 'foundation') {
     if (sourceCards.length !== 1) return null; // Foundations only accept 1 card at a time
-    const targetPile = foundations[to.index];
-    if (!canPlaceOnFoundation(leadCard, targetPile, to.index)) return null;
+    const targetPile = state.foundations[to.index];
+    if (!targetPile || !canPlaceOnFoundation(leadCard, targetPile, to.index)) return null;
   } else {
     return null; // Cannot move into waste or stock directly
   }
 
-  // 3. Remove cards from source
+  // 3. Prepare updated piles with structural sharing
+  const stock = state.stock;
+  let waste = state.waste;
   if (from.type === 'waste') {
-    waste.pop();
-  } else if (from.type === 'tableau') {
-    tableau[from.index].splice(tableau[from.index].length - sourceCards.length, sourceCards.length);
-  } else if (from.type === 'foundation') {
-    foundations[from.index].pop();
+    waste = state.waste.slice(0, state.waste.length - 1);
   }
 
-  // 4. If tableau source has exposed face-down card, flip it face-up
+  let tableau = state.tableau;
   let turnedOverCardId: string | undefined;
   let flipPoints = 0;
-  if (from.type === 'tableau' && tableau[from.index].length > 0) {
-    const topCard = tableau[from.index][tableau[from.index].length - 1];
-    if (!topCard.faceUp) {
-      topCard.faceUp = true;
-      turnedOverCardId = topCard.id;
-      flipPoints = 5;
+
+  if (from.type === 'tableau' || to.type === 'tableau') {
+    tableau = state.tableau.slice();
+
+    if (from.type === 'tableau') {
+      const fromCol = state.tableau[from.index];
+      const remaining = fromCol.slice(0, fromCol.length - sourceCards.length);
+      if (remaining.length > 0) {
+        const topRemaining = remaining[remaining.length - 1];
+        if (!topRemaining.faceUp) {
+          turnedOverCardId = topRemaining.id;
+          flipPoints = 5;
+          tableau[from.index] = [
+            ...remaining.slice(0, -1),
+            { ...topRemaining, faceUp: true },
+          ];
+        } else {
+          tableau[from.index] = remaining;
+        }
+      } else {
+        tableau[from.index] = remaining;
+      }
+    }
+
+    if (to.type === 'tableau') {
+      tableau[to.index] = [...state.tableau[to.index], ...sourceCards];
     }
   }
 
-  // 5. Append cards to destination
-  if (to.type === 'tableau') {
-    tableau[to.index].push(...sourceCards);
-  } else if (to.type === 'foundation') {
-    foundations[to.index].push(leadCard);
+  let foundations = state.foundations;
+  if (from.type === 'foundation' || to.type === 'foundation') {
+    foundations = state.foundations.slice();
+
+    if (from.type === 'foundation') {
+      foundations[from.index] = state.foundations[from.index].slice(0, -1);
+    }
+
+    if (to.type === 'foundation') {
+      foundations[to.index] = [...state.foundations[to.index], leadCard];
+    }
   }
 
-  // 6. Calculate points
+  // 4. Calculate points
   let movePoints = 0;
   if (from.type === 'waste' && to.type === 'tableau') movePoints = 5;
   else if (from.type === 'waste' && to.type === 'foundation') movePoints = 10;
@@ -323,16 +328,16 @@ export function undo(state: GameState): GameState {
 
   const lastMove = state.history[state.history.length - 1];
   const remainingHistory = state.history.slice(0, -1);
-  const { stock, waste, foundations, tableau } = clonePiles(state);
 
   // Case 1: Draw from stock to waste
   if (lastMove.from.type === 'stock' && lastMove.to.type === 'waste') {
     const count = lastMove.cardIds.length;
-    const cards = waste.splice(waste.length - count, count).map((c) => ({
+    const undrawnCards = state.waste.slice(state.waste.length - count).map((c) => ({
       ...c,
       faceUp: false,
     }));
-    stock.push(...cards);
+    const stock = [...state.stock, ...undrawnCards];
+    const waste = state.waste.slice(0, state.waste.length - count);
 
     return {
       ...state,
@@ -346,16 +351,15 @@ export function undo(state: GameState): GameState {
 
   // Case 2: Stock recycle (waste -> stock)
   if (lastMove.from.type === 'waste' && lastMove.to.type === 'stock') {
-    const cards = stock.splice(0, stock.length).reverse().map((c) => ({
-      ...c,
-      faceUp: true,
-    }));
-    waste.push(...cards);
+    const cards = state.stock
+      .slice()
+      .reverse()
+      .map((c) => ({ ...c, faceUp: true }));
 
     return {
       ...state,
-      stock,
-      waste,
+      stock: [],
+      waste: [...state.waste, ...cards],
       score: Math.max(0, state.score - lastMove.pointsEarned),
       moves: state.moves + 1,
       status: 'playing',
@@ -365,32 +369,53 @@ export function undo(state: GameState): GameState {
 
   // Case 3: Move between piles
   let movedCards: Card[] = [];
+  let remainingTargetCol: Card[] | null = null;
+  let remainingTargetPile: Card[] | null = null;
+
   if (lastMove.to.type === 'tableau') {
     const count = lastMove.cardIds.length;
-    movedCards = tableau[lastMove.to.index].splice(
-      tableau[lastMove.to.index].length - count,
-      count
-    );
+    const targetCol = state.tableau[lastMove.to.index];
+    movedCards = targetCol.slice(targetCol.length - count);
+    remainingTargetCol = targetCol.slice(0, targetCol.length - count);
   } else if (lastMove.to.type === 'foundation') {
-    movedCards = [foundations[lastMove.to.index].pop()!];
+    const targetPile = state.foundations[lastMove.to.index];
+    movedCards = [targetPile[targetPile.length - 1]];
+    remainingTargetPile = targetPile.slice(0, targetPile.length - 1);
   }
 
-  // If a card was flipped on the source column, flip it back face-down
-  if (lastMove.turnedOverCardId && lastMove.from.type === 'tableau') {
-    const sourceCol = tableau[lastMove.from.index];
-    const turnedCard = sourceCol.find((c) => c.id === lastMove.turnedOverCardId);
-    if (turnedCard) {
-      turnedCard.faceUp = false;
+  const stock = state.stock;
+  let waste = state.waste;
+  if (lastMove.from.type === 'waste') {
+    waste = [...state.waste, ...movedCards];
+  }
+
+  let foundations = state.foundations;
+  if (lastMove.from.type === 'foundation' || lastMove.to.type === 'foundation') {
+    foundations = state.foundations.slice();
+    if (lastMove.to.type === 'foundation' && remainingTargetPile) {
+      foundations[lastMove.to.index] = remainingTargetPile;
+    }
+    if (lastMove.from.type === 'foundation') {
+      foundations[lastMove.from.index] = [...foundations[lastMove.from.index], ...movedCards];
     }
   }
 
-  // Put moved cards back in their source pile
-  if (lastMove.from.type === 'waste') {
-    waste.push(...movedCards);
-  } else if (lastMove.from.type === 'tableau') {
-    tableau[lastMove.from.index].push(...movedCards);
-  } else if (lastMove.from.type === 'foundation') {
-    foundations[lastMove.from.index].push(...movedCards);
+  let tableau = state.tableau;
+  if (lastMove.from.type === 'tableau' || lastMove.to.type === 'tableau') {
+    tableau = state.tableau.slice();
+    if (lastMove.to.type === 'tableau' && remainingTargetCol) {
+      tableau[lastMove.to.index] = remainingTargetCol;
+    }
+    if (lastMove.from.type === 'tableau') {
+      let sourceCol = tableau[lastMove.from.index];
+      if (lastMove.turnedOverCardId && sourceCol.length > 0) {
+        const turnedIdx = sourceCol.findIndex((c) => c.id === lastMove.turnedOverCardId);
+        if (turnedIdx !== -1) {
+          sourceCol = sourceCol.map((c, i) => (i === turnedIdx ? { ...c, faceUp: false } : c));
+        }
+      }
+      tableau[lastMove.from.index] = [...sourceCol, ...movedCards];
+    }
   }
 
   return {

@@ -189,10 +189,30 @@ interface SearchBoard {
 }
 
 function serializeBoard(tableau: Card[][], foundations: Card[][]): string {
-  const fPart = foundations.map((f) => (f.length > 0 ? f[f.length - 1].id : '')).join(',');
-  const tPart = tableau
-    .map((col) => col.filter((c) => c.faceUp).map((c) => c.id).join('-'))
-    .join(';');
+  let fPart = '';
+  for (let i = 0; i < foundations.length; i++) {
+    const pile = foundations[i];
+    if (i > 0) fPart += ',';
+    if (pile.length > 0) {
+      fPart += pile[pile.length - 1].id;
+    }
+  }
+
+  let tPart = '';
+  for (let c = 0; c < tableau.length; c++) {
+    if (c > 0) tPart += ';';
+    const col = tableau[c];
+    let first = true;
+    for (let i = 0; i < col.length; i++) {
+      const card = col[i];
+      if (card.faceUp) {
+        if (!first) tPart += '-';
+        tPart += card.id;
+        first = false;
+      }
+    }
+  }
+
   return `${fPart}|${tPart}`;
 }
 
@@ -288,10 +308,11 @@ export function canMoveUnlockAdvancement(
   visited.add(initialKey);
 
   const queue: SearchBoard[] = [initialNode];
+  let queueHead = 0;
   const maxStates = 150;
 
-  while (queue.length > 0 && visited.size < maxStates) {
-    const current = queue.shift()!;
+  while (queueHead < queue.length && visited.size < maxStates) {
+    const current = queue[queueHead++];
 
     // 1. Can any card in current board uncover a face-down card?
     for (let fromIdx = 0; fromIdx < current.tableau.length; fromIdx++) {

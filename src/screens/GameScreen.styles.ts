@@ -88,6 +88,8 @@ export const styles = StyleSheet.create({
   },
   floatingAnimatedContainer: {
     position: 'absolute',
+    left: 0,
+    top: 0,
     pointerEvents: 'none',
     zIndex: 9999,
     ...shadows.floatingDrag,
