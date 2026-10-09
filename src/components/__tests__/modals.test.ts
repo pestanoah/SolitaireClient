@@ -198,6 +198,77 @@ describe('Modal Backdrop Dismissal', () => {
       reviewBoardBtn.props.onPress();
       expect(onClose).toHaveBeenCalledTimes(1);
     });
+
+    test('renders "Replay Draw" button and triggers onReplayDraw when clicked', () => {
+      const onReplayDraw = jest.fn();
+      const onNewGame = jest.fn();
+
+      const element: any = GameOverModal({
+        visible: true,
+        score: 120,
+        moves: 18,
+        elapsedSeconds: 75,
+        onReplayDraw,
+        onNewGame,
+      });
+
+      const backdropView = element.props.children;
+      const card = React.Children.toArray(backdropView.props.children)[0] as any;
+      const cardChildren: any[] = React.Children.toArray(card.props.children);
+
+      // buttonContainer is the 5th child (index 4)
+      const buttonContainer = cardChildren[4];
+      const buttonRow = React.Children.toArray(buttonContainer.props.children)[0] as any;
+      const buttons = React.Children.toArray(buttonRow.props.children);
+
+      const replayBtn = buttons[0] as any;
+      expect(replayBtn.props.accessibilityLabel).toBe('Replay draw');
+      replayBtn.props.onPress();
+      expect(onReplayDraw).toHaveBeenCalledTimes(1);
+
+      const newGameBtn = buttons[1] as any;
+      expect(newGameBtn.props.accessibilityLabel).toBe('New game');
+      newGameBtn.props.onPress();
+      expect(onNewGame).toHaveBeenCalledTimes(1);
+    });
+
+    test('supports onReplay alias and renders Undo Move when canUndo is true', () => {
+      const onReplay = jest.fn();
+      const onUndo = jest.fn();
+      const onNewGame = jest.fn();
+
+      const element: any = GameOverModal({
+        visible: true,
+        score: 120,
+        moves: 18,
+        elapsedSeconds: 75,
+        canUndo: true,
+        onUndo,
+        onReplay,
+        onNewGame,
+      });
+
+      const backdropView = element.props.children;
+      const card = React.Children.toArray(backdropView.props.children)[0] as any;
+      const cardChildren: any[] = React.Children.toArray(card.props.children);
+
+      const buttonContainer = cardChildren[4];
+      const containerChildren = React.Children.toArray(buttonContainer.props.children);
+
+      // Replay button in buttonRow
+      const buttonRow = containerChildren[0] as any;
+      const rowButtons = React.Children.toArray(buttonRow.props.children);
+      const replayBtn = rowButtons[0] as any;
+      expect(replayBtn.props.accessibilityLabel).toBe('Replay draw');
+      replayBtn.props.onPress();
+      expect(onReplay).toHaveBeenCalledTimes(1);
+
+      // Undo button is the second child in buttonContainer
+      const undoBtn = containerChildren[1] as any;
+      expect(undoBtn.props.accessibilityLabel).toBe('Undo move');
+      undoBtn.props.onPress();
+      expect(onUndo).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('WinModal', () => {

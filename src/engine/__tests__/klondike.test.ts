@@ -1,4 +1,4 @@
-import { createStandardDeck, dealKlondike, shuffleCards } from '../deck';
+import { createStandardDeck, dealKlondike, dealKlondikeFromDeck, shuffleCards } from '../deck';
 import {
   canPlaceOnFoundation,
   canPlaceOnTableau,
@@ -8,7 +8,7 @@ import {
   hasAvailableMoves,
   hasExhaustedStockCycles,
 } from '../rules';
-import { drawCards, moveCards, undo, findSmartMove, autoCompleteStep } from '../klondike';
+import { drawCards, moveCards, undo, findSmartMove, autoCompleteStep, replayGame } from '../klondike';
 import { Card, GameState, getCardColor } from '../types';
 
 describe('Deck and Card Utilities', () => {
@@ -1070,6 +1070,107 @@ describe('Structural Sharing and Immutability', () => {
     expect(undone.tableau[1]).toBe(nextState.tableau[1]);
     expect(undone.foundations[1]).toBe(nextState.foundations[1]);
     expect(undone.stock).toBe(nextState.stock);
+  });
+});
+
+describe('Replay Deal Engine', () => {
+  test('dealKlondike attaches initialDeck containing all 52 cards face down', () => {
+    const game = dealKlondike(1, 42);
+    expect(game.initialDeck).toBeDefined();
+    expect(game.initialDeck!.length).toBe(52);
+    expect(game.initialDeck!.every((c) => !c.faceUp)).toBe(true);
+
+    const ids = new Set(game.initialDeck!.map((c) => c.id));
+    expect(ids.size).toBe(52);
+  });
+
+  test('dealKlondikeFromDeck reproduces exact layout and cards', () => {
+    const deck = createStandardDeck();
+    const game1 = dealKlondikeFromDeck(deck, 3);
+    const game2 = dealKlondikeFromDeck(deck, 3);
+
+    expect(game1.drawCount).toBe(3);
+    expect(game2.drawCount).toBe(3);
+
+    for (let c = 0; c < 7; c++) {
+      expect(game1.tableau[c].map((card) => card.id)).toEqual(game2.tableau[c].map((card) => card.id));
+      expect(game1.tableau[c].map((card) => card.faceUp)).toEqual(game2.tableau[c].map((card) => card.faceUp));
+    }
+
+    expect(game1.stock.map((card) => card.id)).toEqual(game2.stock.map((card) => card.id));
+  });
+
+  test('replayGame resets state to exact initial deal after multiple moves', () => {
+    const initialGame = dealKlondike(1, 777);
+    const initialTableauIds = initialGame.tableau.map((col) => col.map((c) => c.id));
+    const initialStockIds = initialGame.stock.map((c) => c.id);
+
+    // Make some moves: draw cards, move cards if possible
+    let active = drawCards(initialGame);
+    active = drawCards(active);
+    active = {
+      ...active,
+      score: 150,
+      moves: 12,
+      elapsedSeconds: 85,
+      status: 'lost',
+    };
+
+    expect(active.stock.length).not.toBe(initialGame.stock.length);
+    expect(active.waste.length).toBeGreaterThan(0);
+    expect(active.score).toBe(150);
+    expect(active.status).toBe('lost');
+
+    // Replay game
+    const replayed = replayGame(active);
+
+    expect(replayed.id).not.toBe(initialGame.id);
+    expect(replayed.id).not.toBe(active.id);
+    expect(replayed.status).toBe('playing');
+    expect(replayed.score).toBe(0);
+    expect(replayed.moves).toBe(0);
+    expect(replayed.elapsedSeconds).toBe(0);
+    expect(replayed.history).toEqual([]);
+    expect(replayed.waste).toEqual([]);
+    expect(replayed.foundations).toEqual([[], [], [], []]);
+    expect(replayed.drawCount).toBe(initialGame.drawCount);
+
+    // Verify exact cards and faceUp states match the original deal
+    for (let c = 0; c < 7; c++) {
+      expect(replayed.tableau[c].map((card) => card.id)).toEqual(initialTableauIds[c]);
+      expect(replayed.tableau[c].map((card) => card.faceUp)).toEqual(
+        initialGame.tableau[c].map((card) => card.faceUp)
+      );
+    }
+    expect(replayed.stock.map((card) => card.id)).toEqual(initialStockIds);
+    expect(replayed.stock.every((c) => !c.faceUp)).toBe(true);
+
+    // Verify initialDeck is preserved so it can be replayed again
+    expect(replayed.initialDeck).toBeDefined();
+    expect(replayed.initialDeck!.length).toBe(52);
+  });
+
+  test('replayGame fallback reconstructs game when initialDeck is missing', () => {
+    const game = dealKlondike(1, 999);
+    // Remove initialDeck to test fallback
+    const { initialDeck, ...gameWithoutInitialDeck } = game;
+    let active = drawCards(gameWithoutInitialDeck as GameState);
+    active = drawCards(active);
+    active.status = 'lost';
+
+    const replayed = replayGame(active);
+
+    expect(replayed.status).toBe('playing');
+    expect(replayed.score).toBe(0);
+    expect(replayed.moves).toBe(0);
+    expect(replayed.elapsedSeconds).toBe(0);
+    expect(replayed.waste).toEqual([]);
+    expect(replayed.tableau.length).toBe(7);
+    expect(replayed.stock.length).toBe(24);
+    for (let c = 0; c < 7; c++) {
+      expect(replayed.tableau[c].length).toBe(c + 1);
+      expect(replayed.tableau[c][c].faceUp).toBe(true);
+    }
   });
 });
 

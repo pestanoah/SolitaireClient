@@ -1,5 +1,6 @@
 import { Card, FOUNDATION_SUITS, GameState, MoveRecord, PileLocation } from './types';
 import { canPlaceOnFoundation, canPlaceOnTableau, isGameWon, hasExhaustedStockCycles } from './rules';
+import { dealKlondike, dealKlondikeFromDeck } from './deck';
 
 /**
  * Draws cards from stock into waste according to drawCount (1 or 3).
@@ -544,4 +545,40 @@ export function autoCompleteStep(state: GameState): GameState | null {
   }
 
   return null;
+}
+
+/**
+ * Replays the exact same draw/deal again from move 0:
+ * - Resets all 52 cards back to their initial tableau and stock positions
+ * - Empties waste and foundation piles
+ * - Resets score, moves, timer, and history to 0
+ * - Generates a new unique game id so game-end tracking operates independently
+ * - Preserves drawCount and initialDeck
+ */
+export function replayGame(state: GameState): GameState {
+  if (state.initialDeck && state.initialDeck.length === 52) {
+    return dealKlondikeFromDeck(state.initialDeck, state.drawCount);
+  }
+
+  // Fallback: If initialDeck is not attached, unwind moves back to initial state
+  let cur = state;
+  while (cur.history.length > 0) {
+    const prev = undo(cur);
+    if (prev === cur || prev.history.length >= cur.history.length) break;
+    cur = prev;
+  }
+
+  // Extract cards from rewound tableau columns + stock
+  const tableauCards: Card[] = [];
+  for (let c = 0; c < 7; c++) {
+    tableauCards.push(...(cur.tableau[c] || []));
+  }
+  const deck = [...tableauCards, ...cur.stock];
+
+  if (deck.length === 52) {
+    return dealKlondikeFromDeck(deck, state.drawCount);
+  }
+
+  // Fallback if deck cannot be reconstructed
+  return dealKlondike(state.drawCount);
 }
