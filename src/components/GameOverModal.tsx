@@ -10,6 +10,8 @@ export interface GameOverModalProps {
   reason?: 'no_moves' | 'forfeit';
   canUndo?: boolean;
   onUndo?: () => void;
+  onReplayDraw?: () => void;
+  onReplay?: () => void;
   onNewGame: () => void;
   onClose?: () => void;
 }
@@ -22,11 +24,14 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   reason = 'no_moves',
   canUndo = false,
   onUndo,
+  onReplayDraw,
+  onReplay,
   onNewGame,
   onClose,
 }) => {
   if (!visible) return null;
 
+  const handleReplay = onReplayDraw || onReplay;
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -68,24 +73,42 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             </View>
           </View>
 
-          <View style={modalStyles.buttonRow}>
+          <View style={styles.buttonContainer}>
+            <View style={modalStyles.buttonRow}>
+              {handleReplay && (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleReplay}
+                  style={[modalStyles.actionBtn, styles.replayBtn]}
+                  accessibilityLabel="Replay draw"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.replayBtnText}>Replay Draw</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={onNewGame}
+                style={[modalStyles.actionBtn, styles.newGameBtn]}
+                accessibilityLabel="New game"
+                accessibilityRole="button"
+              >
+                <Text style={styles.newGameBtnText}>New Game</Text>
+              </TouchableOpacity>
+            </View>
+
             {canUndo && onUndo && (
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={onUndo}
-                style={[modalStyles.actionBtn, styles.undoBtn]}
+                style={[modalStyles.actionBtn, styles.undoBtn, styles.undoBtnFull]}
+                accessibilityLabel="Undo move"
+                accessibilityRole="button"
               >
                 <Text style={styles.undoBtnText}>Undo Move</Text>
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={onNewGame}
-              style={[modalStyles.actionBtn, styles.newGameBtn]}
-            >
-              <Text style={styles.newGameBtnText}>New Game</Text>
-            </TouchableOpacity>
           </View>
 
           {onClose && (
@@ -118,16 +141,32 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxxl,
     textAlign: 'center',
   },
+  buttonContainer: {
+    width: '100%',
+    gap: spacing.md,
+  },
   undoBtn: {
     backgroundColor: colors.overlay.whiteFillSubtle,
     borderWidth: 1,
     borderColor: colors.overlay.whiteWatermark,
     ...shadows.button,
   },
+  undoBtnFull: {
+    width: '100%',
+  },
   undoBtnText: {
     color: colors.slate[200],
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
+  },
+  replayBtn: {
+    backgroundColor: colors.action.primary,
+    ...shadows.button,
+  },
+  replayBtnText: {
+    color: colors.white,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.heavy,
   },
   newGameBtn: {
     backgroundColor: colors.action.success,

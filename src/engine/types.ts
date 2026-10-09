@@ -53,6 +53,7 @@ export interface GameState {
   status: 'playing' | 'paused' | 'won' | 'lost';
   history: MoveRecord[];
   createdAt: number;
+  initialDeck?: Card[];
 }
 
 export interface PlayerStats {

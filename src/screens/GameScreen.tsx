@@ -31,6 +31,7 @@ import {
   drawCards,
   findSmartMove,
   moveCards,
+  replayGame,
   undo,
 } from '../engine/klondike';
 import {
@@ -1279,6 +1280,21 @@ export const GameScreen: React.FC = () => {
     [settings.drawCount, clearActiveHint]
   );
 
+  // Replay the exact same starting deal
+  const handleReplayDraw = useCallback(() => {
+    const current = latestGameStateRef.current;
+    clearActiveHint();
+    setSelectedCards(null);
+    setAnimatingCard(null);
+    isAnimatingRef.current = false;
+    setLossReason('no_moves');
+    setGameOverDismissed(false);
+    setWinDismissed(false);
+    playDealSound();
+    const replayed = replayGame(current);
+    setGameState(replayed);
+  }, [clearActiveHint]);
+
   // Start new game (prompts if active game has moves)
   const handleNewGame = useCallback(() => {
     const current = latestGameStateRef.current;
@@ -1939,6 +1955,7 @@ export const GameScreen: React.FC = () => {
         reason={lossReason}
         canUndo={gameState.history.length > 0}
         onUndo={handleUndo}
+        onReplayDraw={handleReplayDraw}
         onNewGame={() => startNewGame()}
         onClose={() => setGameOverDismissed(true)}
       />

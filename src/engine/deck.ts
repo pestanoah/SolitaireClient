@@ -49,27 +49,25 @@ export function shuffleCards(cards: Card[], seed?: number): Card[] {
 }
 
 /**
- * Deals a new Classic Klondike game.
- * - 7 tableau columns (total 28 cards), top card of each column is face-up.
- * - Remaining 24 cards placed in stock (face-down).
- * - 4 empty foundation piles.
- * - Empty waste pile.
+ * Deals a Klondike game from an ordered 52-card deck.
+ * Cards are cloned to prevent shared object mutation.
  */
-export function dealKlondike(drawCount: 1 | 3 = 1, seed?: number): GameState {
-  const deck = shuffleCards(createStandardDeck(), seed);
-
+export function dealKlondikeFromDeck(deck: Card[], drawCount: 1 | 3 = 1): GameState {
+  const cleanDeck = deck.map((c) => ({ ...c, faceUp: false }));
   const tableau: Card[][] = [[], [], [], [], [], [], []];
   let deckIndex = 0;
 
   for (let col = 0; col < 7; col++) {
     for (let row = 0; row <= col; row++) {
-      const card = deck[deckIndex++];
-      card.faceUp = row === col; // Only the top-most card is dealt face-up
-      tableau[col].push(card);
+      const card = cleanDeck[deckIndex++];
+      tableau[col].push({
+        ...card,
+        faceUp: row === col, // Only top card is dealt face-up
+      });
     }
   }
 
-  const stock: Card[] = deck.slice(deckIndex).map((c) => ({
+  const stock: Card[] = cleanDeck.slice(deckIndex).map((c) => ({
     ...c,
     faceUp: false,
   }));
@@ -90,5 +88,18 @@ export function dealKlondike(drawCount: 1 | 3 = 1, seed?: number): GameState {
     status: 'playing',
     history: [],
     createdAt: Date.now(),
+    initialDeck: cleanDeck.map((c) => ({ ...c, faceUp: false })),
   };
+}
+
+/**
+ * Deals a new Classic Klondike game.
+ * - 7 tableau columns (total 28 cards), top card of each column is face-up.
+ * - Remaining 24 cards placed in stock (face-down).
+ * - 4 empty foundation piles.
+ * - Empty waste pile.
+ */
+export function dealKlondike(drawCount: 1 | 3 = 1, seed?: number): GameState {
+  const deck = shuffleCards(createStandardDeck(), seed);
+  return dealKlondikeFromDeck(deck, drawCount);
 }
