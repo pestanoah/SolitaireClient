@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { isDateSeed } from '../engine/deck';
 import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 
 export interface GameOverModalProps {
@@ -7,6 +8,7 @@ export interface GameOverModalProps {
   score: number;
   moves: number;
   elapsedSeconds: number;
+  seed?: string;
   reason?: 'no_moves' | 'forfeit';
   canUndo?: boolean;
   onUndo?: () => void;
@@ -14,6 +16,7 @@ export interface GameOverModalProps {
   onReplay?: () => void;
   onNewGame: () => void;
   onClose?: () => void;
+  onShare?: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -21,6 +24,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   score,
   moves,
   elapsedSeconds,
+  seed,
   reason = 'no_moves',
   canUndo = false,
   onUndo,
@@ -28,6 +32,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   onReplay,
   onNewGame,
   onClose,
+  onShare,
 }) => {
   if (!visible) return null;
 
@@ -109,6 +114,26 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
                 <Text style={styles.undoBtnText}>Undo Move</Text>
               </TouchableOpacity>
             )}
+
+            {onShare && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={onShare}
+                style={[modalStyles.actionBtn, styles.shareBtn]}
+                accessibilityLabel="Share deck"
+                accessibilityRole="button"
+              >
+                <Text style={styles.shareBtnText}>Share Deck</Text>
+              </TouchableOpacity>
+            )}
+
+            {seed && (
+              <View style={styles.seedBadge}>
+                <Text style={styles.seedText} numberOfLines={1} ellipsizeMode="middle">
+                  {isDateSeed(seed) ? `Daily Challenge: #${seed}` : `Seed: #${seed}`}
+                </Text>
+              </View>
+            )}
           </View>
 
           {onClose && (
@@ -176,6 +201,34 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.base,
     fontWeight: fontWeight.heavy,
+  },
+  shareBtn: {
+    backgroundColor: colors.action.primary,
+    width: '100%',
+    ...shadows.button,
+  },
+  shareBtnText: {
+    color: colors.white,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  seedBadge: {
+    alignSelf: 'center',
+    backgroundColor: colors.overlay.panelDark,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.overlay.borderWhiteSubtle,
+    maxWidth: '90%',
+    marginTop: spacing.xs,
+  },
+  seedText: {
+    color: colors.slate[400],
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.bold,
+    fontFamily: 'monospace',
+    textAlign: 'center',
   },
   reviewBoardBtn: {
     marginTop: spacing.lg,

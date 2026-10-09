@@ -54,6 +54,7 @@ export interface GameState {
   history: MoveRecord[];
   createdAt: number;
   initialDeck?: Card[];
+  seed?: string;
 }
 
 export interface PlayerStats {

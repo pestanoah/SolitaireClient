@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { getDailyChallengeSeed, isDailyChallenge } from '../engine/deck';
 import { UserSettings } from '../engine/types';
 import {
   borderRadius,
@@ -21,21 +22,27 @@ import {
 export interface SettingsModalProps {
   visible: boolean;
   settings: UserSettings;
+  currentSeed?: string;
   onClose: () => void;
   onChangeDrawCount: (drawCount: 1 | 3) => void;
   onToggleSound: (enabled: boolean) => void;
   onToggleAutoMove: (enabled: boolean) => void;
   onToggleRightHanded: (enabled: boolean) => void;
+  onOpenSeedModal?: () => void;
+  onPlayDailyChallenge?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   visible,
   settings,
+  currentSeed,
   onClose,
   onChangeDrawCount,
   onToggleSound,
   onToggleAutoMove,
   onToggleRightHanded,
+  onOpenSeedModal,
+  onPlayDailyChallenge,
 }) => {
   const isSoundOn = settings.soundEnabled !== false;
 
@@ -206,6 +213,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 accessibilityLabel="Toggle right-handed mode"
               />
             </View>
+
+            {onOpenSeedModal && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.settingBlock}>
+                  <View style={styles.settingHeader}>
+                    <Text style={styles.settingTitle}>Daily Challenge & Seeds</Text>
+                    <Text style={styles.settingDescription}>
+                      {isDailyChallenge(currentSeed)
+                        ? `Playing Daily Challenge: #${currentSeed}`
+                        : currentSeed
+                        ? `Active deck seed: #${currentSeed}`
+                        : `Today's seed: ${getDailyChallengeSeed()}`}
+                    </Text>
+                  </View>
+                  <View style={styles.seedButtonsRow}>
+                    {onPlayDailyChallenge && (
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          onClose();
+                          onPlayDailyChallenge();
+                        }}
+                        style={styles.dailyChallengeBtn}
+                        accessibilityLabel="Play today's daily challenge"
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.dailyChallengeBtnText}>Daily Challenge</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        onClose();
+                        onOpenSeedModal();
+                      }}
+                      style={[styles.seedModalBtn, onPlayDailyChallenge ? { flex: 1 } : null]}
+                      accessibilityLabel="Manage seed and challenge"
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.seedModalBtnText}>Custom Seed</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
 
           {/* Done Button */}
@@ -337,6 +391,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   doneText: {
+    color: colors.white,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  seedModalBtn: {
+    backgroundColor: colors.slate[800],
+    borderWidth: 1,
+    borderColor: colors.felt.surface,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seedModalBtnText: {
+    color: colors.felt.accent,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  seedButtonsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    width: '100%',
+  },
+  dailyChallengeBtn: {
+    flex: 1,
+    backgroundColor: colors.felt.surface,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dailyChallengeBtnText: {
     color: colors.white,
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
