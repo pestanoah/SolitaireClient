@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { isDateSeed } from '../engine/deck';
 import { colors, spacing, borderRadius, fontSize, fontWeight, letterSpacing } from '../theme';
 
 interface GameHeaderProps {
@@ -12,12 +13,14 @@ interface GameHeaderProps {
   canGiveUp?: boolean;
   soundEnabled?: boolean;
   isLandscape?: boolean;
+  seed?: string;
   onUndo: () => void;
   onHint?: () => void;
   onGiveUp?: () => void;
   onNewGame: () => void;
   onOpenStats: () => void;
   onOpenSettings: () => void;
+  onOpenSeed?: () => void;
   onToggleDrawCount?: () => void;
   onToggleSound?: () => void;
 }
@@ -32,12 +35,14 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   canGiveUp = false,
   soundEnabled = true,
   isLandscape,
+  seed,
   onUndo,
   onHint,
   onGiveUp,
   onNewGame,
   onOpenStats,
   onOpenSettings,
+  onOpenSeed,
   onToggleDrawCount,
   onToggleSound,
 }) => {
@@ -77,6 +82,21 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           >
             <Text style={styles.modeValueLandscape}>Draw {drawCount}</Text>
           </Pressable>
+
+          {seed && onOpenSeed && (
+            <Pressable
+              onPress={onOpenSeed}
+              style={({ pressed }) => [styles.modeBadgeLandscape, pressed && { opacity: 0.7 }]}
+              accessibilityLabel={`Seed: ${seed}. Tap to manage seed.`}
+              accessibilityRole="button"
+            >
+              <Text style={styles.modeValueLandscape}>
+                {isDateSeed(seed)
+                  ? `Daily #${seed}`
+                  : `#${seed.length > 7 ? `${seed.slice(0, 6)}…` : seed}`}
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Actions Row (Landscape) */}
@@ -126,6 +146,17 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
               accessibilityRole="button"
             >
               <Text style={styles.actionBtnTextLandscape}>Give Up</Text>
+            </Pressable>
+          )}
+
+          {onOpenSeed && (
+            <Pressable
+              onPress={onOpenSeed}
+              style={({ pressed }) => [styles.actionBtnLandscape, pressed && { opacity: 0.7 }]}
+              accessibilityLabel="Manage seed and sharing"
+              accessibilityRole="button"
+            >
+              <Text style={styles.actionBtnTextLandscape}>Seed</Text>
             </Pressable>
           )}
 
@@ -186,6 +217,22 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           <Text style={styles.metricLabel}>TIME</Text>
           <Text style={styles.metricValue}>{timeFormatted}</Text>
         </View>
+
+        {seed && onOpenSeed && (
+          <Pressable
+            onPress={onOpenSeed}
+            style={({ pressed }) => [styles.seedBadgeHeader, pressed && { opacity: 0.7 }]}
+            accessibilityLabel={`Seed: ${seed}. Tap to manage seed.`}
+            accessibilityRole="button"
+          >
+            <Text style={styles.seedBadgeLabel}>
+              {isDateSeed(seed) ? 'DAILY' : 'SEED'}
+            </Text>
+            <Text style={styles.seedBadgeValue} numberOfLines={1}>
+              #{seed.length > 7 ? `${seed.slice(0, 6)}…` : seed}
+            </Text>
+          </Pressable>
+        )}
 
         <Pressable
           onPress={handleOpenSettings}
@@ -316,6 +363,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.overlay.borderWhiteMedium,
     minHeight: 36,
+  },
+  seedBadgeHeader: {
+    backgroundColor: colors.overlay.panelMedium,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs - 1,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.overlay.borderWhiteMedium,
+    minHeight: 36,
+    maxWidth: 84,
+  },
+  seedBadgeLabel: {
+    color: colors.felt.accent,
+    fontSize: fontSize.tiny,
+    fontWeight: fontWeight.bold,
+    lineHeight: 10,
+    textAlign: 'center',
+  },
+  seedBadgeValue: {
+    color: colors.white,
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.bold,
+    lineHeight: 16,
+    textAlign: 'center',
+    fontFamily: 'monospace',
   },
   modeLabel: {
     color: colors.felt.accent,

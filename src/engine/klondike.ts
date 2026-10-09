@@ -557,7 +557,7 @@ export function autoCompleteStep(state: GameState): GameState | null {
  */
 export function replayGame(state: GameState): GameState {
   if (state.initialDeck && state.initialDeck.length === 52) {
-    return dealKlondikeFromDeck(state.initialDeck, state.drawCount);
+    return dealKlondikeFromDeck(state.initialDeck, state.drawCount, state.seed);
   }
 
   // Fallback: If initialDeck is not attached, unwind moves back to initial state
@@ -576,9 +576,9 @@ export function replayGame(state: GameState): GameState {
   const deck = [...tableauCards, ...cur.stock];
 
   if (deck.length === 52) {
-    return dealKlondikeFromDeck(deck, state.drawCount);
+    return dealKlondikeFromDeck(deck, state.drawCount, state.seed);
   }
 
   // Fallback if deck cannot be reconstructed
-  return dealKlondike(state.drawCount);
+  return dealKlondike(state.drawCount, state.seed);
 }

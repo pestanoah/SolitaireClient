@@ -4,14 +4,48 @@ import { SettingsModal } from '../SettingsModal';
 import { ConfirmModal } from '../ConfirmModal';
 import { GameOverModal } from '../GameOverModal';
 import { WinModal } from '../WinModal';
+import { SeedModal } from '../SeedModal';
 import { modalStyles } from '../../theme';
+import { getDailyChallengeSeed } from '../../engine/deck';
+
+function findByAccessibilityLabel(element: any, label: string): any {
+  if (!element || typeof element !== 'object') return null;
+  if (element.props?.accessibilityLabel === label) return element;
+  const children = React.Children.toArray(element.props?.children);
+  for (const child of children) {
+    const found = findByAccessibilityLabel(child, label);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findTextContaining(element: any, match: string): any {
+  if (!element) return null;
+  if (typeof element === 'string' && element.includes(match)) return element;
+  if (typeof element.props?.children === 'string' && element.props.children.includes(match)) {
+    return element;
+  }
+  const children = React.Children.toArray(element.props?.children);
+  for (const child of children) {
+    const found = findTextContaining(child, match);
+    if (found) return found;
+  }
+  return null;
+}
 
 describe('Modal Backdrop Dismissal', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
+    (jest.spyOn(React, 'useState') as any).mockImplementation((init: any) => [
+      typeof init === 'function' ? init() : init,
+      jest.fn(),
+    ]);
   });
 
   afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
   describe('StatsModal', () => {
@@ -70,6 +104,43 @@ describe('Modal Backdrop Dismissal', () => {
 
       backdropPressable.props.onPress();
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    test('renders Daily Challenge and Custom Seed buttons and handles clicks', () => {
+      const onClose = jest.fn();
+      const onOpenSeedModal = jest.fn();
+      const onPlayDailyChallenge = jest.fn();
+      const settings = {
+        drawCount: 1 as const,
+        autoMoveOnTap: true,
+        soundEnabled: true,
+        rightHanded: false,
+      };
+
+      const element: any = SettingsModal({
+        visible: true,
+        settings,
+        onClose,
+        onChangeDrawCount: jest.fn(),
+        onToggleSound: jest.fn(),
+        onToggleAutoMove: jest.fn(),
+        onToggleRightHanded: jest.fn(),
+        onOpenSeedModal,
+        onPlayDailyChallenge,
+        currentSeed: '2026-10-09',
+      });
+
+      const dailyBtn = findByAccessibilityLabel(element, "Play today's daily challenge");
+      expect(dailyBtn).toBeDefined();
+      dailyBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onPlayDailyChallenge).toHaveBeenCalledTimes(1);
+
+      const customSeedBtn = findByAccessibilityLabel(element, 'Manage seed and challenge');
+      expect(customSeedBtn).toBeDefined();
+      customSeedBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(2);
+      expect(onOpenSeedModal).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -327,6 +398,196 @@ describe('Modal Backdrop Dismissal', () => {
       });
 
       expect(element).toBeNull();
+    });
+
+    test('renders Share Deck button and seed badge when seed and onShare are provided', () => {
+      const onShare = jest.fn();
+      const element: any = WinModal({
+        visible: true,
+        score: 300,
+        moves: 30,
+        elapsedSeconds: 120,
+        seed: 'lucky-deck',
+        onNewGame: jest.fn(),
+        onShare,
+      });
+
+      expect(element).not.toBeNull();
+      const backdropView = element.props.children;
+      const card = React.Children.toArray(backdropView.props.children)[0] as any;
+      const cardChildren = React.Children.toArray(card.props.children);
+
+      // Verify seed text is present
+      const seedBadge = cardChildren.find((c: any) =>
+        c?.props?.children?.props?.children?.toString().includes('lucky-deck')
+      );
+      expect(seedBadge).toBeDefined();
+
+      // Find share button
+      const actionsRow = cardChildren.find((c: any) =>
+        React.Children.toArray(c?.props?.children).some(
+          (b: any) => b?.props?.accessibilityLabel === 'Share deck'
+        )
+      ) as any;
+      expect(actionsRow).toBeDefined();
+      const shareBtn = React.Children.toArray(actionsRow.props.children).find(
+        (b: any) => b?.props?.accessibilityLabel === 'Share deck'
+      ) as any;
+      expect(shareBtn).toBeDefined();
+      shareBtn.props.onPress();
+      expect(onShare).toHaveBeenCalledTimes(1);
+    });
+
+    test('renders Daily Challenge badge when seed is a date', () => {
+      const element: any = WinModal({
+        visible: true,
+        score: 300,
+        moves: 30,
+        elapsedSeconds: 120,
+        seed: '2026-10-09',
+        onNewGame: jest.fn(),
+      });
+
+      const seedBadge = findTextContaining(element, 'Daily Challenge: #2026-10-09');
+      expect(seedBadge).not.toBeNull();
+    });
+  });
+
+  describe('GameOverModal Seed & Share', () => {
+    test('renders Share Deck button and triggers onShare when clicked', () => {
+      const onShare = jest.fn();
+      const element: any = GameOverModal({
+        visible: true,
+        score: 100,
+        moves: 20,
+        elapsedSeconds: 60,
+        seed: 'challenge-42',
+        onNewGame: jest.fn(),
+        onShare,
+      });
+
+      const backdropView = element.props.children;
+      const card = React.Children.toArray(backdropView.props.children)[0] as any;
+      const cardChildren = React.Children.toArray(card.props.children);
+      const buttonContainer = cardChildren[4] as any;
+      const buttons = React.Children.toArray(buttonContainer.props.children);
+
+      const shareBtn = buttons.find((b: any) => b?.props?.accessibilityLabel === 'Share deck') as any;
+      expect(shareBtn).toBeDefined();
+      shareBtn.props.onPress();
+      expect(onShare).toHaveBeenCalledTimes(1);
+    });
+
+    test('renders Daily Challenge badge when seed is a date', () => {
+      const element: any = GameOverModal({
+        visible: true,
+        score: 100,
+        moves: 20,
+        elapsedSeconds: 60,
+        seed: '2026-10-09',
+        onNewGame: jest.fn(),
+      });
+
+      const seedBadge = findTextContaining(element, 'Daily Challenge: #2026-10-09');
+      expect(seedBadge).not.toBeNull();
+    });
+  });
+
+  describe('SeedModal', () => {
+    test('renders backdrop and triggers onClose when clicked off', () => {
+      const onClose = jest.fn();
+      const onPlaySeed = jest.fn();
+      const element: any = SeedModal({
+        visible: true,
+        currentSeed: 'my-test-seed',
+        drawCount: 1,
+        onClose,
+        onPlaySeed,
+      });
+
+      expect(element).not.toBeNull();
+      expect(element.props.onRequestClose).toBe(onClose);
+
+      const backdropView = element.props.children;
+      const [backdropPressable]: any[] = React.Children.toArray(backdropView.props.children);
+      expect(backdropPressable.props.style).toEqual(modalStyles.backdropPressable);
+      backdropPressable.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    test('returns null when visible is false', () => {
+      const element = SeedModal({
+        visible: false,
+        drawCount: 1,
+        onClose: jest.fn(),
+        onPlaySeed: jest.fn(),
+      });
+
+      expect(element).toBeNull();
+    });
+
+    test('renders Daily Challenge button and triggers onPlaySeed with today seed', () => {
+      const onClose = jest.fn();
+      const onPlaySeed = jest.fn();
+      const todaySeed = getDailyChallengeSeed();
+
+      const element: any = SeedModal({
+        visible: true,
+        currentSeed: 'custom-seed',
+        drawCount: 1,
+        onClose,
+        onPlaySeed,
+      });
+
+      const dailyBtn = findByAccessibilityLabel(element, "Play today's daily challenge");
+      expect(dailyBtn).toBeDefined();
+
+      const textChild = React.Children.toArray(dailyBtn.props.children)[0] as any;
+      expect(textChild.props.children).toBe('Play Today');
+
+      dailyBtn.props.onPress();
+      expect(onPlaySeed).toHaveBeenCalledWith(todaySeed);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    test('renders Replay on Daily Challenge button when currentSeed is today', () => {
+      const onClose = jest.fn();
+      const onPlaySeed = jest.fn();
+      const todaySeed = getDailyChallengeSeed();
+
+      const element: any = SeedModal({
+        visible: true,
+        currentSeed: todaySeed,
+        drawCount: 1,
+        onClose,
+        onPlaySeed,
+      });
+
+      const dailyBtn = findByAccessibilityLabel(element, "Play today's daily challenge");
+      expect(dailyBtn).toBeDefined();
+
+      const textChild = React.Children.toArray(dailyBtn.props.children)[0] as any;
+      expect(textChild.props.children).toBe('Replay');
+    });
+
+    test('renders current seed and handles share button click', () => {
+      const onClose = jest.fn();
+      const onPlaySeed = jest.fn();
+      const onShareSeed = jest.fn();
+
+      const element: any = SeedModal({
+        visible: true,
+        currentSeed: 'my-active-seed',
+        drawCount: 1,
+        onClose,
+        onPlaySeed,
+        onShareSeed,
+      });
+
+      const shareBtn = findByAccessibilityLabel(element, 'Share current seed');
+      expect(shareBtn).toBeDefined();
+      shareBtn.props.onPress();
+      expect(onShareSeed).toHaveBeenCalledWith('my-active-seed');
     });
   });
 });

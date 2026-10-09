@@ -22,9 +22,10 @@ import { StatsModal } from '../components/StatsModal';
 import { StockWaste } from '../components/StockWaste';
 import { TableauColumn, calculateTableauOffsets } from '../components/TableauColumn';
 import { WinModal } from '../components/WinModal';
+import { SeedModal } from '../components/SeedModal';
 
 export { calculateTableauOffsets };
-import { dealKlondike } from '../engine/deck';
+import { dealKlondike, getDailyChallengeSeed, isDateSeed } from '../engine/deck';
 import { findAvailableHints, Hint } from '../engine/hints';
 import {
   autoCompleteStep,
@@ -58,6 +59,7 @@ import {
   playResetSound,
   setSoundEnabled,
 } from '../utils/sound';
+import { cleanUrlParams, parseSeedFromUrl, shareGameDeck } from '../utils/share';
 
 interface AnimatingCardData {
   cards: Card[];
@@ -248,6 +250,7 @@ export const GameScreen: React.FC = () => {
   });
   const [statsVisible, setStatsVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [seedModalVisible, setSeedModalVisible] = useState(false);
 
   // Active Game State
   const [gameState, setGameState] = useState<GameState>(() => dealKlondike(1));
@@ -442,16 +445,31 @@ export const GameScreen: React.FC = () => {
       if (!isMounted) return;
       setStats(loadedStats);
 
-      const savedGame = await loadGameState();
-      if (!isMounted) return;
-      if (savedGame) {
-        lastSavedGameRef.current = savedGame;
-        setGameState(savedGame);
+      const urlSeedData = parseSeedFromUrl();
+      if (urlSeedData?.seed) {
+        const count = urlSeedData.drawCount ?? loadedSettings.drawCount;
+        const seededGame = dealKlondike(count, urlSeedData.seed);
+        lastSavedGameRef.current = seededGame;
+        setGameState(seededGame);
+        await saveGameState(seededGame);
+        cleanUrlParams();
+        if (isDateSeed(urlSeedData.seed)) {
+          showHint(`Loaded Daily Challenge: ${urlSeedData.seed}`);
+        } else {
+          showHint(`Loaded seeded deck: "${urlSeedData.seed}"`);
+        }
       } else {
-        const newGame = dealKlondike(loadedSettings.drawCount);
-        lastSavedGameRef.current = newGame;
-        setGameState(newGame);
-        await saveGameState(newGame);
+        const savedGame = await loadGameState();
+        if (!isMounted) return;
+        if (savedGame) {
+          lastSavedGameRef.current = savedGame;
+          setGameState(savedGame);
+        } else {
+          const newGame = dealKlondike(loadedSettings.drawCount);
+          lastSavedGameRef.current = newGame;
+          setGameState(newGame);
+          await saveGameState(newGame);
+        }
       }
       isHydratedRef.current = true;
     })();
@@ -1320,6 +1338,70 @@ export const GameScreen: React.FC = () => {
     startNewGame();
   }, [startNewGame]);
 
+  // Start seeded game (prompts if active game has moves)
+  const startSeededGame = useCallback(
+    (seed: string) => {
+      const current = latestGameStateRef.current;
+      const runStart = () => {
+        clearActiveHint();
+        setSelectedCards(null);
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+        setLossReason('no_moves');
+        setGameOverDismissed(false);
+        setWinDismissed(false);
+        playDealSound();
+        const newGame = dealKlondike(settings.drawCount, seed);
+        setGameState(newGame);
+        if (isDateSeed(seed)) {
+          showHint(`Playing Daily Challenge: ${seed}`);
+        } else {
+          showHint(`Playing seeded deal: "${seed}"`);
+        }
+      };
+
+      if (current.status === 'playing' && current.moves > 0) {
+        setConfirmModal({
+          visible: true,
+          title: 'Abandon Game?',
+          message: 'Starting a seeded game will record the current game as a loss in your stats.',
+          confirmLabel: 'Abandon & Deal',
+          onConfirm: async () => {
+            setConfirmModal(null);
+            if (!recordedGameIdsRef.current.has(current.id)) {
+              recordedGameIdsRef.current.add(current.id);
+              const updated = await recordGameEnd(false, current.score, current.elapsedSeconds);
+              setStats(updated);
+            }
+            runStart();
+          },
+        });
+        return;
+      }
+
+      runStart();
+    },
+    [settings.drawCount, clearActiveHint, showHint]
+  );
+
+  // Play today's daily challenge
+  const handlePlayDailyChallenge = useCallback(() => {
+    startSeededGame(getDailyChallengeSeed());
+  }, [startSeededGame]);
+
+  // Share active game seed
+  const handleShareDeck = useCallback(
+    async (seedToShare?: string) => {
+      const targetSeed = seedToShare || latestGameStateRef.current.seed;
+      if (!targetSeed) return;
+      const res = await shareGameDeck(targetSeed, settings.drawCount);
+      if (res.success) {
+        showHint(res.message || 'Link copied to clipboard!');
+      }
+    },
+    [settings.drawCount, showHint]
+  );
+
   // Give up / forfeit game
   const handleGiveUp = useCallback(() => {
     const current = latestGameStateRef.current;
@@ -1584,12 +1666,14 @@ export const GameScreen: React.FC = () => {
         canGiveUp={gameState.status === 'playing' && gameState.moves > 0}
         soundEnabled={settings.soundEnabled !== false}
         isLandscape={isLandscape}
+        seed={gameState.seed}
         onUndo={handleUndo}
         onHint={handleHint}
         onGiveUp={handleGiveUp}
         onNewGame={handleNewGame}
         onOpenStats={() => setStatsVisible(true)}
         onOpenSettings={() => setSettingsVisible(true)}
+        onOpenSeed={() => setSeedModalVisible(true)}
         onToggleDrawCount={handleToggleDrawCount}
         onToggleSound={handleToggleSound}
       />
@@ -1931,11 +2015,14 @@ export const GameScreen: React.FC = () => {
       <SettingsModal
         visible={settingsVisible}
         settings={settings}
+        currentSeed={gameState.seed}
         onClose={() => setSettingsVisible(false)}
         onChangeDrawCount={handleChangeDrawCount}
         onToggleSound={handleToggleSound}
         onToggleAutoMove={handleToggleAutoMove}
         onToggleRightHanded={handleToggleRightHanded}
+        onOpenSeedModal={() => setSeedModalVisible(true)}
+        onPlayDailyChallenge={handlePlayDailyChallenge}
       />
 
       <WinModal
@@ -1943,8 +2030,10 @@ export const GameScreen: React.FC = () => {
         score={gameState.score}
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
+        seed={gameState.seed}
         onNewGame={() => startNewGame()}
         onClose={() => setWinDismissed(true)}
+        onShare={() => handleShareDeck(gameState.seed)}
       />
 
       <GameOverModal
@@ -1952,12 +2041,23 @@ export const GameScreen: React.FC = () => {
         score={gameState.score}
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
+        seed={gameState.seed}
         reason={lossReason}
         canUndo={gameState.history.length > 0}
         onUndo={handleUndo}
         onReplayDraw={handleReplayDraw}
         onNewGame={() => startNewGame()}
         onClose={() => setGameOverDismissed(true)}
+        onShare={() => handleShareDeck(gameState.seed)}
+      />
+
+      <SeedModal
+        visible={seedModalVisible}
+        currentSeed={gameState.seed}
+        drawCount={gameState.drawCount}
+        onClose={() => setSeedModalVisible(false)}
+        onPlaySeed={startSeededGame}
+        onShareSeed={handleShareDeck}
       />
 
       {confirmModal && (

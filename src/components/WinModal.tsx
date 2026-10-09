@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { isDateSeed } from '../engine/deck';
 import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 import { triggerWinConfetti } from '../utils/confetti';
 
@@ -8,8 +9,10 @@ interface WinModalProps {
   score: number;
   moves: number;
   elapsedSeconds: number;
+  seed?: string;
   onNewGame: () => void;
   onClose?: () => void;
+  onShare?: () => void;
 }
 
 export const WinModal: React.FC<WinModalProps> = ({
@@ -17,8 +20,10 @@ export const WinModal: React.FC<WinModalProps> = ({
   score,
   moves,
   elapsedSeconds,
+  seed,
   onNewGame,
   onClose,
+  onShare,
 }) => {
   useEffect(() => {
     if (visible) {
@@ -68,13 +73,37 @@ export const WinModal: React.FC<WinModalProps> = ({
             </View>
           </View>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={onNewGame}
-            style={styles.playAgainBtn}
-          >
-            <Text style={styles.playAgainText}>Play Again</Text>
-          </TouchableOpacity>
+          {seed ? (
+            <View style={styles.seedBadge}>
+              <Text style={styles.seedText} numberOfLines={1} ellipsizeMode="middle">
+                {isDateSeed(seed) ? `Daily Challenge: #${seed}` : `Seed: #${seed}`}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.actionButtonsRow}>
+            {onShare ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={onShare}
+                style={styles.shareBtn}
+                accessibilityLabel="Share deck"
+                accessibilityRole="button"
+              >
+                <Text style={styles.shareBtnText}>Share Deck</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={onNewGame}
+              style={styles.playAgainBtn}
+              accessibilityLabel="Play again"
+              accessibilityRole="button"
+            >
+              <Text style={styles.playAgainText}>Play Again</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -105,9 +134,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay.panelMedium,
     borderRadius: borderRadius.xxl,
     padding: spacing.xxl,
-    marginBottom: spacing.section,
+    marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.overlay.borderWhiteSubtle,
+  },
+  seedBadge: {
+    backgroundColor: colors.overlay.panelDark,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.overlay.borderWhiteSubtle,
+    maxWidth: '90%',
+  },
+  seedText: {
+    color: colors.felt.accent,
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.bold,
+    fontFamily: 'monospace',
+    textAlign: 'center',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
   },
   statLabel: {
     color: colors.felt.accent,
@@ -116,13 +167,31 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   playAgainBtn: {
+    flex: 1,
     backgroundColor: colors.action.success,
     paddingVertical: spacing.xl,
-    paddingHorizontal: 36,
+    paddingHorizontal: spacing.lg,
     borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadows.button,
   },
   playAgainText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.heavy,
+  },
+  shareBtn: {
+    flex: 1,
+    backgroundColor: colors.action.primary,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.button,
+  },
+  shareBtnText: {
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: fontWeight.heavy,
