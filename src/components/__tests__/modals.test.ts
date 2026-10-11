@@ -436,6 +436,7 @@ describe('Modal Backdrop Dismissal', () => {
       expect(shareBtn).toBeDefined();
       shareBtn.props.onPress();
       expect(onShare).toHaveBeenCalledTimes(1);
+      expect(onShare).toHaveBeenCalledWith({ score: 300, elapsedSeconds: 120 });
     });
 
     test('renders Daily Challenge badge when seed is a date', () => {
@@ -476,6 +477,7 @@ describe('Modal Backdrop Dismissal', () => {
       expect(shareBtn).toBeDefined();
       shareBtn.props.onPress();
       expect(onShare).toHaveBeenCalledTimes(1);
+      expect(onShare).toHaveBeenCalledWith({ score: 100, elapsedSeconds: 60 });
     });
 
     test('renders Daily Challenge badge when seed is a date', () => {

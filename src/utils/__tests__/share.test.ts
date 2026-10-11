@@ -1,7 +1,9 @@
 import {
+  buildShareText,
   cleanUrlParams,
   copyToClipboard,
   DEFAULT_BASE_URL,
+  formatTime,
   generateShareUrl,
   parseSeedFromUrl,
   shareGameDeck,
@@ -80,6 +82,65 @@ describe('Share and Seed Utility', () => {
     });
   });
 
+  describe('formatTime', () => {
+    test('formats zero seconds as 00:00', () => {
+      expect(formatTime(0)).toBe('00:00');
+    });
+
+    test('formats seconds under one minute', () => {
+      expect(formatTime(45)).toBe('00:45');
+    });
+
+    test('formats minutes and seconds with padding', () => {
+      expect(formatTime(125)).toBe('02:05');
+      expect(formatTime(610)).toBe('10:10');
+    });
+  });
+
+  describe('buildShareText', () => {
+    test('returns default text when stats are omitted or empty', () => {
+      expect(buildShareText('lucky-deal')).toBe('Can you beat this Solitaire deal? Seed: lucky-deal');
+      expect(buildShareText('lucky-deal', {})).toBe('Can you beat this Solitaire deal? Seed: lucky-deal');
+    });
+
+    test('includes score and time for completed won game', () => {
+      const text = buildShareText('lucky-deal', { score: 520, elapsedSeconds: 135, won: true });
+      expect(text).toContain('Score: 520');
+      expect(text).toContain('Time: 02:15');
+      expect(text).toContain('I completed this Solitaire game!');
+      expect(text).toContain('Seed: lucky-deal');
+    });
+
+    test('formats Daily Challenge completed won game', () => {
+      const text = buildShareText('2026-10-11', { score: 700, elapsedSeconds: 90, won: true });
+      expect(text).toContain('Score: 700');
+      expect(text).toContain('Time: 01:30');
+      expect(text).toContain("I completed today's Solitaire Daily Challenge!");
+      expect(text).toContain('Seed: 2026-10-11');
+    });
+
+    test('includes score and time for game over run', () => {
+      const text = buildShareText('challenge-88', { score: 180, elapsedSeconds: 105, won: false });
+      expect(text).toContain('Score: 180');
+      expect(text).toContain('Time: 01:45');
+      expect(text).toContain('Can you beat my Solitaire run?');
+      expect(text).toContain('Seed: challenge-88');
+    });
+
+    test('formats Daily Challenge game over run', () => {
+      const text = buildShareText('2026-10-11', { score: 180, elapsedSeconds: 105, won: false });
+      expect(text).toContain('Score: 180');
+      expect(text).toContain('Time: 01:45');
+      expect(text).toContain('Can you beat my Solitaire Daily Challenge run?');
+      expect(text).toContain('Seed: 2026-10-11');
+    });
+
+    test('handles score-only and time-only stats gracefully', () => {
+      expect(buildShareText('deal-1', { score: 300 })).toContain('Score: 300');
+      expect(buildShareText('deal-1', { elapsedSeconds: 65 })).toContain('Time: 01:05');
+    });
+  });
+
   describe('shareGameDeck', () => {
     test('returns share result structure', async () => {
       const result = await shareGameDeck('test-seed', 1);
@@ -87,6 +148,16 @@ describe('Share and Seed Utility', () => {
       expect(typeof result.success).toBe('boolean');
       expect(typeof result.method).toBe('string');
       expect(typeof result.message).toBe('string');
+    });
+
+    test('handles completed game stats with score and time', async () => {
+      const result = await shareGameDeck('test-seed', 1, {
+        score: 450,
+        elapsedSeconds: 120,
+        won: true,
+      });
+      expect(result).toBeDefined();
+      expect(typeof result.success).toBe('boolean');
     });
   });
 

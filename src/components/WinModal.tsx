@@ -12,7 +12,7 @@ interface WinModalProps {
   seed?: string;
   onNewGame: () => void;
   onClose?: () => void;
-  onShare?: () => void;
+  onShare?: (stats?: { score: number; elapsedSeconds: number }) => void;
 }
 
 export const WinModal: React.FC<WinModalProps> = ({
@@ -85,7 +85,7 @@ export const WinModal: React.FC<WinModalProps> = ({
             {onShare ? (
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={onShare}
+                onPress={() => onShare({ score, elapsedSeconds })}
                 style={styles.shareBtn}
                 accessibilityLabel="Share deck"
                 accessibilityRole="button"
