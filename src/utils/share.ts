@@ -1,9 +1,62 @@
 import { Platform, Share } from 'react-native';
+import { isDateSeed } from '../engine/deck';
 
 export interface ShareResult {
   success: boolean;
   method: 'share' | 'clipboard' | 'none';
   message: string;
+}
+
+export interface ShareGameStats {
+  score?: number;
+  elapsedSeconds?: number;
+  won?: boolean;
+}
+
+/**
+ * Formats elapsed seconds into mm:ss (e.g. 02:45).
+ */
+export function formatTime(elapsedSeconds: number): string {
+  const minutes = Math.floor(Math.max(0, elapsedSeconds) / 60);
+  const seconds = Math.floor(Math.max(0, elapsedSeconds) % 60);
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Builds the textual message to accompany the shared game link,
+ * including score and formatted elapsed time when available.
+ */
+export function buildShareText(seed: string, stats?: ShareGameStats): string {
+  const hasScore = typeof stats?.score === 'number';
+  const hasTime = typeof stats?.elapsedSeconds === 'number';
+
+  if (!hasScore && !hasTime) {
+    return `Can you beat this Solitaire deal? Seed: ${seed}`;
+  }
+
+  const parts: string[] = [];
+  if (hasScore) {
+    parts.push(`Score: ${stats!.score}`);
+  }
+  if (hasTime) {
+    parts.push(`Time: ${formatTime(stats!.elapsedSeconds!)}`);
+  }
+  const statsString = parts.join(' | ');
+
+  const isDaily = isDateSeed(seed);
+  const isWon = stats?.won !== false;
+
+  if (isWon) {
+    const title = isDaily
+      ? "I completed today's Solitaire Daily Challenge!"
+      : 'I completed this Solitaire game!';
+    return `${title} ${statsString}. Can you beat it? Seed: ${seed}`;
+  }
+
+  const title = isDaily
+    ? 'Can you beat my Solitaire Daily Challenge run?'
+    : 'Can you beat my Solitaire run?';
+  return `${title} ${statsString}. Seed: ${seed}`;
 }
 
 export const DEFAULT_BASE_URL = 'https://pestanoah.github.io/SolitaireClient';
@@ -113,10 +166,26 @@ export async function copyToClipboard(text: string): Promise<boolean> {
  * Shares the game deck URL with another player.
  * Prioritizes the Web Share API or native share sheet; falls back to copying to clipboard.
  */
-export async function shareGameDeck(seed: string, drawCount?: 1 | 3): Promise<ShareResult> {
+export async function shareGameDeck(
+  seed: string,
+  drawCount?: 1 | 3,
+  stats?: ShareGameStats
+): Promise<ShareResult> {
   const shareUrl = generateShareUrl(seed, drawCount);
-  const shareTitle = 'Klondike Solitaire Challenge';
-  const shareText = `Can you beat this Solitaire deal? Seed: ${seed}`;
+  const isDaily = isDateSeed(seed);
+  const isWon = stats?.won !== false;
+  const hasStats = typeof stats?.score === 'number' || typeof stats?.elapsedSeconds === 'number';
+
+  const shareTitle = hasStats
+    ? isWon
+      ? isDaily
+        ? 'Klondike Solitaire Daily Challenge'
+        : 'Klondike Solitaire Victory'
+      : 'Klondike Solitaire Challenge'
+    : 'Klondike Solitaire Challenge';
+
+  const shareText = buildShareText(seed, stats);
+  const clipboardContent = hasStats ? `${shareText}\n${shareUrl}` : shareUrl;
 
   // 1. Web Share API (Mobile Safari, Mobile Chrome, Safari macOS)
   if (
@@ -157,9 +226,13 @@ export async function shareGameDeck(seed: string, drawCount?: 1 | 3): Promise<Sh
   }
 
   // 3. Fallback: Copy URL to clipboard
-  const copied = await copyToClipboard(shareUrl);
+  const copied = await copyToClipboard(clipboardContent);
   if (copied) {
-    return { success: true, method: 'clipboard', message: 'Challenge link copied to clipboard!' };
+    return {
+      success: true,
+      method: 'clipboard',
+      message: hasStats ? 'Result and link copied to clipboard!' : 'Challenge link copied to clipboard!',
+    };
   }
 
   return {
