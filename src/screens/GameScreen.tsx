@@ -59,7 +59,7 @@ import {
   playResetSound,
   setSoundEnabled,
 } from '../utils/sound';
-import { cleanUrlParams, parseSeedFromUrl, shareGameDeck } from '../utils/share';
+import { cleanUrlParams, parseSeedFromUrl, shareGameDeck, ShareGameStats } from '../utils/share';
 
 interface AnimatingCardData {
   cards: Card[];
@@ -1391,10 +1391,10 @@ export const GameScreen: React.FC = () => {
 
   // Share active game seed
   const handleShareDeck = useCallback(
-    async (seedToShare?: string) => {
+    async (seedToShare?: string, stats?: ShareGameStats) => {
       const targetSeed = seedToShare || latestGameStateRef.current.seed;
       if (!targetSeed) return;
-      const res = await shareGameDeck(targetSeed, settings.drawCount);
+      const res = await shareGameDeck(targetSeed, settings.drawCount, stats);
       if (res.success) {
         showHint(res.message || 'Link copied to clipboard!');
       }
@@ -2033,7 +2033,13 @@ export const GameScreen: React.FC = () => {
         seed={gameState.seed}
         onNewGame={() => startNewGame()}
         onClose={() => setWinDismissed(true)}
-        onShare={() => handleShareDeck(gameState.seed)}
+        onShare={(stats) =>
+          handleShareDeck(gameState.seed, {
+            score: stats?.score ?? gameState.score,
+            elapsedSeconds: stats?.elapsedSeconds ?? gameState.elapsedSeconds,
+            won: true,
+          })
+        }
       />
 
       <GameOverModal
@@ -2048,7 +2054,13 @@ export const GameScreen: React.FC = () => {
         onReplayDraw={handleReplayDraw}
         onNewGame={() => startNewGame()}
         onClose={() => setGameOverDismissed(true)}
-        onShare={() => handleShareDeck(gameState.seed)}
+        onShare={(stats) =>
+          handleShareDeck(gameState.seed, {
+            score: stats?.score ?? gameState.score,
+            elapsedSeconds: stats?.elapsedSeconds ?? gameState.elapsedSeconds,
+            won: false,
+          })
+        }
       />
 
       <SeedModal

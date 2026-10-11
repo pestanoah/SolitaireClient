@@ -16,7 +16,7 @@ export interface GameOverModalProps {
   onReplay?: () => void;
   onNewGame: () => void;
   onClose?: () => void;
-  onShare?: () => void;
+  onShare?: (stats?: { score: number; elapsedSeconds: number }) => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({
@@ -118,7 +118,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             {onShare && (
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={onShare}
+                onPress={() => onShare({ score, elapsedSeconds })}
                 style={[modalStyles.actionBtn, styles.shareBtn]}
                 accessibilityLabel="Share deck"
                 accessibilityRole="button"
