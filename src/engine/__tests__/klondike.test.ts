@@ -233,6 +233,7 @@ describe('State Transitions & Gameplay', () => {
 
   test('findSmartMove finds foundation and tableau placements', () => {
     let state = dealKlondike(1);
+    state.tableau = [[], [], [], [], [], [], []];
     state.waste = [{ id: 'ace_spades', suit: 'spades', rank: 1, faceUp: true }];
 
     const smartMove = findSmartMove(state, 'ace_spades');
@@ -240,7 +241,6 @@ describe('State Transitions & Gameplay', () => {
     expect(smartMove!.to.type).toBe('foundation');
 
     // Tableau smart move
-    state.tableau = [[], [], [], [], [], [], []];
     state.waste = [{ id: 'red_5', suit: 'hearts', rank: 5, faceUp: true }];
     state.tableau[3] = [{ id: 'black_6', suit: 'spades', rank: 6, faceUp: true }];
 
@@ -250,9 +250,71 @@ describe('State Transitions & Gameplay', () => {
     expect(smartMove2!.to.index).toBe(3);
   });
 
+  test('findSmartMove prioritizes moving waste cards down to tableau before foundation to maximize score', () => {
+    const state = dealKlondike(1);
+    state.foundations = [[], [], [], []];
+    state.tableau = [[], [], [], [], [], [], []];
+    // Tableau col 2 has 2 of Hearts
+    state.tableau[2] = [{ id: '2h', suit: 'hearts', rank: 2, faceUp: true }];
+    // Waste has Ace of Spades (can legally go to Foundation 0 OR Tableau col 2 onto 2 of Hearts)
+    state.waste = [{ id: 'as', suit: 'spades', rank: 1, faceUp: true }];
+
+    // Moving to Tableau awards +5 points immediately, and allows the player to tap it again
+    // to move from Tableau to Foundation for +10 points (total 15 pts vs only 10 pts moving straight to foundation).
+    const smart = findSmartMove(state, 'as');
+    expect(smart).not.toBeNull();
+    expect(smart!.from).toEqual({ type: 'waste', index: 0 });
+    expect(smart!.to).toEqual({ type: 'tableau', index: 2 });
+    expect(smart!.cardIds).toEqual(['as']);
+
+    // Once the Ace is placed on the tableau, tapping it again routes it up to foundation
+    const afterTableauMove = moveCards(state, smart!.from, smart!.to, smart!.cardIds)!;
+    expect(afterTableauMove.score).toBe(5); // +5 pts from waste to tableau
+
+    const secondTap = findSmartMove(afterTableauMove, 'as');
+    expect(secondTap).not.toBeNull();
+    expect(secondTap!.from).toEqual({ type: 'tableau', index: 2 });
+    expect(secondTap!.to).toEqual({ type: 'foundation', index: 0 });
+
+    const afterFoundationMove = moveCards(afterTableauMove, secondTap!.from, secondTap!.to, secondTap!.cardIds)!;
+    expect(afterFoundationMove.score).toBe(15); // +5 + 10 = 15 total pts!
+  });
+
+  test('findSmartMove routes waste card directly to foundation when no valid tableau placement exists', () => {
+    const state = dealKlondike(1);
+    state.foundations = [[], [], [], []];
+    state.tableau = [[], [], [], [], [], [], []];
+    // Tableau has 4 of Diamonds (Ace of Spades cannot go onto 4 of Diamonds)
+    state.tableau[0] = [{ id: '4d', suit: 'diamonds', rank: 4, faceUp: true }];
+    state.waste = [{ id: 'as', suit: 'spades', rank: 1, faceUp: true }];
+
+    const smart = findSmartMove(state, 'as');
+    expect(smart).not.toBeNull();
+    expect(smart!.from).toEqual({ type: 'waste', index: 0 });
+    expect(smart!.to).toEqual({ type: 'foundation', index: 0 });
+  });
+
+  test('findSmartMove moves tableau cards directly to foundation even if another tableau column can receive it', () => {
+    const state = dealKlondike(1);
+    state.foundations = [[], [], [], []];
+    state.tableau = [[], [], [], [], [], [], []];
+    // Tableau col 0 has Ace of Spades
+    state.tableau[0] = [{ id: 'as', suit: 'spades', rank: 1, faceUp: true }];
+    // Tableau col 1 has 2 of Hearts (which could also legally accept Ace of Spades)
+    state.tableau[1] = [{ id: '2h', suit: 'hearts', rank: 2, faceUp: true }];
+
+    // Tableau to Foundation awards +10 pts (moving to another tableau awards 0 pts),
+    // and advances the game towards victory, so foundation is preferred for tableau cards.
+    const smart = findSmartMove(state, 'as');
+    expect(smart).not.toBeNull();
+    expect(smart!.from).toEqual({ type: 'tableau', index: 0 });
+    expect(smart!.to).toEqual({ type: 'foundation', index: 0 });
+  });
+
   test('findSmartMove targets the designated foundation pile matching card suit (0:♠, 1:♥, 2:♦, 3:♣)', () => {
     const state = dealKlondike(1);
     state.foundations = [[], [], [], []];
+    state.tableau = [[], [], [], [], [], [], []];
 
     // Ace of Spades -> Foundation 0
     state.waste = [{ id: 'as', suit: 'spades', rank: 1, faceUp: true }];

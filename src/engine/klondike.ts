@@ -202,8 +202,12 @@ export function moveCards(
 
 /**
  * Finds the best legal destination for a given card:
- * 1. Checks all 4 foundation piles first.
- * 2. Checks all 7 tableau columns next (prioritizing non-empty columns to make progress).
+ * - Waste cards: checks tableau first (prioritizing non-empty columns, or empty column for King,
+ *   to award +5 points and keep the card eligible to move to foundation later for +10 points,
+ *   maximizing total score), then checks foundation piles if no tableau placement exists.
+ * - Tableau cards: checks foundation piles first (+10 points to advance towards winning),
+ *   then checks other tableau columns.
+ * - Foundation cards: checks tableau columns (for cards rank > 2).
  */
 export function findSmartMove(
   state: GameState,
@@ -249,61 +253,51 @@ export function findSmartMove(
 
   if (!from || !card) return null;
 
-  // Single card: try foundations first (only if not already on a foundation)
-  if (from.type !== 'foundation' && cardIds.length === 1) {
-    // 1. Try the foundation pile designated for the card's suit
-    const suitIndex = FOUNDATION_SUITS.indexOf(card.suit);
+  const findFoundationTarget = (): PileLocation | null => {
+    if (from!.type === 'foundation' || cardIds.length !== 1) return null;
+
+    const suitIndex = FOUNDATION_SUITS.indexOf(card!.suit);
     if (suitIndex >= 0 && suitIndex < state.foundations.length) {
-      if (canPlaceOnFoundation(card, state.foundations[suitIndex], suitIndex)) {
-        return {
-          from,
-          to: { type: 'foundation', index: suitIndex },
-          cardIds,
-        };
+      if (canPlaceOnFoundation(card!, state.foundations[suitIndex], suitIndex)) {
+        return { type: 'foundation', index: suitIndex };
       }
     }
 
-    // 2. Check remaining foundation piles (for variants or multi-deck foundations)
     for (let f = 0; f < state.foundations.length; f++) {
       if (f === suitIndex) continue;
-      if (canPlaceOnFoundation(card, state.foundations[f], f)) {
-        return {
-          from,
-          to: { type: 'foundation', index: f },
-          cardIds,
-        };
+      if (canPlaceOnFoundation(card!, state.foundations[f], f)) {
+        return { type: 'foundation', index: f };
       }
     }
-  }
 
-  // Foundation cards with rank <= 2 (Aces and Twos) should never be moved down to tableau
-  if (from.type === 'foundation' && card.rank <= 2) {
     return null;
-  }
+  };
 
-  // Try tableau columns (prefer non-empty columns before placing King on an empty column)
-  const candidateIndices: number[] = [];
-  for (let t = 0; t < state.tableau.length; t++) {
-    if (from.type === 'tableau' && from.index === t) continue; // Same column
-    if (canPlaceOnTableau(card, state.tableau[t], allowAnyCardOnEmpty)) {
-      candidateIndices.push(t);
+  const findTableauTarget = (preferNonEmptyOverFoundation = false): PileLocation | null => {
+    // Foundation cards with rank <= 2 (Aces and Twos) should never be moved down to tableau
+    if (from!.type === 'foundation' && card!.rank <= 2) {
+      return null;
     }
-  }
 
-  if (candidateIndices.length > 0) {
+    const candidateIndices: number[] = [];
+    for (let t = 0; t < state.tableau.length; t++) {
+      if (from!.type === 'tableau' && from!.index === t) continue; // Same column
+      if (canPlaceOnTableau(card!, state.tableau[t], allowAnyCardOnEmpty)) {
+        candidateIndices.push(t);
+      }
+    }
+
+    if (candidateIndices.length === 0) return null;
+
     // If the card is already a King at index 0 of its current tableau column, don't move it to another empty column
     if (
-      from.type === 'tableau' &&
-      card.rank === 13 &&
-      state.tableau[from.index].findIndex((c) => c.id === card!.id) === 0
+      from!.type === 'tableau' &&
+      card!.rank === 13 &&
+      state.tableau[from!.index].findIndex((c) => c.id === card!.id) === 0
     ) {
       const nonEmpties = candidateIndices.filter((idx) => state.tableau[idx].length > 0);
       if (nonEmpties.length === 0) return null;
-      return {
-        from,
-        to: { type: 'tableau', index: nonEmpties[0] },
-        cardIds,
-      };
+      return { type: 'tableau', index: nonEmpties[0] };
     }
 
     // Prefer non-empty columns first
@@ -311,11 +305,63 @@ export function findSmartMove(
       (a, b) => (state.tableau[b].length > 0 ? 1 : 0) - (state.tableau[a].length > 0 ? 1 : 0)
     );
 
-    return {
-      from,
-      to: { type: 'tableau', index: candidateIndices[0] },
-      cardIds,
-    };
+    // If preferNonEmptyOverFoundation is requested, ensure we only consider non-empty columns
+    // (or Kings placed on empty columns) as taking precedence over foundation
+    if (preferNonEmptyOverFoundation) {
+      const bestIdx = candidateIndices[0];
+      const isNonEmpty = state.tableau[bestIdx].length > 0;
+      const isKingOnEmpty = card!.rank === 13 && state.tableau[bestIdx].length === 0;
+      if (!isNonEmpty && !isKingOnEmpty) {
+        return null;
+      }
+    }
+
+    return { type: 'tableau', index: candidateIndices[0] };
+  };
+
+  // 1. Waste cards: prefer tableau first (+5 pts, and remains eligible for +10 pts foundation later = 15 total pts)
+  if (from.type === 'waste') {
+    const tableauTarget = findTableauTarget(true);
+    if (tableauTarget) {
+      return { from, to: tableauTarget, cardIds };
+    }
+
+    const foundationTarget = findFoundationTarget();
+    if (foundationTarget) {
+      return { from, to: foundationTarget, cardIds };
+    }
+
+    const fallbackTableau = findTableauTarget(false);
+    if (fallbackTableau) {
+      return { from, to: fallbackTableau, cardIds };
+    }
+
+    return null;
+  }
+
+  // 2. Tableau cards: prefer foundation first (+10 pts, uncovers hidden cards and advances game towards win)
+  if (from.type === 'tableau') {
+    const foundationTarget = findFoundationTarget();
+    if (foundationTarget) {
+      return { from, to: foundationTarget, cardIds };
+    }
+
+    const tableauTarget = findTableauTarget(false);
+    if (tableauTarget) {
+      return { from, to: tableauTarget, cardIds };
+    }
+
+    return null;
+  }
+
+  // 3. Foundation cards: can only move down to tableau
+  if (from.type === 'foundation') {
+    const tableauTarget = findTableauTarget(false);
+    if (tableauTarget) {
+      return { from, to: tableauTarget, cardIds };
+    }
+
+    return null;
   }
 
   return null;
