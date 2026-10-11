@@ -43,6 +43,103 @@ export function formatCardShort(card: Card): string {
 }
 
 /**
+ * Checks if moving a card from tableau column `tableauIndex` to foundation
+ * would directly reverse the most recent move of that card.
+ */
+function isReversingFoundationMove(
+  state: GameState,
+  cardId: string,
+  tableauIndex: number
+): boolean {
+  if (!state.history || state.history.length === 0) return false;
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const move = state.history[i];
+    if (move.cardIds.includes(cardId)) {
+      return (
+        move.from.type === 'foundation' &&
+        move.to.type === 'tableau' &&
+        move.to.index === tableauIndex
+      );
+    }
+  }
+  return false;
+}
+
+/**
+ * Checks if moving a card from foundation pile to tableau column `tableauIndex`
+ * would directly reverse the most recent move of that card.
+ */
+function isReversingTableauMove(
+  state: GameState,
+  cardId: string,
+  tableauIndex: number
+): boolean {
+  if (!state.history || state.history.length === 0) return false;
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const move = state.history[i];
+    if (move.cardIds.includes(cardId)) {
+      return (
+        move.from.type === 'tableau' &&
+        move.from.index === tableauIndex &&
+        move.to.type === 'foundation'
+      );
+    }
+  }
+  return false;
+}
+
+/**
+ * Checks if a tableau card (at the top of targetColIdx) can currently receive a card
+ * from the waste pile or from another tableau column that advances the game.
+ * If true, moving targetCard to foundation would destroy that advancing opportunity.
+ */
+function canReceiveAdvancingCard(
+  state: GameState,
+  targetColIdx: number,
+  targetCard: Card,
+  allowAnyCardOnEmpty: boolean,
+  accessibleDeckCards: Card[]
+): boolean {
+  // 1. Can the currently visible top waste card be placed onto targetCard?
+  if (state.waste.length > 0) {
+    const topWaste = state.waste[state.waste.length - 1];
+    if (canPlaceOnTableau(topWaste, state.tableau[targetColIdx], allowAnyCardOnEmpty)) {
+      return true;
+    }
+  }
+
+  // 2. Can any tableau card be moved onto targetCard that advances the game?
+  for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
+    if (fromIdx === targetColIdx) continue;
+    const fromCol = state.tableau[fromIdx];
+    for (let cardIdx = 0; cardIdx < fromCol.length; cardIdx++) {
+      const card = fromCol[cardIdx];
+      if (!card.faceUp) continue;
+
+      if (canPlaceOnTableau(card, state.tableau[targetColIdx], allowAnyCardOnEmpty)) {
+        const uncoversCard = cardIdx > 0 && !fromCol[cardIdx - 1].faceUp;
+        if (uncoversCard) return true;
+
+        if (
+          canMoveUnlockAdvancement(
+            state,
+            { type: 'tableau', index: fromIdx },
+            { type: 'tableau', index: targetColIdx },
+            [card.id],
+            accessibleDeckCards,
+            allowAnyCardOnEmpty
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Fast-path check for direct advancing moves that require zero search / BFS:
  * - Waste card directly to foundation or tableau
  * - Tableau card directly to foundation
@@ -63,11 +160,12 @@ function hasDirectAdvancingMove(
     }
   }
 
-  // 2. Tableau cards to foundation
+  // 2. Tableau cards to foundation (ignoring un-advancing reversals)
   for (let t = 0; t < state.tableau.length; t++) {
     const col = state.tableau[t];
     if (col.length === 0) continue;
     const topCard = col[col.length - 1];
+    if (isReversingFoundationMove(state, topCard.id, t)) continue;
     for (let f = 0; f < state.foundations.length; f++) {
       if (canPlaceOnFoundation(topCard, state.foundations[f], f)) return true;
     }
@@ -132,6 +230,23 @@ export function findAvailableHints(
     for (let t = 0; t < state.tableau.length; t++) {
       if (canPlaceOnTableau(card, state.tableau[t], allowAnyCardOnEmpty)) return true;
     }
+    // Also check if card could be placed on a foundation card that can legally move down to tableau
+    for (let f = 0; f < state.foundations.length; f++) {
+      const pile = state.foundations[f];
+      if (pile.length === 0) continue;
+      const topFoundation = pile[pile.length - 1];
+      if (topFoundation.rank <= 2) continue;
+
+      for (let t = 0; t < state.tableau.length; t++) {
+        const toCol = state.tableau[t];
+        if (topFoundation.rank === 13 && toCol.length === 0) continue;
+        if (canPlaceOnTableau(topFoundation, toCol, allowAnyCardOnEmpty)) {
+          if (canPlaceOnTableau(card, [topFoundation], allowAnyCardOnEmpty)) {
+            return true;
+          }
+        }
+      }
+    }
     return false;
   });
 
@@ -144,8 +259,22 @@ export function findAvailableHints(
     const suitIndex = FOUNDATION_SUITS.indexOf(topCard.suit);
     if (suitIndex >= 0 && suitIndex < state.foundations.length) {
       if (canPlaceOnFoundation(topCard, state.foundations[suitIndex], suitIndex)) {
+        // Prevent immediate reversal of foundation-to-tableau moves
+        if (isReversingFoundationMove(state, topCard.id, t)) {
+          continue;
+        }
+
         const uncoversCard = col.length >= 2 && !col[col.length - 2].faceUp;
         const isAceOrTwo = topCard.rank <= 2;
+
+        // If rank > 2 and does not uncover a card, avoid moving to foundation
+        // if an available waste or advancing tableau card can be placed onto it
+        if (!isAceOrTwo && !uncoversCard) {
+          if (canReceiveAdvancingCard(state, t, topCard, allowAnyCardOnEmpty, accessibleDeckCards)) {
+            continue;
+          }
+        }
+
         const score = isAceOrTwo ? 100 : uncoversCard ? 90 : 70;
 
         scored.push({
@@ -270,7 +399,10 @@ export function findAvailableHints(
     }
   }
 
-  // 5. Foundation down to Tableau (only if it unlocks uncovering a card or playing deck cards)
+  // 5. Foundation down to Tableau (only if it unlocks uncovering a card or playing immediately accessible waste cards)
+  const immediatelyPlayableDeckCards =
+    state.waste.length > 0 ? [state.waste[state.waste.length - 1]] : [];
+
   for (let f = 0; f < state.foundations.length; f++) {
     const pile = state.foundations[f];
     if (pile.length === 0) continue;
@@ -283,6 +415,11 @@ export function findAvailableHints(
       const toCol = state.tableau[t];
       if (topCard.rank === 13 && toCol.length === 0) continue;
 
+      // Prevent immediate reversal of tableau-to-foundation moves
+      if (isReversingTableauMove(state, topCard.id, t)) {
+        continue;
+      }
+
       if (canPlaceOnTableau(topCard, toCol, allowAnyCardOnEmpty)) {
         if (
           !canMoveUnlockAdvancement(
@@ -290,7 +427,7 @@ export function findAvailableHints(
             { type: 'foundation', index: f },
             { type: 'tableau', index: t },
             [topCard.id],
-            accessibleDeckCards,
+            immediatelyPlayableDeckCards,
             allowAnyCardOnEmpty
           )
         ) {

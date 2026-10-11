@@ -234,6 +234,113 @@ describe('Hints Engine', () => {
     expect(emptyColHint?.to?.index).toBe(1);
   });
 
+  test('does not suggest moving foundation card down when matching card is still in stock (suggests draw instead)', () => {
+    const state = createBaseState();
+    state.foundations[1] = [
+      createDummyCard('ah', 'hearts', 1, true),
+      createDummyCard('2h', 'hearts', 2, true),
+      createDummyCard('3h', 'hearts', 3, true),
+      createDummyCard('4h', 'hearts', 4, true),
+    ];
+    state.tableau[0] = [createDummyCard('5s', 'spades', 5, true)];
+    // 3 of Spades is inside stock, not yet drawn
+    state.stock = [createDummyCard('3s', 'spades', 3, false)];
+    state.waste = [];
+
+    // Should NOT suggest moving 4h down onto 5s yet; should suggest drawing from stock
+    const hint = findHint(state);
+    expect(hint).not.toBeNull();
+    expect(hint?.type).toBe('draw');
+    expect(hint?.from.type).toBe('stock');
+    expect(hint?.message).toBe('Draw from the stock pile');
+  });
+
+  test('does not suggest moving a card back to foundation immediately after moving it down to tableau', () => {
+    const state = createBaseState();
+    state.foundations[1] = [
+      createDummyCard('ah', 'hearts', 1, true),
+      createDummyCard('2h', 'hearts', 2, true),
+      createDummyCard('3h', 'hearts', 3, true),
+    ];
+    // 4h was just moved down onto 5s in column 0
+    state.tableau[0] = [
+      createDummyCard('5s', 'spades', 5, true),
+      createDummyCard('4h', 'hearts', 4, true),
+    ];
+    // Waste has 3s ready to be placed on 4h
+    state.waste = [createDummyCard('3s', 'spades', 3, true)];
+    state.history = [
+      {
+        from: { type: 'foundation', index: 1 },
+        to: { type: 'tableau', index: 0 },
+        cardIds: ['4h'],
+        pointsEarned: -15,
+      },
+    ];
+
+    // Hint should suggest playing 3s onto 4h, NOT moving 4h back to foundation!
+    const hint = findHint(state);
+    expect(hint).not.toBeNull();
+    expect(hint?.from.type).toBe('waste');
+    expect(hint?.to?.type).toBe('tableau');
+    expect(hint?.to?.index).toBe(0);
+    expect(hint?.cardIds).toEqual(['3s']);
+    expect(hint?.message).toBe('Move 3♠ onto 4♥');
+
+    // And available hints should NOT include moving 4h to foundation
+    const hints = findAvailableHints(state);
+    const reverseHint = hints.find((h) => h.cardIds?.[0] === '4h' && h.to?.type === 'foundation');
+    expect(reverseHint).toBeUndefined();
+  });
+
+  test('does not suggest moving a card back down to tableau immediately after moving it to foundation', () => {
+    const state = createBaseState();
+    state.foundations[1] = [
+      createDummyCard('ah', 'hearts', 1, true),
+      createDummyCard('2h', 'hearts', 2, true),
+      createDummyCard('3h', 'hearts', 3, true),
+      createDummyCard('4h', 'hearts', 4, true),
+    ];
+    state.tableau[0] = [createDummyCard('5s', 'spades', 5, true)];
+    state.waste = [createDummyCard('3s', 'spades', 3, true)];
+    // 4h was just moved from tableau column 0 to foundation pile 1
+    state.history = [
+      {
+        from: { type: 'tableau', index: 0 },
+        to: { type: 'foundation', index: 1 },
+        cardIds: ['4h'],
+        pointsEarned: 10,
+      },
+    ];
+
+    // Hint should NOT suggest moving 4h right back down onto column 0
+    const hints = findAvailableHints(state);
+    const reverseHint = hints.find((h) => h.cardIds?.[0] === '4h' && h.to?.type === 'tableau' && h.to?.index === 0);
+    expect(reverseHint).toBeUndefined();
+  });
+
+  test('prioritizes playing a waste card onto a tableau card over moving that tableau card to foundation', () => {
+    const state = createBaseState();
+    state.foundations[1] = [
+      createDummyCard('ah', 'hearts', 1, true),
+      createDummyCard('2h', 'hearts', 2, true),
+      createDummyCard('3h', 'hearts', 3, true),
+    ];
+    // 4h is on 5s (could legally move to foundation, but 3s is on waste)
+    state.tableau[0] = [
+      createDummyCard('5s', 'spades', 5, true),
+      createDummyCard('4h', 'hearts', 4, true),
+    ];
+    state.waste = [createDummyCard('3s', 'spades', 3, true)];
+    state.history = []; // Even without history
+
+    // Playing 3s onto 4h must take precedence over moving 4h to foundation
+    const hint = findHint(state);
+    expect(hint).not.toBeNull();
+    expect(hint?.cardIds).toEqual(['3s']);
+    expect(hint?.message).toBe('Move 3♠ onto 4♥');
+  });
+
   test('returns null when game is won or no moves remain', () => {
     const state = createBaseState();
     state.status = 'won';
