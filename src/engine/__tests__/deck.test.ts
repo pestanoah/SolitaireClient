@@ -173,7 +173,7 @@ describe('Deck and Seed Engine', () => {
       expect(getDailyChallengeSeed(dateWithPaddedParts)).toBe('2025-01-05');
 
       const todaySeed = getDailyChallengeSeed();
-      expect(/^\d{4}-\d{2}-\d{2}$/.test(todaySeed)).toBe(true);
+      expect(isDateSeed(todaySeed)).toBe(true);
     });
 
     test('isDailyChallenge matches date seed', () => {

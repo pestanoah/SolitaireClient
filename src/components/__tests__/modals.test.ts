@@ -142,6 +142,33 @@ describe('Modal Backdrop Dismissal', () => {
       expect(onClose).toHaveBeenCalledTimes(2);
       expect(onOpenSeedModal).toHaveBeenCalledTimes(1);
     });
+
+    test('renders Winnable Deals Only toggle and triggers callback', () => {
+      const onToggleWinningDeals = jest.fn();
+      const settings = {
+        drawCount: 1 as const,
+        autoMoveOnTap: true,
+        soundEnabled: true,
+        rightHanded: false,
+        winningDealsOnly: true,
+      };
+
+      const element: any = SettingsModal({
+        visible: true,
+        settings,
+        onClose: jest.fn(),
+        onChangeDrawCount: jest.fn(),
+        onToggleSound: jest.fn(),
+        onToggleAutoMove: jest.fn(),
+        onToggleRightHanded: jest.fn(),
+        onToggleWinningDeals,
+      });
+
+      const winnableSwitch = findByAccessibilityLabel(element, 'Toggle winnable deals only');
+      expect(winnableSwitch).not.toBeNull();
+      winnableSwitch.props.onValueChange(false);
+      expect(onToggleWinningDeals).toHaveBeenCalledWith(false);
+    });
   });
 
   describe('ConfirmModal', () => {
@@ -493,6 +520,36 @@ describe('Modal Backdrop Dismissal', () => {
       const seedBadge = findTextContaining(element, 'Daily Challenge: #2026-10-09');
       expect(seedBadge).not.toBeNull();
     });
+
+    test('renders "This deal was beatable!" banner when isWinnableDeal is true', () => {
+      const element: any = GameOverModal({
+        visible: true,
+        score: 100,
+        moves: 20,
+        elapsedSeconds: 60,
+        seed: '2',
+        isWinnableDeal: true,
+        onNewGame: jest.fn(),
+      });
+
+      const winnableBanner = findTextContaining(element, 'This deal was beatable!');
+      expect(winnableBanner).not.toBeNull();
+    });
+
+    test('renders "Random Deal" banner when isWinnableDeal is false', () => {
+      const element: any = GameOverModal({
+        visible: true,
+        score: 100,
+        moves: 20,
+        elapsedSeconds: 60,
+        seed: 'unverified-seed',
+        isWinnableDeal: false,
+        onNewGame: jest.fn(),
+      });
+
+      const randomBanner = findTextContaining(element, 'Random Deal');
+      expect(randomBanner).not.toBeNull();
+    });
   });
 
   describe('SeedModal', () => {
@@ -590,6 +647,19 @@ describe('Modal Backdrop Dismissal', () => {
       expect(shareBtn).toBeDefined();
       shareBtn.props.onPress();
       expect(onShareSeed).toHaveBeenCalledWith('my-active-seed');
+    });
+
+    test('renders note that custom seeds are not guaranteed to be winnable', () => {
+      const element: any = SeedModal({
+        visible: true,
+        currentSeed: 'my-active-seed',
+        drawCount: 1,
+        onClose: jest.fn(),
+        onPlaySeed: jest.fn(),
+      });
+
+      const note = findTextContaining(element, 'Custom seeds are not guaranteed to be winnable');
+      expect(note).not.toBeNull();
     });
   });
 });

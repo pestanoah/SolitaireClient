@@ -31,6 +31,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest",
+    "generate:seeds": "python3 scripts/generate_winnable_seeds.py all 10000",
     "build:web": "expo export -p web && node -e \"require('fs').copyFileSync('dist/index.html', 'dist/404.html')\"",
     "predeploy": "npm run build:web",
     "deploy": "gh-pages --nojekyll -d dist"

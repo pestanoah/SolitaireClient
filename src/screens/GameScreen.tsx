@@ -25,7 +25,7 @@ import { WinModal } from '../components/WinModal';
 import { SeedModal } from '../components/SeedModal';
 
 export { calculateTableauOffsets };
-import { dealKlondike, getDailyChallengeSeed, isDateSeed } from '../engine/deck';
+import { dealKlondike, getDailyChallengeSeed, isDateSeed, isSeedWinnable } from '../engine/deck';
 import { findAvailableHints, Hint } from '../engine/hints';
 import {
   autoCompleteStep,
@@ -465,7 +465,11 @@ export const GameScreen: React.FC = () => {
           lastSavedGameRef.current = savedGame;
           setGameState(savedGame);
         } else {
-          const newGame = dealKlondike(loadedSettings.drawCount);
+          const newGame = dealKlondike(
+            loadedSettings.drawCount,
+            undefined,
+            loadedSettings.winningDealsOnly !== false
+          );
           lastSavedGameRef.current = newGame;
           setGameState(newGame);
           await saveGameState(newGame);
@@ -1292,10 +1296,14 @@ export const GameScreen: React.FC = () => {
       setGameOverDismissed(false);
       setWinDismissed(false);
       playDealSound();
-      const newGame = dealKlondike(count ?? settings.drawCount);
+      const newGame = dealKlondike(
+        count ?? settings.drawCount,
+        undefined,
+        settings.winningDealsOnly !== false
+      );
       setGameState(newGame);
     },
-    [settings.drawCount, clearActiveHint]
+    [settings.drawCount, settings.winningDealsOnly, clearActiveHint]
   );
 
   // Replay the exact same starting deal
@@ -1500,6 +1508,18 @@ export const GameScreen: React.FC = () => {
     (enabled?: boolean) => {
       const nextRightHanded = typeof enabled === 'boolean' ? enabled : !settings.rightHanded;
       const nextSettings = { ...settings, rightHanded: nextRightHanded };
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+    },
+    [settings]
+  );
+
+  // Toggle Winnable Deals Only
+  const handleToggleWinningDeals = useCallback(
+    (enabled?: boolean) => {
+      const nextWinningDeals =
+        typeof enabled === 'boolean' ? enabled : settings.winningDealsOnly === false;
+      const nextSettings = { ...settings, winningDealsOnly: nextWinningDeals };
       setSettings(nextSettings);
       saveSettings(nextSettings);
     },
@@ -2021,6 +2041,7 @@ export const GameScreen: React.FC = () => {
         onToggleSound={handleToggleSound}
         onToggleAutoMove={handleToggleAutoMove}
         onToggleRightHanded={handleToggleRightHanded}
+        onToggleWinningDeals={handleToggleWinningDeals}
         onOpenSeedModal={() => setSeedModalVisible(true)}
         onPlayDailyChallenge={handlePlayDailyChallenge}
       />
@@ -2049,6 +2070,7 @@ export const GameScreen: React.FC = () => {
         elapsedSeconds={gameState.elapsedSeconds}
         seed={gameState.seed}
         reason={lossReason}
+        isWinnableDeal={isSeedWinnable(gameState.seed, gameState.drawCount)}
         canUndo={gameState.history.length > 0}
         onUndo={handleUndo}
         onReplayDraw={handleReplayDraw}
