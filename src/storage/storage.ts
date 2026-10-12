@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   autoMoveOnTap: true,
   soundEnabled: true,
   rightHanded: false,
+  winningDealsOnly: true,
 };
 
 export async function saveGameState(state: GameState): Promise<void> {

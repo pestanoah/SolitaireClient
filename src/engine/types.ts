@@ -69,4 +69,5 @@ export interface UserSettings {
   autoMoveOnTap: boolean;
   soundEnabled?: boolean;
   rightHanded?: boolean;
+  winningDealsOnly?: boolean;
 }

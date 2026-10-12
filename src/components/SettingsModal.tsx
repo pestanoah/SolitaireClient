@@ -28,6 +28,7 @@ export interface SettingsModalProps {
   onToggleSound: (enabled: boolean) => void;
   onToggleAutoMove: (enabled: boolean) => void;
   onToggleRightHanded: (enabled: boolean) => void;
+  onToggleWinningDeals?: (enabled: boolean) => void;
   onOpenSeedModal?: () => void;
   onPlayDailyChallenge?: () => void;
 }
@@ -41,6 +42,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleSound,
   onToggleAutoMove,
   onToggleRightHanded,
+  onToggleWinningDeals,
   onOpenSeedModal,
   onPlayDailyChallenge,
 }) => {
@@ -211,6 +213,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 thumbColor={colors.white}
                 ios_backgroundColor={colors.slate[700]}
                 accessibilityLabel="Toggle right-handed mode"
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* 5. Winnable Deals Only */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingRowText}>
+                <Text style={styles.settingTitle}>Winnable Deals Only</Text>
+                <Text style={styles.settingDescription}>
+                  Every deal is mathematically guaranteed to be beatable
+                </Text>
+              </View>
+              <Switch
+                value={settings.winningDealsOnly !== false}
+                onValueChange={onToggleWinningDeals}
+                trackColor={{
+                  false: colors.slate[700],
+                  true: colors.action.success,
+                }}
+                thumbColor={colors.white}
+                ios_backgroundColor={colors.slate[700]}
+                accessibilityLabel="Toggle winnable deals only"
               />
             </View>
 

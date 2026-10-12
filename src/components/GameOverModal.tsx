@@ -10,6 +10,7 @@ export interface GameOverModalProps {
   elapsedSeconds: number;
   seed?: string;
   reason?: 'no_moves' | 'forfeit';
+  isWinnableDeal?: boolean;
   canUndo?: boolean;
   onUndo?: () => void;
   onReplayDraw?: () => void;
@@ -26,6 +27,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   elapsedSeconds,
   seed,
   reason = 'no_moves',
+  isWinnableDeal,
   canUndo = false,
   onUndo,
   onReplayDraw,
@@ -77,6 +79,31 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
               <Text style={modalStyles.statLabel}>Time</Text>
             </View>
           </View>
+
+          {isWinnableDeal !== undefined && (
+            <View
+              style={[
+                styles.winnableBanner,
+                isWinnableDeal ? styles.winnableBannerSuccess : styles.winnableBannerNeutral,
+              ]}
+            >
+              <View style={styles.winnableBannerTextContainer}>
+                <Text
+                  style={[
+                    styles.winnableBannerTitle,
+                    isWinnableDeal ? styles.winnableTitleSuccess : styles.winnableTitleNeutral,
+                  ]}
+                >
+                  {isWinnableDeal ? 'This deal was beatable!' : 'Random Deal'}
+                </Text>
+                <Text style={styles.winnableBannerSubtitle}>
+                  {isWinnableDeal
+                    ? 'A winning path existed from the initial deal. Tap "Replay Draw" to try another route!'
+                    : 'This was an unverified random deal.'}
+                </Text>
+              </View>
+            </View>
+          )}
 
           <View style={styles.buttonContainer}>
             <View style={modalStyles.buttonRow}>
@@ -130,7 +157,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
             {seed && (
               <View style={styles.seedBadge}>
                 <Text style={styles.seedText} numberOfLines={1} ellipsizeMode="middle">
-                  {isDateSeed(seed) ? `Daily Challenge: #${seed}` : `Seed: #${seed}`}
+                  {isDateSeed(seed) ? `Daily Challenge: #${seed.split('_v')[0]}` : `Seed: #${seed}`}
                 </Text>
               </View>
             )}
@@ -229,6 +256,43 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     fontFamily: 'monospace',
     textAlign: 'center',
+  },
+  winnableBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacing.lg,
+    width: '100%',
+    gap: spacing.sm,
+  },
+  winnableBannerSuccess: {
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    borderColor: 'rgba(34, 197, 94, 0.35)',
+  },
+  winnableBannerNeutral: {
+    backgroundColor: colors.overlay.panelDark,
+    borderColor: colors.overlay.borderWhiteSubtle,
+  },
+  winnableBannerTextContainer: {
+    flex: 1,
+  },
+  winnableBannerTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    marginBottom: 2,
+  },
+  winnableTitleSuccess: {
+    color: colors.action.success,
+  },
+  winnableTitleNeutral: {
+    color: colors.slate[300],
+  },
+  winnableBannerSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.slate[300],
+    lineHeight: 16,
   },
   reviewBoardBtn: {
     marginTop: spacing.lg,

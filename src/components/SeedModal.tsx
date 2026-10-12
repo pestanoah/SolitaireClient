@@ -180,6 +180,10 @@ export const SeedModal: React.FC<SeedModalProps> = ({
               accessibilityLabel="Enter custom seed string"
             />
 
+            <Text style={styles.customSeedNote}>
+              Note: Custom seeds are not guaranteed to be winnable.
+            </Text>
+
             <View style={styles.actionRow}>
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -354,7 +358,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     color: colors.white,
     fontSize: fontSize.base,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  customSeedNote: {
+    color: colors.slate[400],
+    fontSize: fontSize.subtext,
+    fontStyle: 'italic',
+    marginBottom: spacing.md,
   },
   actionRow: {
     flexDirection: 'row',

@@ -64,32 +64,14 @@ export function generateRandomSeed(): string {
   return Math.random().toString(36).substring(2, 10);
 }
 
-/**
- * Returns a date formatted as a deterministic seed string (YYYY-MM-DD).
- * Defaults to the current calendar date.
- */
-export function getDailyChallengeSeed(date: Date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-/**
- * Checks whether a given seed matches today's daily challenge seed.
- */
-export function isDailyChallenge(seed?: string, date: Date = new Date()): boolean {
-  if (!seed) return false;
-  return seed === getDailyChallengeSeed(date);
-}
-
-/**
- * Checks whether a seed string follows a date format (YYYY-MM-DD).
- */
-export function isDateSeed(seed?: string): boolean {
-  if (!seed) return false;
-  return /^\d{4}-\d{2}-\d{2}$/.test(seed);
-}
+export {
+  getDailyChallengeSeed,
+  getRandomWinnableSeed,
+  isDailyChallenge,
+  isDateSeed,
+  isSeedWinnable,
+} from './winnable';
+import { getRandomWinnableSeed } from './winnable';
 
 /**
  * Fisher-Yates shuffle with deterministic Mulberry32 PRNG seed.
@@ -163,9 +145,21 @@ export function dealKlondikeFromDeck(
  * - 4 empty foundation piles.
  * - Empty waste pile.
  * Supports any string or numeric seed for deterministic seeded runs.
+ * If seed is omitted and winnableOnly is true, deals from the verified winnable pool.
  */
-export function dealKlondike(drawCount: 1 | 3 = 1, seed?: number | string): GameState {
-  const actualSeed = seed !== undefined ? String(seed) : generateRandomSeed();
+export function dealKlondike(
+  drawCount: 1 | 3 = 1,
+  seed?: number | string,
+  winnableOnly = true
+): GameState {
+  let actualSeed: string;
+  if (seed !== undefined) {
+    actualSeed = String(seed);
+  } else if (winnableOnly) {
+    actualSeed = getRandomWinnableSeed(drawCount);
+  } else {
+    actualSeed = generateRandomSeed();
+  }
   const deck = shuffleCards(createStandardDeck(), actualSeed);
   return dealKlondikeFromDeck(deck, drawCount, actualSeed);
 }
