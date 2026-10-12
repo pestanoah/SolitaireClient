@@ -378,12 +378,23 @@ export function findAvailableHints(
   // 4. Waste card to Tableau
   if (state.waste.length > 0) {
     const topWaste = state.waste[state.waste.length - 1];
+    const wasteSuitIndex = FOUNDATION_SUITS.indexOf(topWaste.suit);
+    const canAlsoMoveToFoundation =
+      wasteSuitIndex >= 0 &&
+      wasteSuitIndex < state.foundations.length &&
+      canPlaceOnFoundation(topWaste, state.foundations[wasteSuitIndex], wasteSuitIndex);
+
     for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
       const toCol = state.tableau[toIdx];
       if (canPlaceOnTableau(topWaste, toCol, allowAnyCardOnEmpty)) {
         const targetCard = toCol.length > 0 ? toCol[toCol.length - 1] : null;
         const targetDesc = targetCard ? formatCardShort(targetCard) : 'empty column';
-        const score = toCol.length > 0 ? 62 : 54;
+        // Moving waste down to tableau yields +5 pts, and card remains eligible for +10 pts foundation
+        // later (+15 total vs +10 directly). When both are available, prioritize tableau first.
+        let score = toCol.length > 0 ? 62 : 54;
+        if (toCol.length > 0 && canAlsoMoveToFoundation) {
+          score = topWaste.rank <= 2 ? 97 : 67;
+        }
 
         scored.push({
           score,

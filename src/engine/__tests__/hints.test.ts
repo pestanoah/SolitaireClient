@@ -341,6 +341,25 @@ describe('Hints Engine', () => {
     expect(hint?.message).toBe('Move 3♠ onto 4♥');
   });
 
+  test('prioritizes moving waste card to tableau before foundation when both are available to maximize score', () => {
+    const state = createBaseState();
+    // Foundation 0 has Ace of Spades
+    state.foundations[0] = [createDummyCard('as', 'spades', 1, true)];
+    // Tableau col 0 has 3 of Hearts
+    state.tableau[0] = [createDummyCard('3h', 'hearts', 3, true)];
+    // Waste has 2 of Spades (can legally go to Foundation 0 OR Tableau col 0 onto 3 of Hearts)
+    state.waste = [createDummyCard('2s', 'spades', 2, true)];
+
+    // Waste to Tableau scores +5 pts and leaves card available for +10 pts foundation later (15 total pts vs 10 pts)
+    const hint = findHint(state);
+    expect(hint).not.toBeNull();
+    expect(hint?.from.type).toBe('waste');
+    expect(hint?.to?.type).toBe('tableau');
+    expect(hint?.to?.index).toBe(0);
+    expect(hint?.cardIds).toEqual(['2s']);
+    expect(hint?.message).toBe('Move 2♠ onto 3♥');
+  });
+
   test('returns null when game is won or no moves remain', () => {
     const state = createBaseState();
     state.status = 'won';
