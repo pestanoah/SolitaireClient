@@ -479,6 +479,99 @@ describe('Modal Backdrop Dismissal', () => {
       const seedBadge = findTextContaining(element, 'Daily Challenge: #2026-10-09');
       expect(seedBadge).not.toBeNull();
     });
+
+    test('renders "Replay Seed" and "New Game" buttons and triggers respective callbacks', () => {
+      const onReplaySeed = jest.fn();
+      const onNewGame = jest.fn();
+
+      const element: any = WinModal({
+        visible: true,
+        score: 650,
+        moves: 42,
+        elapsedSeconds: 95,
+        seed: 'speedrun-123',
+        onReplaySeed,
+        onNewGame,
+      });
+
+      expect(element).not.toBeNull();
+      const backdropView = element.props.children;
+      const card = React.Children.toArray(backdropView.props.children)[0] as any;
+      const cardChildren = React.Children.toArray(card.props.children);
+
+      // buttonContainer is the 6th child (after icon, title, subtitle, statsContainer, seedBadge)
+      const buttonContainer = cardChildren[5] as any;
+      const buttonRow = React.Children.toArray(buttonContainer.props.children)[0] as any;
+      const rowButtons = React.Children.toArray(buttonRow.props.children);
+
+      // Replay Seed button
+      const replayBtn = rowButtons[0] as any;
+      expect(replayBtn.props.accessibilityLabel).toBe('Replay seed');
+      expect(findTextContaining(replayBtn, 'Replay Seed')).not.toBeNull();
+      replayBtn.props.onPress();
+      expect(onReplaySeed).toHaveBeenCalledTimes(1);
+
+      // New Game button
+      const newGameBtn = rowButtons[1] as any;
+      expect(newGameBtn.props.accessibilityLabel).toBe('New game');
+      expect(findTextContaining(newGameBtn, 'New Game')).not.toBeNull();
+      newGameBtn.props.onPress();
+      expect(onNewGame).toHaveBeenCalledTimes(1);
+    });
+
+    test('supports onReplayDraw and onReplay aliases on WinModal', () => {
+      const onReplayDraw = jest.fn();
+      const onNewGame = jest.fn();
+
+      const elementDraw: any = WinModal({
+        visible: true,
+        score: 500,
+        moves: 35,
+        elapsedSeconds: 110,
+        seed: 'seed-456',
+        onReplayDraw,
+        onNewGame,
+      });
+
+      const replayBtnDraw = findByAccessibilityLabel(elementDraw, 'Replay seed');
+      expect(replayBtnDraw).not.toBeNull();
+      replayBtnDraw.props.onPress();
+      expect(onReplayDraw).toHaveBeenCalledTimes(1);
+
+      const onReplay = jest.fn();
+      const elementReplay: any = WinModal({
+        visible: true,
+        score: 500,
+        moves: 35,
+        elapsedSeconds: 110,
+        seed: 'seed-789',
+        onReplay,
+        onNewGame,
+      });
+
+      const replayBtnGeneric = findByAccessibilityLabel(elementReplay, 'Replay seed');
+      expect(replayBtnGeneric).not.toBeNull();
+      replayBtnGeneric.props.onPress();
+      expect(onReplay).toHaveBeenCalledTimes(1);
+    });
+
+    test('renders Review Board button when onClose is provided', () => {
+      const onClose = jest.fn();
+      const element: any = WinModal({
+        visible: true,
+        score: 700,
+        moves: 40,
+        elapsedSeconds: 85,
+        onNewGame: jest.fn(),
+        onClose,
+      });
+
+      const reviewBoardBtn = findByAccessibilityLabel(element, 'Review board');
+      expect(reviewBoardBtn).not.toBeNull();
+      expect(findTextContaining(reviewBoardBtn, 'Review Board')).not.toBeNull();
+      reviewBoardBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('GameOverModal Seed & Share', () => {

@@ -2052,6 +2052,8 @@ export const GameScreen: React.FC = () => {
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
         seed={gameState.seed}
+        onReplaySeed={handleReplayDraw}
+        onReplayDraw={handleReplayDraw}
         onNewGame={() => startNewGame()}
         onClose={() => setWinDismissed(true)}
         onShare={(stats) =>
