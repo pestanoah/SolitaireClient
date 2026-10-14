@@ -4,13 +4,16 @@ import { isDateSeed } from '../engine/deck';
 import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
 import { triggerWinConfetti } from '../utils/confetti';
 
-interface WinModalProps {
+export interface WinModalProps {
   visible: boolean;
   score: number;
   moves: number;
   elapsedSeconds: number;
   seed?: string;
   onNewGame: () => void;
+  onReplaySeed?: () => void;
+  onReplayDraw?: () => void;
+  onReplay?: () => void;
   onClose?: () => void;
   onShare?: (stats?: { score: number; elapsedSeconds: number }) => void;
 }
@@ -22,6 +25,9 @@ export const WinModal: React.FC<WinModalProps> = ({
   elapsedSeconds,
   seed,
   onNewGame,
+  onReplaySeed,
+  onReplayDraw,
+  onReplay,
   onClose,
   onShare,
 }) => {
@@ -36,6 +42,7 @@ export const WinModal: React.FC<WinModalProps> = ({
 
   if (!visible) return null;
 
+  const handleReplay = onReplaySeed || onReplayDraw || onReplay;
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -81,29 +88,55 @@ export const WinModal: React.FC<WinModalProps> = ({
             </View>
           ) : null}
 
-          <View style={styles.actionButtonsRow}>
+          <View style={styles.buttonContainer}>
+            <View style={modalStyles.buttonRow}>
+              {handleReplay ? (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={handleReplay}
+                  style={[modalStyles.actionBtn, styles.replayBtn]}
+                  accessibilityLabel="Replay seed"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.replayBtnText}>Replay Seed</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={onNewGame}
+                style={[modalStyles.actionBtn, styles.newGameBtn]}
+                accessibilityLabel="New game"
+                accessibilityRole="button"
+              >
+                <Text style={styles.newGameBtnText}>New Game</Text>
+              </TouchableOpacity>
+            </View>
+
             {onShare ? (
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => onShare({ score, elapsedSeconds })}
-                style={styles.shareBtn}
+                style={[modalStyles.actionBtn, styles.shareBtn]}
                 accessibilityLabel="Share deck"
                 accessibilityRole="button"
               >
                 <Text style={styles.shareBtnText}>Share Deck</Text>
               </TouchableOpacity>
             ) : null}
+          </View>
 
+          {onClose && (
             <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={onNewGame}
-              style={styles.playAgainBtn}
-              accessibilityLabel="Play again"
+              activeOpacity={0.7}
+              onPress={onClose}
+              style={styles.reviewBoardBtn}
+              accessibilityLabel="Review board"
               accessibilityRole="button"
             >
-              <Text style={styles.playAgainText}>Play Again</Text>
+              <Text style={styles.reviewBoardText}>Review Board</Text>
             </TouchableOpacity>
-          </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -155,10 +188,9 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     textAlign: 'center',
   },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
+  buttonContainer: {
     width: '100%',
+    gap: spacing.md,
   },
   statLabel: {
     color: colors.felt.accent,
@@ -166,34 +198,47 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontWeight: fontWeight.semibold,
   },
-  playAgainBtn: {
-    flex: 1,
-    backgroundColor: colors.action.success,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
+  replayBtn: {
+    backgroundColor: colors.action.primary,
+    paddingHorizontal: spacing.sm,
     ...shadows.button,
   },
-  playAgainText: {
+  replayBtnText: {
     color: colors.white,
-    fontSize: fontSize.md,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.heavy,
+  },
+  newGameBtn: {
+    backgroundColor: colors.action.success,
+    paddingHorizontal: spacing.sm,
+    ...shadows.button,
+  },
+  newGameBtnText: {
+    color: colors.white,
+    fontSize: fontSize.base,
     fontWeight: fontWeight.heavy,
   },
   shareBtn: {
-    flex: 1,
     backgroundColor: colors.action.primary,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: '100%',
     ...shadows.button,
   },
   shareBtnText: {
     color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.heavy,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  reviewBoardBtn: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewBoardText: {
+    color: colors.felt.accent,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    textDecorationLine: 'underline',
   },
 });
