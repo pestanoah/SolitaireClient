@@ -5,6 +5,8 @@ jest.mock('react-native-safe-area-context', () => ({
 import {
   AUTO_COMPLETE_DELAY_MS,
   AUTO_COMPLETE_ANIMATION_DURATION_MS,
+  DEFAULT_DEAL_STAGGER_MS,
+  DEFAULT_DEAL_DURATION_MS,
   calculatePileBasePosition,
   calculatePileCardPosition,
   calculateTableauOffsets,
@@ -23,6 +25,19 @@ describe('Auto-complete Speed Timing', () => {
     const originalTotalDuration = 160 + 200;
     const currentTotalDuration = AUTO_COMPLETE_DELAY_MS + AUTO_COMPLETE_ANIMATION_DURATION_MS;
     expect(originalTotalDuration / currentTotalDuration).toBe(2);
+  });
+});
+
+describe('Initial Game Deal Animation Timing', () => {
+  test('initial deal animation stagger and flight duration are configured for ~1s total deal time', () => {
+    expect(DEFAULT_DEAL_STAGGER_MS).toBe(28);
+    expect(DEFAULT_DEAL_DURATION_MS).toBe(160);
+
+    // 28 tableau cards + 1 waste card in Draw 1 = 29 cards
+    // 28 steps * 28ms stagger = 784ms delay for final card + 160ms flight duration = 944ms (~1.0s)
+    const draw1TotalDuration = (29 - 1) * DEFAULT_DEAL_STAGGER_MS + DEFAULT_DEAL_DURATION_MS;
+    expect(draw1TotalDuration).toBeLessThanOrEqual(1100);
+    expect(draw1TotalDuration).toBeGreaterThanOrEqual(800);
   });
 });
 

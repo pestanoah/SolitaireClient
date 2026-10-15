@@ -1,4 +1,4 @@
-import { Card, GameState, Rank, Suit } from './types';
+import { Card, GameState, PileLocation, Rank, Suit } from './types';
 
 const SUITS: Suit[] = ['spades', 'hearts', 'diamonds', 'clubs'];
 const RANKS: Rank[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
@@ -169,3 +169,55 @@ export function dealKlondike(
   const deck = shuffleCards(createStandardDeck(), actualSeed);
   return dealKlondikeFromDeck(deck, drawCount, actualSeed);
 }
+
+export interface DealStep {
+  card: Card;
+  targetPile: PileLocation;
+  targetIndexInPile: number;
+  faceUp: boolean;
+  round: number;
+  stepIndex: number;
+}
+
+/**
+ * Generates the sequence of dealing steps for a new Klondike Solitaire game.
+ * Deals round-by-round across the 7 tableau columns (28 cards total),
+ * followed by the initial waste draw (if any cards in waste).
+ */
+export function generateKlondikeDealSteps(gameState: GameState): DealStep[] {
+  const steps: DealStep[] = [];
+  let stepIndex = 0;
+
+  // 7 rounds of tableau dealing
+  for (let r = 0; r < 7; r++) {
+    for (let c = r; c < 7; c++) {
+      const card = gameState.tableau[c]?.[r];
+      if (card) {
+        steps.push({
+          card,
+          targetPile: { type: 'tableau', index: c },
+          targetIndexInPile: r,
+          faceUp: card.faceUp,
+          round: r,
+          stepIndex: stepIndex++,
+        });
+      }
+    }
+  }
+
+  // Initial waste cards (if auto-drawn)
+  for (let w = 0; w < gameState.waste.length; w++) {
+    const card = gameState.waste[w];
+    steps.push({
+      card,
+      targetPile: { type: 'waste', index: 0 },
+      targetIndexInPile: w,
+      faceUp: true,
+      round: 7,
+      stepIndex: stepIndex++,
+    });
+  }
+
+  return steps;
+}
+
