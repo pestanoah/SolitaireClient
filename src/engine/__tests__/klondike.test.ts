@@ -432,6 +432,27 @@ describe('State Transitions & Gameplay', () => {
     expect(canAutoComplete(state)).toBe(false);
   });
 
+  test('canAutoComplete returns false when all tableau cards are uncovered but no advancing moves exist (deadlocked)', () => {
+    let state = dealKlondike(1);
+    state.stock = [];
+    state.waste = [];
+    state.tableau = [
+      [
+        { id: 'c_4s', suit: 'spades', rank: 4, faceUp: true },
+        { id: 'c_5d', suit: 'diamonds', rank: 5, faceUp: true },
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+
+    expect(areAllTableauCardsUncovered(state.tableau)).toBe(true);
+    expect(canAutoComplete(state)).toBe(false);
+  });
+
   test('autoCompleteStep advances waste card to foundation and draws from stock when needed', () => {
     let state = dealKlondike(1);
     state.tableau = [
@@ -1341,5 +1362,29 @@ describe('Automatic First Card Draw on Start and Waste Reset', () => {
     const undone = undo(nextState);
     expect(undone.stock.length).toBe(0);
     expect(undone.waste.map((c) => c.id)).toEqual(['w1', 'w2']);
+  });
+
+  test('undo accurately restores score when move points penalty is clamped to 0', () => {
+    let state = dealKlondike(1);
+    state.foundations[0] = [
+      { id: 'c_as', suit: 'spades', rank: 1, faceUp: true },
+      { id: 'c_2s', suit: 'spades', rank: 2, faceUp: true },
+      { id: 'c_3s', suit: 'spades', rank: 3, faceUp: true },
+    ];
+    state.tableau[0] = [{ id: 'c_4h', suit: 'hearts', rank: 4, faceUp: true }];
+    state.score = 5;
+
+    const moved = moveCards(
+      state,
+      { type: 'foundation', index: 0 },
+      { type: 'tableau', index: 0 },
+      ['c_3s']
+    );
+    expect(moved).not.toBeNull();
+    expect(moved!.score).toBe(0);
+    expect(moved!.history[moved!.history.length - 1].pointsEarned).toBe(-5);
+
+    const undone = undo(moved!);
+    expect(undone.score).toBe(5);
   });
 });

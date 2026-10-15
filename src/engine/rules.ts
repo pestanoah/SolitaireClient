@@ -92,11 +92,9 @@ export function canAutoComplete(state: GameState): boolean {
     return false;
   }
 
-  // If there are cards remaining in stock or waste, verify there are still available moves
-  if (state.stock.length > 0 || state.waste.length > 0) {
-    if (!hasAvailableMoves(state)) {
-      return false;
-    }
+  // Verify there are still available moves to advance the game
+  if (!hasAvailableMoves(state)) {
+    return false;
   }
 
   return true;
