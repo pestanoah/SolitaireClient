@@ -1,0 +1,33 @@
+{
+  "name": "Solitaire",
+  "short_name": "Solitaire",
+  "description": "Classic Klondike Solitaire with Draw 1 / Draw 3, hints, and daily challenges.",
+  "id": "/SolitaireClient/",
+  "start_url": "/SolitaireClient/",
+  "scope": "/SolitaireClient/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#064e3b",
+  "theme_color": "#064e3b",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
