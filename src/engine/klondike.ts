@@ -183,13 +183,14 @@ export function moveCards(
 
   const totalPoints = movePoints + flipPoints;
   const newScore = Math.max(0, state.score + totalPoints);
+  const appliedPoints = newScore - state.score;
 
   const moveRecord: MoveRecord = {
     from,
     to,
     cardIds: sourceCards.map((c) => c.id),
     turnedOverCardId,
-    pointsEarned: totalPoints,
+    pointsEarned: appliedPoints,
   };
 
   const won = isGameWon(foundations);

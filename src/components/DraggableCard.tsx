@@ -113,7 +113,7 @@ export const DraggableCard: React.FC<DraggableCardProps> = React.memo(({
         isDraggingRef.current = false;
         startCalledRef.current = false;
       },
-      onPanResponderTerminationRequest: () => false,
+      onPanResponderTerminationRequest: () => !isDraggingRef.current,
     })
   ).current;
 

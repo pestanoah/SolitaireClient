@@ -293,8 +293,10 @@ export const GameScreen: React.FC = () => {
 
   // Drag State
   const [dragState, setDraggedCard] = useState<DragState | null>(null);
+  const dragStateRef = useRef<DragState | null>(null);
   const dragPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const isAnimatingRef = useRef(false);
+  const isAutoCompletingRef = useRef(false);
 
   // Toast / Hint Banner
   const [hintMessage, setHintMessage] = useState<string | null>(null);
@@ -323,7 +325,7 @@ export const GameScreen: React.FC = () => {
 
   const handleHint = useCallback(() => {
     const current = latestGameStateRef.current;
-    if (isAnimatingRef.current || canAutoComplete(current)) return;
+    if (isAnimatingRef.current || isAutoCompletingRef.current) return;
     if (current.status !== 'playing') return;
 
     const hints = findAvailableHints(current);
@@ -604,7 +606,6 @@ export const GameScreen: React.FC = () => {
     const current = latestGameStateRef.current;
     if (
       current.status === 'playing' &&
-      !canAutoComplete(current) &&
       !isGameWon(current.foundations)
     ) {
       const timer = setTimeout(() => {
@@ -612,7 +613,8 @@ export const GameScreen: React.FC = () => {
         if (
           activeState.status === 'playing' &&
           !isAnimatingRef.current &&
-          !canAutoComplete(activeState) &&
+          !dragStateRef.current &&
+          !isAutoCompletingRef.current &&
           !isGameWon(activeState.foundations) &&
           !hasAvailableMoves(activeState)
         ) {
@@ -700,6 +702,9 @@ export const GameScreen: React.FC = () => {
       clearActiveHint();
       setSelectedCards(null);
       setAnimatingCard(null);
+      dragStateRef.current = null;
+      setDraggedCard(null);
+      isAutoCompletingRef.current = false;
 
       const steps = generateKlondikeDealSteps(game);
       if (steps.length === 0) {
@@ -988,7 +993,7 @@ export const GameScreen: React.FC = () => {
   const handleDragStart = useCallback(
     (from: PileLocation, card: Card, cardIndex: number) => {
       const current = latestGameStateRef.current;
-      if (isAnimatingRef.current || canAutoComplete(current)) return;
+      if (isAnimatingRef.current || isAutoCompletingRef.current) return;
       clearActiveHint();
       setSelectedCards(null);
 
@@ -1010,12 +1015,14 @@ export const GameScreen: React.FC = () => {
       const startPos = getPileCardPosition(from, cardIndex, current);
       dragPan.setValue({ x: 0, y: 0 });
 
-      setDraggedCard({
+      const newDragState: DragState = {
         from,
         cards: movingCards,
         cardIds: movingCards.map((c) => c.id),
         startPos,
-      });
+      };
+      dragStateRef.current = newDragState;
+      setDraggedCard(newDragState);
     },
     [getPileCardPosition, dragPan, clearActiveHint]
   );
@@ -1029,21 +1036,23 @@ export const GameScreen: React.FC = () => {
 
   const handleDragEnd = useCallback(
     (dx: number, dy: number, isDrag: boolean) => {
-      if (!dragState) return;
+      const activeDrag = dragStateRef.current;
+      if (!activeDrag) return;
 
       if (!isDrag) {
+        dragStateRef.current = null;
         setDraggedCard(null);
         return;
       }
 
-      const dropX = dragState.startPos.x + dx;
-      const dropY = dragState.startPos.y + dy;
+      const dropX = activeDrag.startPos.x + dx;
+      const dropY = activeDrag.startPos.y + dy;
 
-      const target = findDropTarget(dragState.cards, dragState.from, dropX, dropY);
+      const target = findDropTarget(activeDrag.cards, activeDrag.from, dropX, dropY);
 
       if (target) {
         const current = latestGameStateRef.current;
-        const nextState = moveCards(current, dragState.from, target, dragState.cardIds);
+        const nextState = moveCards(current, activeDrag.from, target, activeDrag.cardIds);
         if (nextState) {
           playCardMoveSound();
           let destCardIndex = 0;
@@ -1057,14 +1066,15 @@ export const GameScreen: React.FC = () => {
           isAnimatingRef.current = true;
           Animated.timing(dragPan, {
             toValue: {
-              x: targetPos.x - dragState.startPos.x,
-              y: targetPos.y - dragState.startPos.y,
+              x: targetPos.x - activeDrag.startPos.x,
+              y: targetPos.y - activeDrag.startPos.y,
             },
             duration: 120,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: Platform.OS !== 'web',
           }).start(() => {
             setGameState(nextState);
+            dragStateRef.current = null;
             setDraggedCard(null);
             setSelectedCards(null);
             isAnimatingRef.current = false;
@@ -1081,17 +1091,18 @@ export const GameScreen: React.FC = () => {
         easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
+        dragStateRef.current = null;
         setDraggedCard(null);
         isAnimatingRef.current = false;
       });
     },
-    [dragState, findDropTarget, getPileCardPosition, dragPan]
+    [findDropTarget, getPileCardPosition, dragPan]
   );
 
   // Stock press with draw animation
   const handleStockPress = useCallback(() => {
     const current = latestGameStateRef.current;
-    if (isAnimatingRef.current || canAutoComplete(current)) return;
+    if (isAnimatingRef.current || isAutoCompletingRef.current) return;
     clearActiveHint();
     setSelectedCards(null);
 
@@ -1200,7 +1211,7 @@ export const GameScreen: React.FC = () => {
   const handleWasteCardPress = useCallback(
     (card: Card) => {
       const current = latestGameStateRef.current;
-      if (isAnimatingRef.current || canAutoComplete(current)) return;
+      if (isAnimatingRef.current || isAutoCompletingRef.current) return;
       clearActiveHint();
 
       if (settings.autoMoveOnTap) {
@@ -1228,7 +1239,7 @@ export const GameScreen: React.FC = () => {
   const handleTableauCardPress = useCallback(
     (card: Card, colIndex: number) => {
       const current = latestGameStateRef.current;
-      if (isAnimatingRef.current || canAutoComplete(current)) return;
+      if (isAnimatingRef.current || isAutoCompletingRef.current) return;
       clearActiveHint();
 
       // If we already have selected cards, try to move onto this tableau column
@@ -1274,7 +1285,7 @@ export const GameScreen: React.FC = () => {
   const handleEmptyColumnPress = useCallback(
     (colIndex: number) => {
       const current = latestGameStateRef.current;
-      if (isAnimatingRef.current || canAutoComplete(current)) return;
+      if (isAnimatingRef.current || isAutoCompletingRef.current) return;
       clearActiveHint();
 
       if (selectedCards) {
@@ -1297,7 +1308,7 @@ export const GameScreen: React.FC = () => {
   const handleFoundationPress = useCallback(
     (fIndex: number) => {
       const current = latestGameStateRef.current;
-      if (isAnimatingRef.current || canAutoComplete(current)) return;
+      if (isAnimatingRef.current || isAutoCompletingRef.current) return;
       clearActiveHint();
 
       const pile = current.foundations[fIndex];
@@ -1374,10 +1385,12 @@ export const GameScreen: React.FC = () => {
       const timer = setTimeout(() => {
         const activeState = latestGameStateRef.current;
         if (activeState.status !== 'playing' || !canAutoComplete(activeState) || isAnimatingRef.current) {
+          isAutoCompletingRef.current = false;
           return;
         }
         const next = autoCompleteStep(activeState);
         if (next && next.history.length > activeState.history.length) {
+          isAutoCompletingRef.current = true;
           const lastMove = next.history[next.history.length - 1];
           executeMoveWithAnimation(
             lastMove.from,
@@ -1385,11 +1398,15 @@ export const GameScreen: React.FC = () => {
             lastMove.cardIds,
             AUTO_COMPLETE_ANIMATION_DURATION_MS
           );
+        } else {
+          isAutoCompletingRef.current = false;
         }
       }, AUTO_COMPLETE_DELAY_MS);
       return () => clearTimeout(timer);
+    } else if (!canAutoComplete(currentState)) {
+      isAutoCompletingRef.current = false;
     }
-  }, [gameState.id, gameState.history, gameState.status, clearActiveHint]);
+  }, [gameState.id, gameState.history, gameState.status, clearActiveHint, executeMoveWithAnimation]);
 
   // Internal helper to deal a new game and reset animation/selection states
   const startNewGame = useCallback(
@@ -1398,6 +1415,9 @@ export const GameScreen: React.FC = () => {
       setSelectedCards(null);
       setAnimatingCard(null);
       setDealingState(null);
+      dragStateRef.current = null;
+      setDraggedCard(null);
+      isAutoCompletingRef.current = false;
       isAnimatingRef.current = false;
       setLossReason('no_moves');
       setGameOverDismissed(false);
@@ -1420,6 +1440,9 @@ export const GameScreen: React.FC = () => {
     setSelectedCards(null);
     setAnimatingCard(null);
     setDealingState(null);
+    dragStateRef.current = null;
+    setDraggedCard(null);
+    isAutoCompletingRef.current = false;
     isAnimatingRef.current = false;
     setLossReason('no_moves');
     setGameOverDismissed(false);
@@ -1463,6 +1486,9 @@ export const GameScreen: React.FC = () => {
         setSelectedCards(null);
         setAnimatingCard(null);
         setDealingState(null);
+        dragStateRef.current = null;
+        setDraggedCard(null);
+        isAutoCompletingRef.current = false;
         isAnimatingRef.current = false;
         setLossReason('no_moves');
         setGameOverDismissed(false);
@@ -1645,7 +1671,7 @@ export const GameScreen: React.FC = () => {
   // Undo move with animation
   const handleUndo = useCallback(() => {
     const current = latestGameStateRef.current;
-    if (isAnimatingRef.current || canAutoComplete(current)) return;
+    if (isAnimatingRef.current || isAutoCompletingRef.current) return;
     if (current.history.length === 0) return;
 
     clearActiveHint();
