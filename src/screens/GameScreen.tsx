@@ -453,6 +453,9 @@ export const GameScreen: React.FC = () => {
         setGameState(seededGame);
         await saveGameState(seededGame);
         cleanUrlParams();
+        setTimeout(() => {
+          animateInitialDealRef.current?.(seededGame);
+        }, 60);
         if (isDateSeed(urlSeedData.seed)) {
           showHint(`Loaded Daily Challenge: ${urlSeedData.seed}`);
         } else {
@@ -473,6 +476,9 @@ export const GameScreen: React.FC = () => {
           lastSavedGameRef.current = newGame;
           setGameState(newGame);
           await saveGameState(newGame);
+          setTimeout(() => {
+            animateInitialDealRef.current?.(newGame);
+          }, 60);
         }
       }
       isHydratedRef.current = true;
@@ -673,6 +679,48 @@ export const GameScreen: React.FC = () => {
     }
   }, [getPileBasePosition]);
 
+  // Animate the initial card(s) being drawn to waste at the start of a deal
+  const animateInitialDeal = useCallback(
+    (game: GameState) => {
+      if (game.waste.length === 0) {
+        playDealSound();
+        return;
+      }
+
+      const drawnCards = game.waste;
+      const drawnIds = drawnCards.map((c) => c.id);
+
+      const startPos = getPileBasePosition({ type: 'stock' });
+      const endPos = getPileBasePosition({ type: 'waste' }, game.waste.length);
+
+      isAnimatingRef.current = true;
+      playDealSound();
+      setAnimatingCard({
+        cards: drawnCards,
+        startX: startPos.x,
+        startY: startPos.y,
+        endX: endPos.x,
+        endY: endPos.y,
+        hiddenCardIds: drawnIds,
+        direction: 'horizontal',
+      });
+
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: Platform.OS !== 'web',
+      }).start(() => {
+        setAnimatingCard(null);
+        isAnimatingRef.current = false;
+      });
+    },
+    [getPileBasePosition, animProgress]
+  );
+  const animateInitialDealRef = useRef(animateInitialDeal);
+  animateInitialDealRef.current = animateInitialDeal;
+
   // Animate and execute move
   const executeMoveWithAnimation = useCallback(
     (
@@ -751,9 +799,39 @@ export const GameScreen: React.FC = () => {
           easing: Easing.out(Easing.cubic),
           useNativeDriver: Platform.OS !== 'web',
         }).start(() => {
-          setGameState(nextState);
-          setAnimatingCard(null);
-          isAnimatingRef.current = false;
+          if (nextState.waste.length > 0) {
+            const drawnCards = nextState.waste;
+            const drawnIds = drawnCards.map((c) => c.id);
+            const drawStartPos = getPileBasePosition({ type: 'stock' });
+            const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+
+            setGameState(nextState);
+            playDealSound();
+            setAnimatingCard({
+              cards: drawnCards,
+              startX: drawStartPos.x,
+              startY: drawStartPos.y,
+              endX: drawEndPos.x,
+              endY: drawEndPos.y,
+              hiddenCardIds: drawnIds,
+              direction: 'horizontal',
+            });
+
+            animProgress.setValue(0);
+            Animated.timing(animProgress, {
+              toValue: 1,
+              duration: durationOverride !== undefined ? durationOverride : 180,
+              easing: Easing.out(Easing.quad),
+              useNativeDriver: Platform.OS !== 'web',
+            }).start(() => {
+              setAnimatingCard(null);
+              isAnimatingRef.current = false;
+            });
+          } else {
+            setGameState(nextState);
+            setAnimatingCard(null);
+            isAnimatingRef.current = false;
+          }
         });
         return true;
       }
@@ -1051,9 +1129,39 @@ export const GameScreen: React.FC = () => {
         easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
-        setGameState(nextState);
-        setAnimatingCard(null);
-        isAnimatingRef.current = false;
+        if (nextState.waste.length > 0) {
+          const drawnCards = nextState.waste;
+          const drawnIds = drawnCards.map((c) => c.id);
+          const drawStartPos = getPileBasePosition({ type: 'stock' });
+          const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+
+          setGameState(nextState);
+          playDealSound();
+          setAnimatingCard({
+            cards: drawnCards,
+            startX: drawStartPos.x,
+            startY: drawStartPos.y,
+            endX: drawEndPos.x,
+            endY: drawEndPos.y,
+            hiddenCardIds: drawnIds,
+            direction: 'horizontal',
+          });
+
+          animProgress.setValue(0);
+          Animated.timing(animProgress, {
+            toValue: 1,
+            duration: 180,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: Platform.OS !== 'web',
+          }).start(() => {
+            setAnimatingCard(null);
+            isAnimatingRef.current = false;
+          });
+        } else {
+          setGameState(nextState);
+          setAnimatingCard(null);
+          isAnimatingRef.current = false;
+        }
       });
       return;
     }
@@ -1295,15 +1403,15 @@ export const GameScreen: React.FC = () => {
       setLossReason('no_moves');
       setGameOverDismissed(false);
       setWinDismissed(false);
-      playDealSound();
       const newGame = dealKlondike(
         count ?? settings.drawCount,
         undefined,
         settings.winningDealsOnly !== false
       );
       setGameState(newGame);
+      animateInitialDeal(newGame);
     },
-    [settings.drawCount, settings.winningDealsOnly, clearActiveHint]
+    [settings.drawCount, settings.winningDealsOnly, clearActiveHint, animateInitialDeal]
   );
 
   // Replay the exact same starting deal
@@ -1316,10 +1424,10 @@ export const GameScreen: React.FC = () => {
     setLossReason('no_moves');
     setGameOverDismissed(false);
     setWinDismissed(false);
-    playDealSound();
     const replayed = replayGame(current);
     setGameState(replayed);
-  }, [clearActiveHint]);
+    animateInitialDeal(replayed);
+  }, [clearActiveHint, animateInitialDeal]);
 
   // Start new game (prompts if active game has moves)
   const handleNewGame = useCallback(() => {
@@ -1358,9 +1466,9 @@ export const GameScreen: React.FC = () => {
         setLossReason('no_moves');
         setGameOverDismissed(false);
         setWinDismissed(false);
-        playDealSound();
         const newGame = dealKlondike(settings.drawCount, seed);
         setGameState(newGame);
+        animateInitialDeal(newGame);
         if (isDateSeed(seed)) {
           showHint(`Playing Daily Challenge: ${seed}`);
         } else {
@@ -1389,7 +1497,7 @@ export const GameScreen: React.FC = () => {
 
       runStart();
     },
-    [settings.drawCount, clearActiveHint, showHint]
+    [settings.drawCount, clearActiveHint, showHint, animateInitialDeal]
   );
 
   // Play today's daily challenge

@@ -34,7 +34,7 @@ export function drawCards(state: GameState): GameState {
     };
   }
 
-  // Recycle waste back to stock
+  // Recycle waste back to stock and draw the first card(s)
   if (state.waste.length > 0) {
     const penalty = state.drawCount === 1 ? 20 : 50;
     const points = -Math.min(state.score, penalty);
@@ -45,6 +45,13 @@ export function drawCards(state: GameState): GameState {
       .reverse()
       .map((c) => ({ ...c, faceUp: false }));
 
+    const drawCount = Math.min(state.drawCount, recycled.length);
+    const stock = recycled.slice(0, recycled.length - drawCount);
+    const waste = recycled.slice(recycled.length - drawCount).map((c) => ({
+      ...c,
+      faceUp: true,
+    }));
+
     const moveRecord: MoveRecord = {
       from: { type: 'waste', index: 0 },
       to: { type: 'stock', index: 0 },
@@ -54,8 +61,8 @@ export function drawCards(state: GameState): GameState {
 
     return {
       ...state,
-      stock: recycled,
-      waste: [],
+      stock,
+      waste,
       score: Math.max(0, state.score + points),
       moves: state.moves + 1,
       history: [...state.history, moveRecord],
@@ -398,7 +405,7 @@ export function undo(state: GameState): GameState {
 
   // Case 2: Stock recycle (waste -> stock)
   if (lastMove.from.type === 'waste' && lastMove.to.type === 'stock') {
-    const cards = state.stock
+    const cards = [...state.stock, ...state.waste]
       .slice()
       .reverse()
       .map((c) => ({ ...c, faceUp: true }));
@@ -406,7 +413,7 @@ export function undo(state: GameState): GameState {
     return {
       ...state,
       stock: [],
-      waste: [...state.waste, ...cards],
+      waste: cards,
       score: Math.max(0, state.score - lastMove.pointsEarned),
       moves: state.moves + 1,
       status: 'playing',
@@ -614,12 +621,16 @@ export function replayGame(state: GameState): GameState {
     cur = prev;
   }
 
-  // Extract cards from rewound tableau columns + stock
+  // Extract cards from rewound tableau columns + stock + waste
   const tableauCards: Card[] = [];
   for (let c = 0; c < 7; c++) {
     tableauCards.push(...(cur.tableau[c] || []));
   }
-  const deck = [...tableauCards, ...cur.stock];
+  const deck = [
+    ...tableauCards,
+    ...cur.stock,
+    ...cur.waste.map((c) => ({ ...c, faceUp: false })),
+  ];
 
   if (deck.length === 52) {
     return dealKlondikeFromDeck(deck, state.drawCount, state.seed);

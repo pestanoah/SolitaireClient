@@ -47,9 +47,10 @@ describe('Deck and Card Utilities', () => {
       }
     }
 
-    expect(game.stock.length).toBe(24);
+    expect(game.stock.length).toBe(23);
     expect(game.stock.every((c) => !c.faceUp)).toBe(true);
-    expect(game.waste.length).toBe(0);
+    expect(game.waste.length).toBe(1);
+    expect(game.waste[0].faceUp).toBe(true);
     expect(game.foundations.length).toBe(4);
     expect(game.foundations.every((f) => f.length === 0)).toBe(true);
     expect(game.score).toBe(0);
@@ -135,35 +136,39 @@ describe('Rules Validation', () => {
 describe('State Transitions & Gameplay', () => {
   test('drawCards draws 1 card in Turn 1 and recycles with penalty', () => {
     let state = dealKlondike(1, 42);
-    expect(state.stock.length).toBe(24);
-    expect(state.waste.length).toBe(0);
-
-    state = drawCards(state);
     expect(state.stock.length).toBe(23);
     expect(state.waste.length).toBe(1);
     expect(state.waste[0].faceUp).toBe(true);
+
+    state = drawCards(state);
+    expect(state.stock.length).toBe(22);
+    expect(state.waste.length).toBe(2);
+    expect(state.waste[1].faceUp).toBe(true);
     expect(state.moves).toBe(1);
 
-    // Draw all remaining 23 cards
-    for (let i = 0; i < 23; i++) {
+    // Draw all remaining 22 cards
+    for (let i = 0; i < 22; i++) {
       state = drawCards(state);
     }
     expect(state.stock.length).toBe(0);
     expect(state.waste.length).toBe(24);
 
-    // Recycle waste to stock
+    // Recycle waste to stock (draws the first card)
     state.score = 50;
     state = drawCards(state);
-    expect(state.stock.length).toBe(24);
-    expect(state.waste.length).toBe(0);
+    expect(state.stock.length).toBe(23);
+    expect(state.waste.length).toBe(1);
+    expect(state.waste[0].faceUp).toBe(true);
     expect(state.score).toBe(30); // 50 - 20 penalty
   });
 
   test('drawCards draws 3 cards in Turn 3 mode', () => {
     let state = dealKlondike(3, 42);
-    state = drawCards(state);
     expect(state.stock.length).toBe(21);
     expect(state.waste.length).toBe(3);
+    state = drawCards(state);
+    expect(state.stock.length).toBe(18);
+    expect(state.waste.length).toBe(6);
   });
 
   test('moveCards transfers card from tableau to foundation and flips exposed card', () => {
@@ -228,7 +233,7 @@ describe('State Transitions & Gameplay', () => {
     const afterUndo = undo(afterDraw);
     expect(afterUndo.moves).toBe(2);
     expect(afterUndo.stock.length).toBe(state.stock.length);
-    expect(afterUndo.waste.length).toBe(0);
+    expect(afterUndo.waste.length).toBe(state.waste.length);
   });
 
   test('findSmartMove finds foundation and tableau placements', () => {
@@ -791,9 +796,10 @@ describe('Available Moves & Loss Detection', () => {
     expect(state.stock.length).toBe(0);
     expect(hasExhaustedStockCycles(state)).toBe(false);
 
-    // Recycle waste back to stock
+    // Recycle waste back to stock (draws the first card)
     state = drawCards(state);
-    expect(state.stock.length).toBe(24);
+    expect(state.stock.length).toBe(23);
+    expect(state.waste.length).toBe(1);
 
     // Draw all stock cards again without any board moves
     while (state.stock.length > 0) {
@@ -1193,7 +1199,8 @@ describe('Replay Deal Engine', () => {
     expect(replayed.moves).toBe(0);
     expect(replayed.elapsedSeconds).toBe(0);
     expect(replayed.history).toEqual([]);
-    expect(replayed.waste).toEqual([]);
+    expect(replayed.waste).toEqual(initialGame.waste);
+    expect(replayed.waste.length).toBe(1);
     expect(replayed.foundations).toEqual([[], [], [], []]);
     expect(replayed.drawCount).toBe(initialGame.drawCount);
 
@@ -1226,9 +1233,9 @@ describe('Replay Deal Engine', () => {
     expect(replayed.score).toBe(0);
     expect(replayed.moves).toBe(0);
     expect(replayed.elapsedSeconds).toBe(0);
-    expect(replayed.waste).toEqual([]);
+    expect(replayed.waste.length).toBe(1);
     expect(replayed.tableau.length).toBe(7);
-    expect(replayed.stock.length).toBe(24);
+    expect(replayed.stock.length).toBe(23);
     for (let c = 0; c < 7; c++) {
       expect(replayed.tableau[c].length).toBe(c + 1);
       expect(replayed.tableau[c][c].faceUp).toBe(true);
@@ -1236,5 +1243,103 @@ describe('Replay Deal Engine', () => {
   });
 });
 
+describe('Automatic First Card Draw on Start and Waste Reset', () => {
+  test('starts a Turn 1 game with the first card drawn to waste', () => {
+    const game = dealKlondike(1, 'draw1-test-seed');
+    expect(game.drawCount).toBe(1);
+    expect(game.stock.length).toBe(23);
+    expect(game.waste.length).toBe(1);
+    expect(game.waste[0].faceUp).toBe(true);
+    expect(game.moves).toBe(0);
+    expect(game.score).toBe(0);
+    expect(game.history).toEqual([]);
+    expect(game.stock.every((c) => !c.faceUp)).toBe(true);
+  });
 
+  test('starts a Turn 3 game with the first 3 cards drawn to waste', () => {
+    const game = dealKlondike(3, 'draw3-test-seed');
+    expect(game.drawCount).toBe(3);
+    expect(game.stock.length).toBe(21);
+    expect(game.waste.length).toBe(3);
+    expect(game.waste.every((c) => c.faceUp)).toBe(true);
+    expect(game.moves).toBe(0);
+    expect(game.score).toBe(0);
+    expect(game.history).toEqual([]);
+    expect(game.stock.every((c) => !c.faceUp)).toBe(true);
+  });
 
+  test('draws 1 card immediately when waste is reset in Turn 1', () => {
+    let state = dealKlondike(1, 'reset-turn1');
+    // Draw all remaining 23 cards to exhaust stock
+    while (state.stock.length > 0) {
+      state = drawCards(state);
+    }
+    expect(state.stock.length).toBe(0);
+    expect(state.waste.length).toBe(24);
+
+    const prevWasteIds = state.waste.map((c) => c.id);
+    const expectedFirstDrawnCardId = prevWasteIds[0];
+
+    state.score = 100;
+    const recycledState = drawCards(state);
+
+    expect(recycledState.stock.length).toBe(23);
+    expect(recycledState.waste.length).toBe(1);
+    expect(recycledState.waste[0].id).toBe(expectedFirstDrawnCardId);
+    expect(recycledState.waste[0].faceUp).toBe(true);
+    expect(recycledState.score).toBe(80); // 100 - 20 penalty
+
+    // Undo should restore previous waste and empty stock
+    const undoneState = undo(recycledState);
+    expect(undoneState.stock.length).toBe(0);
+    expect(undoneState.waste.map((c) => c.id)).toEqual(prevWasteIds);
+    expect(undoneState.waste.every((c) => c.faceUp)).toBe(true);
+    expect(undoneState.score).toBe(100);
+  });
+
+  test('draws 3 cards immediately when waste is reset in Turn 3', () => {
+    let state = dealKlondike(3, 'reset-turn3');
+    // Draw all remaining 21 cards to exhaust stock
+    while (state.stock.length > 0) {
+      state = drawCards(state);
+    }
+    expect(state.stock.length).toBe(0);
+    expect(state.waste.length).toBe(24);
+
+    const prevWasteIds = state.waste.map((c) => c.id);
+
+    state.score = 100;
+    const recycledState = drawCards(state);
+
+    expect(recycledState.stock.length).toBe(21);
+    expect(recycledState.waste.length).toBe(3);
+    expect(recycledState.waste.every((c) => c.faceUp)).toBe(true);
+    expect(recycledState.score).toBe(50); // 100 - 50 penalty
+
+    // Undo restores previous waste completely
+    const undoneState = undo(recycledState);
+    expect(undoneState.stock.length).toBe(0);
+    expect(undoneState.waste.map((c) => c.id)).toEqual(prevWasteIds);
+    expect(undoneState.waste.every((c) => c.faceUp)).toBe(true);
+    expect(undoneState.score).toBe(100);
+  });
+
+  test('handles recycling when waste has fewer cards than drawCount', () => {
+    let state = dealKlondike(3);
+    state.stock = [];
+    state.waste = [
+      { id: 'w1', suit: 'hearts', rank: 5, faceUp: true },
+      { id: 'w2', suit: 'clubs', rank: 9, faceUp: true },
+    ];
+    state.score = 50;
+
+    const nextState = drawCards(state);
+    expect(nextState.stock.length).toBe(0);
+    expect(nextState.waste.length).toBe(2);
+    expect(nextState.waste.map((c) => c.id)).toEqual(['w2', 'w1']);
+
+    const undone = undo(nextState);
+    expect(undone.stock.length).toBe(0);
+    expect(undone.waste.map((c) => c.id)).toEqual(['w1', 'w2']);
+  });
+});

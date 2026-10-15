@@ -112,9 +112,16 @@ export function dealKlondikeFromDeck(
     }
   }
 
-  const stock: Card[] = cleanDeck.slice(deckIndex).map((c) => ({
+  const rawStock: Card[] = cleanDeck.slice(deckIndex).map((c) => ({
     ...c,
     faceUp: false,
+  }));
+
+  const initialDrawCount = Math.min(drawCount, rawStock.length);
+  const stock = rawStock.slice(0, rawStock.length - initialDrawCount);
+  const waste = rawStock.slice(rawStock.length - initialDrawCount).map((c) => ({
+    ...c,
+    faceUp: true,
   }));
 
   const foundations: Card[][] = [[], [], [], []];
@@ -124,7 +131,7 @@ export function dealKlondikeFromDeck(
     id: `klondike_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     drawCount,
     stock,
-    waste: [],
+    waste,
     foundations,
     tableau,
     score: 0,
@@ -141,9 +148,8 @@ export function dealKlondikeFromDeck(
 /**
  * Deals a new Classic Klondike game.
  * - 7 tableau columns (total 28 cards), top card of each column is face-up.
- * - Remaining 24 cards placed in stock (face-down).
+ * - Remaining 24 cards: first card(s) drawn into waste face-up according to drawCount, remainder in stock face-down.
  * - 4 empty foundation piles.
- * - Empty waste pile.
  * Supports any string or numeric seed for deterministic seeded runs.
  * If seed is omitted and winnableOnly is true, deals from the verified winnable pool.
  */
