@@ -71,6 +71,133 @@ describe('Modal Backdrop Dismissal', () => {
       backdropPressable.props.onPress();
       expect(onClose).toHaveBeenCalledTimes(1);
     });
+
+    test('renders Reset Stats and Close buttons, and Close button triggers onClose', () => {
+      const onClose = jest.fn();
+      const onResetStats = jest.fn();
+      const stats = {
+        gamesPlayed: 10,
+        gamesWon: 5,
+        highScore: 500,
+        bestTimeSeconds: 120,
+      };
+
+      const element: any = StatsModal({ visible: true, stats, onClose, onResetStats });
+      const resetBtn = findByAccessibilityLabel(element, 'Reset statistics');
+      expect(resetBtn).not.toBeNull();
+      expect(findTextContaining(resetBtn, 'Reset Stats')).not.toBeNull();
+
+      const closeBtn = findByAccessibilityLabel(element, 'Close statistics');
+      expect(closeBtn).not.toBeNull();
+      expect(findTextContaining(closeBtn, 'Close')).not.toBeNull();
+
+      closeBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    test('clicking Reset Stats opens confirmation modal', () => {
+      const setConfirmState = jest.fn();
+      (jest.spyOn(React, 'useState') as any).mockImplementationOnce(() => [false, setConfirmState]);
+
+      const element: any = StatsModal({
+        visible: true,
+        stats: { gamesPlayed: 3, gamesWon: 1, highScore: 250, bestTimeSeconds: 90 },
+        onClose: jest.fn(),
+        onResetStats: jest.fn(),
+      });
+
+      const resetBtn = findByAccessibilityLabel(element, 'Reset statistics');
+      resetBtn.props.onPress();
+      expect(setConfirmState).toHaveBeenCalledWith(true);
+    });
+
+    test('renders confirmation modal when confirm state is active', () => {
+      (jest.spyOn(React, 'useState') as any).mockImplementationOnce(() => [true, jest.fn()]);
+
+      const element: any = StatsModal({
+        visible: true,
+        stats: { gamesPlayed: 3, gamesWon: 1, highScore: 250, bestTimeSeconds: 90 },
+        onClose: jest.fn(),
+        onResetStats: jest.fn(),
+      });
+
+      const backdropView = element.props.children;
+      const children: any[] = React.Children.toArray(backdropView.props.children);
+      const confirmModal = children[2];
+      expect(confirmModal).toBeDefined();
+      expect(confirmModal.props.visible).toBe(true);
+      expect(confirmModal.props.title).toBe('Reset Statistics?');
+      expect(confirmModal.props.message).toBe(
+        'Are you sure you want to reset all statistics? This action cannot be undone.'
+      );
+      expect(confirmModal.props.confirmLabel).toBe('Reset');
+      expect(confirmModal.props.isDestructive).toBe(true);
+    });
+
+    test('canceling confirmation modal dismisses confirmation without resetting', () => {
+      const setConfirmState = jest.fn();
+      (jest.spyOn(React, 'useState') as any).mockImplementationOnce(() => [true, setConfirmState]);
+      const onResetStats = jest.fn();
+
+      const element: any = StatsModal({
+        visible: true,
+        stats: { gamesPlayed: 3, gamesWon: 1, highScore: 250, bestTimeSeconds: 90 },
+        onClose: jest.fn(),
+        onResetStats,
+      });
+
+      const backdropView = element.props.children;
+      const children: any[] = React.Children.toArray(backdropView.props.children);
+      const confirmModal = children[2];
+      expect(confirmModal).toBeDefined();
+
+      confirmModal.props.onCancel();
+      expect(setConfirmState).toHaveBeenCalledWith(false);
+      expect(onResetStats).not.toHaveBeenCalled();
+    });
+
+    test('confirming confirmation modal triggers onResetStats and closes confirmation', () => {
+      const setConfirmState = jest.fn();
+      (jest.spyOn(React, 'useState') as any).mockImplementationOnce(() => [true, setConfirmState]);
+      const onResetStats = jest.fn();
+
+      const element: any = StatsModal({
+        visible: true,
+        stats: { gamesPlayed: 3, gamesWon: 1, highScore: 250, bestTimeSeconds: 90 },
+        onClose: jest.fn(),
+        onResetStats,
+      });
+
+      const backdropView = element.props.children;
+      const children: any[] = React.Children.toArray(backdropView.props.children);
+      const confirmModal = children[2];
+      expect(confirmModal).toBeDefined();
+
+      confirmModal.props.onConfirm();
+      expect(setConfirmState).toHaveBeenCalledWith(false);
+      expect(onResetStats).toHaveBeenCalledTimes(1);
+    });
+
+    test('supports onReset alias when onResetStats is not provided', () => {
+      const setConfirmState = jest.fn();
+      (jest.spyOn(React, 'useState') as any).mockImplementationOnce(() => [true, setConfirmState]);
+      const onReset = jest.fn();
+
+      const element: any = StatsModal({
+        visible: true,
+        stats: { gamesPlayed: 3, gamesWon: 1, highScore: 250, bestTimeSeconds: 90 },
+        onClose: jest.fn(),
+        onReset,
+      });
+
+      const backdropView = element.props.children;
+      const children: any[] = React.Children.toArray(backdropView.props.children);
+      const confirmModal = children[2];
+
+      confirmModal.props.onConfirm();
+      expect(setConfirmState).toHaveBeenCalledWith(false);
+      expect(onReset).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('SettingsModal', () => {
