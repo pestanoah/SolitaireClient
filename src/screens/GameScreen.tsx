@@ -61,6 +61,7 @@ import {
   loadSettings,
   loadStats,
   recordGameEnd,
+  resetStats,
   saveGameState,
   saveSettings,
 } from '../storage/storage';
@@ -1634,6 +1635,13 @@ export const GameScreen: React.FC = () => {
     [settings]
   );
 
+  // Reset player statistics
+  const handleResetStats = useCallback(async () => {
+    const freshStats = await resetStats();
+    setStats(freshStats);
+    showHint('Statistics reset.');
+  }, [showHint]);
+
   // Undo move with animation
   const handleUndo = useCallback(() => {
     const current = latestGameStateRef.current;
@@ -2164,6 +2172,7 @@ export const GameScreen: React.FC = () => {
         visible={statsVisible}
         stats={stats}
         onClose={() => setStatsVisible(false)}
+        onResetStats={handleResetStats}
       />
 
       <SettingsModal

@@ -1,15 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { PlayerStats } from '../engine/types';
 import { colors, modalStyles, spacing, borderRadius, fontSize, fontWeight } from '../theme';
+import { ConfirmModal } from './ConfirmModal';
 
-interface StatsModalProps {
+export interface StatsModalProps {
   visible: boolean;
   stats: PlayerStats;
   onClose: () => void;
+  onResetStats?: () => void;
+  onReset?: () => void;
 }
 
-export const StatsModal: React.FC<StatsModalProps> = ({ visible, stats, onClose }) => {
+export const StatsModal: React.FC<StatsModalProps> = ({
+  visible,
+  stats,
+  onClose,
+  onResetStats,
+  onReset,
+}) => {
+  const [showConfirm, setShowConfirm] = useState(false);
+
   const winRate =
     stats.gamesPlayed > 0
       ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100)
@@ -22,12 +33,26 @@ export const StatsModal: React.FC<StatsModalProps> = ({ visible, stats, onClose 
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const handleClose = () => {
+    setShowConfirm(false);
+    onClose();
+  };
+
+  const handleConfirmReset = () => {
+    setShowConfirm(false);
+    (onResetStats || onReset)?.();
+  };
+
+  const handleCancelReset = () => {
+    setShowConfirm(false);
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={modalStyles.backdropMedium}>
         <Pressable
           style={modalStyles.backdropPressable}
-          onPress={onClose}
+          onPress={handleClose}
           accessibilityLabel="Close statistics modal"
           accessibilityRole="button"
         />
@@ -61,10 +86,41 @@ export const StatsModal: React.FC<StatsModalProps> = ({ visible, stats, onClose 
             </View>
           </View>
 
-          <TouchableOpacity activeOpacity={0.8} onPress={onClose} style={styles.closeBtn}>
-            <Text style={styles.closeText}>Close</Text>
-          </TouchableOpacity>
+          <View style={modalStyles.buttonRow}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setShowConfirm(true)}
+              style={[modalStyles.actionBtn, styles.resetBtn]}
+              accessibilityLabel="Reset statistics"
+              accessibilityRole="button"
+            >
+              <Text style={styles.resetText}>Reset Stats</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={handleClose}
+              style={[modalStyles.actionBtn, styles.closeBtn]}
+              accessibilityLabel="Close statistics"
+              accessibilityRole="button"
+            >
+              <Text style={styles.closeText}>Close</Text>
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {showConfirm && (
+          <ConfirmModal
+            visible={showConfirm}
+            title="Reset Statistics?"
+            message="Are you sure you want to reset all statistics? This action cannot be undone."
+            confirmLabel="Reset"
+            cancelLabel="Cancel"
+            isDestructive={true}
+            onConfirm={handleConfirmReset}
+            onCancel={handleCancelReset}
+          />
+        )}
       </View>
     </Modal>
   );
@@ -109,11 +165,20 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontWeight: fontWeight.semibold,
   },
+  resetBtn: {
+    backgroundColor: colors.slate[700],
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+  },
+  resetText: {
+    color: colors.action.destructiveText,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
   closeBtn: {
     backgroundColor: colors.action.primary,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: 32,
     borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
   },
   closeText: {
     color: colors.white,

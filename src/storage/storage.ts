@@ -7,14 +7,14 @@ const STORAGE_KEYS = {
   SETTINGS: '@solitaire:settings',
 };
 
-const DEFAULT_STATS: PlayerStats = {
+export const DEFAULT_STATS: PlayerStats = {
   gamesPlayed: 0,
   gamesWon: 0,
   highScore: 0,
   bestTimeSeconds: null,
 };
 
-const DEFAULT_SETTINGS: UserSettings = {
+export const DEFAULT_SETTINGS: UserSettings = {
   drawCount: 1,
   autoMoveOnTap: true,
   soundEnabled: true,
@@ -69,6 +69,16 @@ export async function saveStats(stats: PlayerStats): Promise<void> {
   } catch (e) {
     console.error('Failed to save stats', e);
   }
+}
+
+export async function resetStats(): Promise<PlayerStats> {
+  const fresh = { ...DEFAULT_STATS };
+  await saveStats(fresh);
+  return fresh;
+}
+
+export async function clearStats(): Promise<void> {
+  await resetStats();
 }
 
 export async function recordGameEnd(

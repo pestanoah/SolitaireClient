@@ -1,9 +1,11 @@
 import {
   clearGameState,
+  clearStats,
   loadGameState,
   loadSettings,
   loadStats,
   recordGameEnd,
+  resetStats,
   saveGameState,
   saveSettings,
 } from '../storage';
@@ -59,6 +61,33 @@ describe('Local Storage Persistence', () => {
     expect(afterLoss.gamesWon).toBe(1);
     expect(afterLoss.highScore).toBe(350); // Unchanged
     expect(afterLoss.bestTimeSeconds).toBe(120); // Unchanged
+  });
+
+  test('resets stats back to default values', async () => {
+    await recordGameEnd(true, 400, 95);
+    const beforeReset = await loadStats();
+    expect(beforeReset.gamesPlayed).toBe(1);
+    expect(beforeReset.gamesWon).toBe(1);
+    expect(beforeReset.highScore).toBe(400);
+    expect(beforeReset.bestTimeSeconds).toBe(95);
+
+    const resetResult = await resetStats();
+    expect(resetResult.gamesPlayed).toBe(0);
+    expect(resetResult.gamesWon).toBe(0);
+    expect(resetResult.highScore).toBe(0);
+    expect(resetResult.bestTimeSeconds).toBeNull();
+
+    const loadedAfter = await loadStats();
+    expect(loadedAfter.gamesPlayed).toBe(0);
+    expect(loadedAfter.gamesWon).toBe(0);
+    expect(loadedAfter.highScore).toBe(0);
+    expect(loadedAfter.bestTimeSeconds).toBeNull();
+
+    // Verify clearStats works as well
+    await recordGameEnd(true, 200, 50);
+    await clearStats();
+    const loadedAfterClear = await loadStats();
+    expect(loadedAfterClear.gamesPlayed).toBe(0);
   });
 
   test('loads default settings when none are stored', async () => {
