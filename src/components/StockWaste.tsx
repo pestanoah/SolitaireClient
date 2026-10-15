@@ -25,6 +25,7 @@ interface StockWasteProps {
   onDragEnd?: (dx: number, dy: number, isDrag: boolean) => void;
   onStockLayout?: (x: number, y: number) => void;
   onWasteLayout?: (x: number, y: number) => void;
+  hideStockBadge?: boolean;
 }
 
 export const StockWaste: React.FC<StockWasteProps> = React.memo(({
@@ -39,6 +40,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   onWasteCardPress,
   selectedCardId,
   hiddenCardIds = [],
+  hideStockBadge = false,
   isStockHintSource = false,
   isStockHintTarget = false,
   hintWasteCardId = null,
@@ -80,9 +82,11 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
               height={cardHeight}
               isHintSource={isStockHintSource}
             />
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{stock.length}</Text>
-            </View>
+            {!hideStockBadge && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{stock.length}</Text>
+              </View>
+            )}
           </View>
         ) : (
           <View

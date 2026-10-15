@@ -23,9 +23,21 @@ import { StockWaste } from '../components/StockWaste';
 import { TableauColumn, calculateTableauOffsets } from '../components/TableauColumn';
 import { WinModal } from '../components/WinModal';
 import { SeedModal } from '../components/SeedModal';
+import {
+  DealingOverlay,
+  DEFAULT_DEAL_STAGGER_MS,
+  DEFAULT_DEAL_DURATION_MS,
+} from '../components/DealingOverlay';
 
-export { calculateTableauOffsets };
-import { dealKlondike, getDailyChallengeSeed, isDateSeed, isSeedWinnable } from '../engine/deck';
+export { calculateTableauOffsets, DEFAULT_DEAL_STAGGER_MS, DEFAULT_DEAL_DURATION_MS };
+import {
+  dealKlondike,
+  DealStep,
+  generateKlondikeDealSteps,
+  getDailyChallengeSeed,
+  isDateSeed,
+  isSeedWinnable,
+} from '../engine/deck';
 import { findAvailableHints, Hint } from '../engine/hints';
 import {
   autoCompleteStep,
@@ -275,6 +287,8 @@ export const GameScreen: React.FC = () => {
   // Animation State
   const animProgress = useRef(new Animated.Value(0)).current;
   const [animatingCard, setAnimatingCard] = useState<AnimatingCardData | null>(null);
+  const [dealingState, setDealingState] = useState<{ game: GameState; steps: DealStep[] } | null>(null);
+  const isDealing = dealingState !== null;
 
   // Drag State
   const [dragState, setDraggedCard] = useState<DragState | null>(null);
@@ -679,47 +693,30 @@ export const GameScreen: React.FC = () => {
     }
   }, [getPileBasePosition]);
 
-  // Animate the initial card(s) being drawn to waste at the start of a deal
+  // Animate dealing all cards from the stock deck to start a new game
   const animateInitialDeal = useCallback(
     (game: GameState) => {
-      if (game.waste.length === 0) {
-        playDealSound();
+      clearActiveHint();
+      setSelectedCards(null);
+      setAnimatingCard(null);
+
+      const steps = generateKlondikeDealSteps(game);
+      if (steps.length === 0) {
         return;
       }
 
-      const drawnCards = game.waste;
-      const drawnIds = drawnCards.map((c) => c.id);
-
-      const startPos = getPileBasePosition({ type: 'stock' });
-      const endPos = getPileBasePosition({ type: 'waste' }, game.waste.length);
-
       isAnimatingRef.current = true;
-      playDealSound();
-      setAnimatingCard({
-        cards: drawnCards,
-        startX: startPos.x,
-        startY: startPos.y,
-        endX: endPos.x,
-        endY: endPos.y,
-        hiddenCardIds: drawnIds,
-        direction: 'horizontal',
-      });
-
-      animProgress.setValue(0);
-      Animated.timing(animProgress, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: Platform.OS !== 'web',
-      }).start(() => {
-        setAnimatingCard(null);
-        isAnimatingRef.current = false;
-      });
+      setDealingState({ game, steps });
     },
-    [getPileBasePosition, animProgress]
+    [clearActiveHint]
   );
   const animateInitialDealRef = useRef(animateInitialDeal);
   animateInitialDealRef.current = animateInitialDeal;
+
+  const handleDealComplete = useCallback(() => {
+    setDealingState(null);
+    isAnimatingRef.current = false;
+  }, []);
 
   // Animate and execute move
   const executeMoveWithAnimation = useCallback(
@@ -1399,6 +1396,7 @@ export const GameScreen: React.FC = () => {
       clearActiveHint();
       setSelectedCards(null);
       setAnimatingCard(null);
+      setDealingState(null);
       isAnimatingRef.current = false;
       setLossReason('no_moves');
       setGameOverDismissed(false);
@@ -1420,6 +1418,7 @@ export const GameScreen: React.FC = () => {
     clearActiveHint();
     setSelectedCards(null);
     setAnimatingCard(null);
+    setDealingState(null);
     isAnimatingRef.current = false;
     setLossReason('no_moves');
     setGameOverDismissed(false);
@@ -1462,6 +1461,7 @@ export const GameScreen: React.FC = () => {
         clearActiveHint();
         setSelectedCards(null);
         setAnimatingCard(null);
+        setDealingState(null);
         isAnimatingRef.current = false;
         setLossReason('no_moves');
         setGameOverDismissed(false);
@@ -1780,7 +1780,18 @@ export const GameScreen: React.FC = () => {
     });
   }, [clearActiveHint, getPileBasePosition, getPileCardPosition]);
 
-  const hiddenIds = animatingCard ? animatingCard.hiddenCardIds : dragState ? dragState.cardIds : EMPTY_CARD_IDS;
+  const dealingHiddenIds = useMemo(() => {
+    if (!dealingState) return EMPTY_CARD_IDS;
+    return dealingState.steps.map((s) => s.card.id);
+  }, [dealingState]);
+
+  const hiddenIds = dealingState
+    ? dealingHiddenIds
+    : animatingCard
+    ? animatingCard.hiddenCardIds
+    : dragState
+    ? dragState.cardIds
+    : EMPTY_CARD_IDS;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1789,9 +1800,9 @@ export const GameScreen: React.FC = () => {
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
         drawCount={gameState.drawCount}
-        canUndo={gameState.history.length > 0}
-        canHint={gameState.status === 'playing'}
-        canGiveUp={gameState.status === 'playing' && gameState.moves > 0}
+        canUndo={gameState.history.length > 0 && !isDealing}
+        canHint={gameState.status === 'playing' && !isDealing}
+        canGiveUp={gameState.status === 'playing' && gameState.moves > 0 && !isDealing}
         soundEnabled={settings.soundEnabled !== false}
         isLandscape={isLandscape}
         seed={gameState.seed}
@@ -1814,7 +1825,7 @@ export const GameScreen: React.FC = () => {
 
       <ScrollView
         style={styles.scrollView}
-        scrollEnabled={!dragState && !isLandscape}
+        scrollEnabled={!dragState && !isDealing && !isLandscape}
         contentContainerStyle={[
           styles.boardContent,
           isLandscape && styles.boardContentLandscape,
@@ -1863,6 +1874,7 @@ export const GameScreen: React.FC = () => {
                   selectedCards?.from.type === 'waste' ? selectedCards.cardIds[0] : null
                 }
                 hiddenCardIds={hiddenIds}
+                hideStockBadge={isDealing}
                 isStockHintSource={activeHint?.type === 'draw' && activeHint.from.type === 'stock'}
                 isStockHintTarget={activeHint?.type === 'recycle' && activeHint.to?.type === 'stock'}
                 hintWasteCardId={
@@ -2129,6 +2141,20 @@ export const GameScreen: React.FC = () => {
                 </View>
               ))}
             </Animated.View>
+          )}
+
+          {/* Initial Game Dealing Animation Overlay */}
+          {dealingState && (
+            <DealingOverlay
+              steps={dealingState.steps}
+              cardWidth={cardWidth}
+              cardHeight={cardHeight}
+              getPileBasePosition={getPileBasePosition}
+              getPileCardPosition={getPileCardPosition}
+              gameState={dealingState.game}
+              onComplete={handleDealComplete}
+              soundEnabled={settings.soundEnabled !== false}
+            />
           )}
         </View>
       </ScrollView>

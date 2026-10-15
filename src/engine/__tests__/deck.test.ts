@@ -3,6 +3,7 @@ import {
   createStandardDeck,
   dealKlondike,
   dealKlondikeFromDeck,
+  generateKlondikeDealSteps,
   generateRandomSeed,
   getDailyChallengeSeed,
   hashStringToSeed,
@@ -194,4 +195,86 @@ describe('Deck and Seed Engine', () => {
       expect(isDateSeed(undefined)).toBe(false);
     });
   });
+
+  describe('generateKlondikeDealSteps (Initial Game Deal)', () => {
+    test('generates exactly 29 deal steps in Draw 1 mode (28 tableau + 1 waste)', () => {
+      const game = dealKlondike(1, 'deal-test-seed');
+      const steps = generateKlondikeDealSteps(game);
+
+      expect(steps.length).toBe(29);
+
+      // Verify all 7 rounds of tableau dealing
+      const roundCounts = [0, 0, 0, 0, 0, 0, 0, 0];
+      for (const step of steps) {
+        roundCounts[step.round]++;
+      }
+
+      expect(roundCounts[0]).toBe(7); // cols 0..6
+      expect(roundCounts[1]).toBe(6); // cols 1..6
+      expect(roundCounts[2]).toBe(5); // cols 2..6
+      expect(roundCounts[3]).toBe(4); // cols 3..6
+      expect(roundCounts[4]).toBe(3); // cols 4..6
+      expect(roundCounts[5]).toBe(2); // cols 5..6
+      expect(roundCounts[6]).toBe(1); // col 6
+      expect(roundCounts[7]).toBe(1); // waste
+
+      // Round 0: Col 0 face up, Cols 1..6 face down
+      const round0 = steps.filter((s) => s.round === 0);
+      expect(round0[0].faceUp).toBe(true);
+      expect(round0[0].targetPile).toEqual({ type: 'tableau', index: 0 });
+      for (let i = 1; i < 7; i++) {
+        expect(round0[i].faceUp).toBe(false);
+        expect(round0[i].targetPile).toEqual({ type: 'tableau', index: i });
+      }
+
+      // Final step is the initial auto-drawn waste card
+      const wasteStep = steps[steps.length - 1];
+      expect(wasteStep.targetPile).toEqual({ type: 'waste', index: 0 });
+      expect(wasteStep.targetIndexInPile).toBe(0);
+      expect(wasteStep.faceUp).toBe(true);
+      expect(wasteStep.card.id).toBe(game.waste[0].id);
+    });
+
+    test('generates exactly 31 deal steps in Draw 3 mode (28 tableau + 3 waste)', () => {
+      const game = dealKlondike(3, 'deal-test-seed-3');
+      const steps = generateKlondikeDealSteps(game);
+
+      expect(steps.length).toBe(31);
+
+      // 28 tableau steps
+      const tableauSteps = steps.filter((s) => s.targetPile.type === 'tableau');
+      expect(tableauSteps.length).toBe(28);
+
+      // 3 waste steps
+      const wasteSteps = steps.filter((s) => s.targetPile.type === 'waste');
+      expect(wasteSteps.length).toBe(3);
+      for (let i = 0; i < 3; i++) {
+        expect(wasteSteps[i].targetIndexInPile).toBe(i);
+        expect(wasteSteps[i].faceUp).toBe(true);
+        expect(wasteSteps[i].card.id).toBe(game.waste[i].id);
+      }
+    });
+
+    test('all tableau cards from GameState are represented with matching faceUp status', () => {
+      const game = dealKlondike(1, 'card-matching-test');
+      const steps = generateKlondikeDealSteps(game);
+
+      for (let col = 0; col < 7; col++) {
+        for (let row = 0; row <= col; row++) {
+          const card = game.tableau[col][row];
+          const matchedStep = steps.find(
+            (s) =>
+              s.targetPile.type === 'tableau' &&
+              s.targetPile.index === col &&
+              s.targetIndexInPile === row
+          );
+
+          expect(matchedStep).toBeDefined();
+          expect(matchedStep!.card.id).toBe(card.id);
+          expect(matchedStep!.faceUp).toBe(card.faceUp);
+        }
+      }
+    });
+  });
 });
+
