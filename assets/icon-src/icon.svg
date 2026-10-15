@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Source artwork for all app icons (native assets/*.png and PWA public/icons/*.png).
+    Regenerate PNGs with: npm run generate:icons
+    All card artwork stays inside the central 80% safe zone (r = 204.8) so the
+    full-bleed variant can be used as a maskable icon. The script relies on the
+    single-line `id="bg"` rect and the `id="cards"` ... `/cards` markers below.
+  -->
+  <defs>
+    <radialGradient id="felt" cx="50%" cy="40%" r="75%">
+      <stop offset="0%" stop-color="#047857"/>
+      <stop offset="100%" stop-color="#064e3b"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <path id="spade" d="M0,-50 C15,-25 50,-10 50,15 C50,35 30,45 12,35 C14,45 18,52 25,55 L-25,55 C-18,52 -14,45 -12,35 C-30,45 -50,35 -50,15 C-50,-10 -15,-25 0,-50 Z"/>
+  </defs>
+
+  <rect id="bg" width="512" height="512" rx="0" fill="url(#felt)"/>
+
+  <g id="cards">
+    <!-- Face-down card -->
+    <g transform="translate(222 264) rotate(-14)" filter="url(#shadow)">
+      <rect x="-84" y="-118" width="168" height="236" rx="16" fill="#1e3a8a" stroke="#e2e8f0" stroke-width="6"/>
+      <rect x="-68" y="-102" width="136" height="204" rx="10" fill="#172554" stroke="#1e40af" stroke-width="4"/>
+      <path d="M0,-44 L32,0 L0,44 L-32,0 Z" fill="none" stroke="#93c5fd" stroke-width="6" stroke-linejoin="round"/>
+      <path d="M0,-20 L14,0 L0,20 L-14,0 Z" fill="#93c5fd"/>
+    </g>
+
+    <!-- Face-up Ace of Spades -->
+    <g transform="translate(292 248) rotate(10)" filter="url(#shadow)">
+      <rect x="-84" y="-118" width="168" height="236" rx="16" fill="#ffffff" stroke="#94a3b8" stroke-width="3"/>
+      <text x="-62" y="-70" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#0f172a" text-anchor="middle">A</text>
+      <use href="#spade" transform="translate(-62 -46) scale(0.22)" fill="#0f172a"/>
+      <use href="#spade" transform="translate(4 14) scale(0.95)" fill="#0f172a"/>
+    </g>
+  </g><!-- /cards -->
+</svg>

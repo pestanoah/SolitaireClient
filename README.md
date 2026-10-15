@@ -97,6 +97,7 @@ The game follows standard Klondike Solitaire scoring conventions:
 ```text
 solitaire/
 ├── assets/                     # App icons, splash screens, and audio files
+│   ├── icon-src/               # SVG source artwork for all icons (npm run generate:icons)
 │   ├── sounds/                 # Card deal, move, and reset sound effects (.wav)
 │   ├── icon.png
 │   └── favicon.png
@@ -195,7 +196,8 @@ npm run android
 | `npm run ios` | Starts the development server and launches the iOS Simulator. |
 | `npm run android` | Starts the development server and launches the Android Emulator. |
 | `npm test` | Runs the full Jest test suite across engine, hints, sound, and storage. |
-| `npm run build:web` | Exports an optimized single-page web bundle to the `dist/` directory. |
+| `npm run build:web` | Exports an optimized single-page web bundle to `dist/` and generates the PWA service worker (`dist/sw.js`) with Workbox. |
+| `npm run generate:icons` | Regenerates all native (`assets/*.png`) and PWA (`public/icons/*.png`) icons from `assets/icon-src/*.svg` (macOS; needs Google Chrome + `sips`). |
 | `npm run deploy` | Builds the web application and publishes it to the `gh-pages` branch. |
 
 ---
@@ -220,7 +222,18 @@ The web client is hosted on **GitHub Pages**. To deploy a new production build:
 npm run deploy
 ```
 
-This runs `build:web` (`expo export -p web` with SPA 404 routing) and pushes the generated `dist/` output directly to the `gh-pages` branch.
+This runs `build:web` (`expo export -p web` with SPA 404 routing + Workbox service worker) and pushes the generated `dist/` output directly to the `gh-pages` branch.
+
+### Progressive Web App
+
+The web build is installable as a PWA (Chrome/Edge "Install app", Android "Add to Home screen", iOS Safari Share → "Add to Home Screen") and playable offline.
+
+- `public/index.html` — custom HTML template (manifest link, theme color, Apple standalone tags, `viewport-fit=cover`, service worker registration).
+- `public/manifest.json` — web app manifest scoped to `/SolitaireClient/`.
+- `public/icons/` — generated icons (`any`, `maskable`, `apple-touch-icon`); source artwork in `assets/icon-src/icon.svg` (shared with the native app icons).
+- `workbox-config.js` — precaches the exported app shell. New builds activate immediately (`skipWaiting`) and are picked up on the next launch.
+
+> If the `experiments.baseUrl` in `app.json` changes, update the hardcoded `/SolitaireClient/` paths in `public/index.html` and `public/manifest.json`.
 
 ---
 

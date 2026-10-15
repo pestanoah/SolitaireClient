@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Single-color silhouette for Android 13+ themed icons (adaptiveIcon.monochromeImage).
+    The launcher only uses the alpha channel, so detail is expressed with cut-outs.
+    Same card geometry as icon.svg. Regenerate PNGs with: npm run generate:icons
+  -->
+  <defs>
+    <path id="spade" d="M0,-50 C15,-25 50,-10 50,15 C50,35 30,45 12,35 C14,45 18,52 25,55 L-25,55 C-18,52 -14,45 -12,35 C-30,45 -50,35 -50,15 C-50,-10 -15,-25 0,-50 Z"/>
+
+    <!-- Back card minus a gap around the front card, minus its inner panel outline. -->
+    <mask id="backMask" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/>
+      <g transform="translate(222 264) rotate(-14)">
+        <rect x="-62" y="-96" width="124" height="192" rx="8" fill="none" stroke="#000" stroke-width="8"/>
+        <path d="M0,-40 L28,0 L0,40 L-28,0 Z" fill="#000"/>
+      </g>
+      <g transform="translate(292 248) rotate(10)">
+        <rect x="-84" y="-118" width="168" height="236" rx="16" fill="#000" stroke="#000" stroke-width="28"/>
+      </g>
+    </mask>
+
+    <!-- Front card minus the rank and suit pips. -->
+    <mask id="frontMask" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/>
+      <g transform="translate(292 248) rotate(10)">
+        <text x="-62" y="-70" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#000" text-anchor="middle">A</text>
+        <use href="#spade" transform="translate(-62 -46) scale(0.22)" fill="#000"/>
+        <use href="#spade" transform="translate(4 14) scale(0.95)" fill="#000"/>
+      </g>
+    </mask>
+  </defs>
+
+  <g id="cards">
+    <g mask="url(#backMask)">
+      <rect x="-84" y="-118" width="168" height="236" rx="16" fill="#fff" transform="translate(222 264) rotate(-14)"/>
+    </g>
+    <g mask="url(#frontMask)">
+      <rect x="-84" y="-118" width="168" height="236" rx="16" fill="#fff" transform="translate(292 248) rotate(10)"/>
+    </g>
+  </g><!-- /cards -->
+</svg>
