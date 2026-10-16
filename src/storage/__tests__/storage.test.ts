@@ -32,8 +32,9 @@ describe('Local Storage Persistence', () => {
     }
   });
 
-  test('saves and loads active game state', async () => {
+  test('saves and loads active game state with moves', async () => {
     const game = dealKlondike(1, 999);
+    game.moves = 1;
     await saveGameState(game);
 
     const loaded = await loadGameState();
@@ -46,8 +47,15 @@ describe('Local Storage Persistence', () => {
     expect(afterClear).toBeNull();
   });
 
-  test('loadGameState ignores saved game state if status is not playing (e.g. idle or won)', async () => {
+  test('loadGameState ignores saved game state if status is not playing or moves is 0', async () => {
     const game = dealKlondike(1, 999);
+    game.moves = 0; // Unplayed deal
+    await saveGameState(game);
+
+    const loadedZeroMoves = await loadGameState();
+    expect(loadedZeroMoves).toBeNull();
+
+    game.moves = 2;
     game.status = 'idle';
     await saveGameState(game);
 

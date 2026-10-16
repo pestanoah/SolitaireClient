@@ -476,9 +476,8 @@ export const GameScreen: React.FC = () => {
       if (urlSeedData?.seed) {
         const count = urlSeedData.drawCount ?? loadedSettings.drawCount;
         const seededGame = dealKlondike(count, urlSeedData.seed);
-        lastSavedGameRef.current = seededGame;
+        lastSavedGameRef.current = null;
         setGameState(seededGame);
-        await saveGameState(seededGame);
         cleanUrlParams();
         setTimeout(() => {
           animateInitialDealRef.current?.(seededGame);
@@ -522,6 +521,14 @@ export const GameScreen: React.FC = () => {
       return;
     }
 
+    // Do not save games where player has not made any moves yet (moves === 0).
+    // If an unplayed deal is active, clear storage so reloading returns to the empty board.
+    if (gameState.moves === 0) {
+      clearGameState();
+      lastSavedGameRef.current = null;
+      return;
+    }
+
     // Skip if this game action has already been persisted (e.g. initial load or timer ticks)
     if (
       lastSavedGameRef.current?.id === gameState.id &&
@@ -532,14 +539,14 @@ export const GameScreen: React.FC = () => {
 
     lastSavedGameRef.current = gameState;
     saveGameState(gameState);
-  }, [gameState.id, gameState.history, gameState.status]);
+  }, [gameState.id, gameState.history, gameState.status, gameState.moves]);
 
   // Flush latest timer & score to storage on tab close, backgrounding, or unmount
   useEffect(() => {
     const handleFlush = () => {
       if (!isHydratedRef.current) return;
       const current = latestGameStateRef.current;
-      if (current.status === 'playing') {
+      if (current.status === 'playing' && current.moves > 0) {
         saveGameState(current);
       }
     };
@@ -565,13 +572,13 @@ export const GameScreen: React.FC = () => {
     };
   }, []);
 
-  // Game timer loop
+  // Game timer loop - only runs while actively playing and player has made at least one move
   useEffect(() => {
-    if (gameState.status !== 'playing') return;
+    if (gameState.status !== 'playing' || gameState.moves === 0) return;
 
     const timer = setInterval(() => {
       setGameState((prev) => {
-        if (prev.status !== 'playing') return prev;
+        if (prev.status !== 'playing' || prev.moves === 0) return prev;
         const nextSeconds = prev.elapsedSeconds + 1;
         const penalty = nextSeconds % 10 === 0 && prev.score > 0 ? 2 : 0;
         return {
@@ -583,7 +590,7 @@ export const GameScreen: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameState.status]);
+  }, [gameState.status, gameState.moves > 0]);
 
   // Reset modal dismissal state when a game is in progress
   useEffect(() => {

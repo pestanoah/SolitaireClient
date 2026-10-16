@@ -342,5 +342,11 @@ describe('Empty Board Initial Load', () => {
     expect(state.foundations).toHaveLength(4);
     expect(state.tableau).toHaveLength(7);
   });
+
+  test('unplayed deal starts with 0 moves and 0 elapsed seconds before user interaction', () => {
+    const deal = dealKlondike(1);
+    expect(deal.moves).toBe(0);
+    expect(deal.elapsedSeconds).toBe(0);
+  });
 });
 
