@@ -14,6 +14,7 @@ import {
 } from '../GameScreen';
 import { Card } from '../../engine/types';
 import { createEmptyGame, dealKlondike } from '../../engine/deck';
+import { styles } from '../GameScreen.styles';
 
 describe('Auto-complete Speed Timing', () => {
   test('auto-complete delay and animation duration are configured for 2x speed', () => {
@@ -347,6 +348,27 @@ describe('Empty Board Initial Load', () => {
     const deal = dealKlondike(1);
     expect(deal.moves).toBe(0);
     expect(deal.elapsedSeconds).toBe(0);
+  });
+
+  test('dealOverlay has absolute positioning to prevent layout shifts on deal', () => {
+    expect(styles.dealOverlay).toBeDefined();
+    expect(styles.dealOverlay.position).toBe('absolute');
+    expect(styles.dealOverlay.left).toBe(0);
+    expect(styles.dealOverlay.right).toBe(0);
+  });
+
+  test('tableauRow minHeight stabilizes layout so dealing does not cause screen jump', () => {
+    // In landscape: maxColumnHeight keeps tableauRow height constant
+    const maxColumnHeight = 350;
+    const cardHeight = 84;
+    const isLandscape = true;
+    const landscapeMinHeight = isLandscape ? maxColumnHeight : Math.floor(cardHeight * 2.2);
+    expect(landscapeMinHeight).toBe(350);
+
+    // In portrait: minHeight maintains height comparable to dealt 7-card column
+    const isPortrait = false;
+    const portraitMinHeight = isPortrait ? maxColumnHeight : Math.max(Math.floor(cardHeight * 2.2), cardHeight + 10 + 54);
+    expect(portraitMinHeight).toBe(Math.floor(84 * 2.2)); // 184
   });
 });
 

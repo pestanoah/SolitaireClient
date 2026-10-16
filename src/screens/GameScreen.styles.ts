@@ -94,11 +94,13 @@ export const styles = StyleSheet.create({
     zIndex: 9999,
     ...shadows.floatingDrag,
   },
-  dealContainer: {
+  dealOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xl,
-    width: '100%',
+    zIndex: 10,
   },
   dealButton: {
     flexDirection: 'row',
