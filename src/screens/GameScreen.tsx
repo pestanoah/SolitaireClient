@@ -4,6 +4,7 @@ import {
   AppState,
   Easing,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   useWindowDimensions,
@@ -31,6 +32,7 @@ import {
 
 export { calculateTableauOffsets, DEFAULT_DEAL_STAGGER_MS, DEFAULT_DEAL_DURATION_MS };
 import {
+  createEmptyGame,
   dealKlondike,
   DealStep,
   generateKlondikeDealSteps,
@@ -266,7 +268,7 @@ export const GameScreen: React.FC = () => {
   const [seedModalVisible, setSeedModalVisible] = useState(false);
 
   // Active Game State
-  const [gameState, setGameState] = useState<GameState>(() => dealKlondike(1));
+  const [gameState, setGameState] = useState<GameState>(() => createEmptyGame(1));
   const latestGameStateRef = useRef<GameState>(gameState);
   latestGameStateRef.current = gameState;
   const [selectedCards, setSelectedCards] = useState<{
@@ -474,9 +476,8 @@ export const GameScreen: React.FC = () => {
       if (urlSeedData?.seed) {
         const count = urlSeedData.drawCount ?? loadedSettings.drawCount;
         const seededGame = dealKlondike(count, urlSeedData.seed);
-        lastSavedGameRef.current = seededGame;
+        lastSavedGameRef.current = null;
         setGameState(seededGame);
-        await saveGameState(seededGame);
         cleanUrlParams();
         setTimeout(() => {
           animateInitialDealRef.current?.(seededGame);
@@ -493,17 +494,9 @@ export const GameScreen: React.FC = () => {
           lastSavedGameRef.current = savedGame;
           setGameState(savedGame);
         } else {
-          const newGame = dealKlondike(
-            loadedSettings.drawCount,
-            undefined,
-            loadedSettings.winningDealsOnly !== false
-          );
-          lastSavedGameRef.current = newGame;
-          setGameState(newGame);
-          await saveGameState(newGame);
-          setTimeout(() => {
-            animateInitialDealRef.current?.(newGame);
-          }, 60);
+          // Do not start a game automatically on initial load!
+          // Display an empty board until the user explicitly requests a deal.
+          setGameState(createEmptyGame(loadedSettings.drawCount));
         }
       }
       isHydratedRef.current = true;
@@ -524,6 +517,18 @@ export const GameScreen: React.FC = () => {
       return;
     }
 
+    if (gameState.status === 'idle') {
+      return;
+    }
+
+    // Do not save games where player has not made any moves yet (moves === 0).
+    // If an unplayed deal is active, clear storage so reloading returns to the empty board.
+    if (gameState.moves === 0) {
+      clearGameState();
+      lastSavedGameRef.current = null;
+      return;
+    }
+
     // Skip if this game action has already been persisted (e.g. initial load or timer ticks)
     if (
       lastSavedGameRef.current?.id === gameState.id &&
@@ -534,14 +539,14 @@ export const GameScreen: React.FC = () => {
 
     lastSavedGameRef.current = gameState;
     saveGameState(gameState);
-  }, [gameState.id, gameState.history, gameState.status]);
+  }, [gameState.id, gameState.history, gameState.status, gameState.moves]);
 
   // Flush latest timer & score to storage on tab close, backgrounding, or unmount
   useEffect(() => {
     const handleFlush = () => {
       if (!isHydratedRef.current) return;
       const current = latestGameStateRef.current;
-      if (current.status === 'playing') {
+      if (current.status === 'playing' && current.moves > 0) {
         saveGameState(current);
       }
     };
@@ -567,13 +572,13 @@ export const GameScreen: React.FC = () => {
     };
   }, []);
 
-  // Game timer loop
+  // Game timer loop - only runs while actively playing and player has made at least one move
   useEffect(() => {
-    if (gameState.status !== 'playing') return;
+    if (gameState.status !== 'playing' || gameState.moves === 0) return;
 
     const timer = setInterval(() => {
       setGameState((prev) => {
-        if (prev.status !== 'playing') return prev;
+        if (prev.status !== 'playing' || prev.moves === 0) return prev;
         const nextSeconds = prev.elapsedSeconds + 1;
         const penalty = nextSeconds % 10 === 0 && prev.score > 0 ? 2 : 0;
         return {
@@ -585,7 +590,7 @@ export const GameScreen: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameState.status]);
+  }, [gameState.status, gameState.moves > 0]);
 
   // Reset modal dismissal state when a game is in progress
   useEffect(() => {
@@ -755,6 +760,31 @@ export const GameScreen: React.FC = () => {
       setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
     }
   }, []);
+
+  // Internal helper to deal a new game and reset animation/selection states
+  const startNewGame = useCallback(
+    (count?: 1 | 3) => {
+      clearActiveHint();
+      setSelectedCards(null);
+      setAnimatingCard(null);
+      setDealingState(null);
+      dragStateRef.current = null;
+      setDraggedCard(null);
+      isAutoCompletingRef.current = false;
+      isAnimatingRef.current = false;
+      setLossReason('no_moves');
+      setGameOverDismissed(false);
+      setWinDismissed(false);
+      const newGame = dealKlondike(
+        count ?? settings.drawCount,
+        undefined,
+        settings.winningDealsOnly !== false
+      );
+      setGameState(newGame);
+      animateInitialDeal(newGame);
+    },
+    [settings.drawCount, settings.winningDealsOnly, clearActiveHint, animateInitialDeal]
+  );
 
   // Animate and execute move
   const executeMoveWithAnimation = useCallback(
@@ -1138,6 +1168,11 @@ export const GameScreen: React.FC = () => {
     clearActiveHint();
     setSelectedCards(null);
 
+    if (current.status === 'idle') {
+      startNewGame();
+      return;
+    }
+
     if (current.stock.length === 0) {
       if (current.waste.length === 0) return;
 
@@ -1237,7 +1272,7 @@ export const GameScreen: React.FC = () => {
       setAnimatingCard(null);
       isAnimatingRef.current = false;
     });
-  }, [clearActiveHint, getPileBasePosition]);
+  }, [clearActiveHint, getPileBasePosition, startNewGame]);
 
   // Waste card press
   const handleWasteCardPress = useCallback(
@@ -1440,31 +1475,6 @@ export const GameScreen: React.FC = () => {
     }
   }, [gameState.id, gameState.history, gameState.status, clearActiveHint, executeMoveWithAnimation]);
 
-  // Internal helper to deal a new game and reset animation/selection states
-  const startNewGame = useCallback(
-    (count?: 1 | 3) => {
-      clearActiveHint();
-      setSelectedCards(null);
-      setAnimatingCard(null);
-      setDealingState(null);
-      dragStateRef.current = null;
-      setDraggedCard(null);
-      isAutoCompletingRef.current = false;
-      isAnimatingRef.current = false;
-      setLossReason('no_moves');
-      setGameOverDismissed(false);
-      setWinDismissed(false);
-      const newGame = dealKlondike(
-        count ?? settings.drawCount,
-        undefined,
-        settings.winningDealsOnly !== false
-      );
-      setGameState(newGame);
-      animateInitialDeal(newGame);
-    },
-    [settings.drawCount, settings.winningDealsOnly, clearActiveHint, animateInitialDeal]
-  );
-
   // Replay the exact same starting deal
   const handleReplayDraw = useCallback(() => {
     const current = latestGameStateRef.current;
@@ -1602,6 +1612,13 @@ export const GameScreen: React.FC = () => {
 
       const current = latestGameStateRef.current;
       const nextSettings = { ...settings, drawCount: newCount };
+
+      if (current.status === 'idle') {
+        setSettings(nextSettings);
+        saveSettings(nextSettings);
+        setGameState((prev) => ({ ...prev, drawCount: newCount }));
+        return;
+      }
 
       const proceedWithChange = async () => {
         if (
@@ -1941,6 +1958,7 @@ export const GameScreen: React.FC = () => {
                 }
                 hiddenCardIds={hiddenIds}
                 hideStockBadge={isDealing}
+                isIdle={gameState.status === 'idle'}
                 isStockHintSource={activeHint?.type === 'draw' && activeHint.from.type === 'stock'}
                 isStockHintTarget={activeHint?.type === 'recycle' && activeHint.to?.type === 'stock'}
                 hintWasteCardId={
@@ -2053,6 +2071,28 @@ export const GameScreen: React.FC = () => {
               );
             })}
           </View>
+
+          {/* Deal Cards Action for Empty Board on Initial Load */}
+          {gameState.status === 'idle' && !isDealing && (
+            <View style={styles.dealContainer}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.dealButton,
+                  isLandscape && styles.dealButtonLandscape,
+                  pressed && styles.dealButtonPressed,
+                ]}
+                onPress={() => startNewGame()}
+                testID="deal-button"
+                accessibilityLabel="Deal cards"
+                accessibilityRole="button"
+              >
+                <Text style={styles.dealButtonIcon}>🂠</Text>
+                <Text style={[styles.dealButtonText, isLandscape && styles.dealButtonTextLandscape]}>
+                  Deal Cards
+                </Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* Flying Animated Card Overlay */}
           {animatingCard && (

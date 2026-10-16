@@ -370,6 +370,10 @@ describe('Hints Engine', () => {
     deadState.status = 'lost';
     expect(findHint(deadState)).toBeNull();
 
+    const idleState = createBaseState();
+    idleState.status = 'idle';
+    expect(findHint(idleState)).toBeNull();
+
     const emptyDead = createBaseState();
     // No cards anywhere
     expect(findHint(emptyDead)).toBeNull();

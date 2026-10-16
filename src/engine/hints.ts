@@ -162,8 +162,7 @@ export function findAvailableHints(
   allowAnyCardOnEmpty = false
 ): Hint[] {
   if (
-    state.status === 'won' ||
-    state.status === 'lost' ||
+    state.status !== 'playing' ||
     isGameWon(state.foundations)
   ) {
     return [];

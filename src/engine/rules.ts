@@ -81,7 +81,7 @@ export function areAllTableauCardsUncovered(tableau: Card[][]): boolean {
  * - The game is active (not won or lost) and not deadlocked.
  */
 export function canAutoComplete(state: GameState): boolean {
-  if (state.status === 'won' || state.status === 'lost') {
+  if (state.status !== 'playing') {
     return false;
   }
   if (isGameWon(state.foundations)) {
@@ -467,7 +467,7 @@ export function canMoveUnlockAdvancement(
  * does NOT count as advancing the game.
  */
 export function hasAvailableMoves(state: GameState, allowAnyCardOnEmpty = false): boolean {
-  if (state.status === 'won' || state.status === 'lost') {
+  if (state.status !== 'playing') {
     return false;
   }
   if (isGameWon(state.foundations)) {

@@ -7,7 +7,7 @@ import { dealKlondike, dealKlondikeFromDeck } from './deck';
  * If stock is empty, recycles waste back into stock with penalty.
  */
 export function drawCards(state: GameState): GameState {
-  if (state.status === 'won' || state.status === 'lost') return state;
+  if (state.status !== 'playing') return state;
 
   if (state.stock.length > 0) {
     const count = Math.min(state.drawCount, state.stock.length);
@@ -82,7 +82,7 @@ export function moveCards(
   cardIds: string[],
   allowAnyCardOnEmpty = false
 ): GameState | null {
-  if (state.status === 'won' || state.status === 'lost' || cardIds.length === 0) return null;
+  if (state.status !== 'playing' || cardIds.length === 0) return null;
   if (from.type === to.type && from.index === to.index) return null;
 
   // 1. Locate source cards
@@ -222,7 +222,7 @@ export function findSmartMove(
   cardId: string,
   allowAnyCardOnEmpty = false
 ): { from: PileLocation; to: PileLocation; cardIds: string[] } | null {
-  if (state.status === 'won' || state.status === 'lost') return null;
+  if (state.status !== 'playing') return null;
 
   // Locate card
   let from: PileLocation | null = null;
@@ -496,7 +496,7 @@ export function undo(state: GameState): GameState {
  * 6. Waste -> stock (recycle if not exhausted)
  */
 export function autoCompleteStep(state: GameState): GameState | null {
-  if (state.status === 'won' || state.status === 'lost') return null;
+  if (state.status !== 'playing') return null;
 
   // 1. Try designated foundation for tableau column top cards
   for (let c = 0; c < state.tableau.length; c++) {

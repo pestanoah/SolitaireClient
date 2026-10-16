@@ -1,4 +1,4 @@
-import { createStandardDeck, dealKlondike, dealKlondikeFromDeck, shuffleCards } from '../deck';
+import { createEmptyGame, createStandardDeck, dealKlondike, dealKlondikeFromDeck, shuffleCards } from '../deck';
 import {
   canPlaceOnFoundation,
   canPlaceOnTableau,
@@ -1483,6 +1483,36 @@ describe('Automatic First Card Draw on Start and Waste Reset', () => {
     expect(hasExhaustedStockCycles(state)).toBe(true);
     // Even though buried card w1 matches tableau 8s, it cannot be reached
     expect(hasAvailableMoves(state)).toBe(false);
+  });
+
+  describe('Idle Game State Handling', () => {
+    test('does not allow drawCards, moveCards, findSmartMove, or autoCompleteStep when game is idle', () => {
+      const idleGame = createEmptyGame();
+      expect(idleGame.status).toBe('idle');
+
+      // drawCards returns state unchanged
+      const afterDraw = drawCards(idleGame);
+      expect(afterDraw).toBe(idleGame);
+
+      // moveCards returns null
+      const afterMove = moveCards(
+        idleGame,
+        { type: 'stock', index: 0 },
+        { type: 'waste', index: 0 },
+        ['any_card']
+      );
+      expect(afterMove).toBeNull();
+
+      // findSmartMove returns null
+      expect(findSmartMove(idleGame, 'c_1')).toBeNull();
+
+      // autoCompleteStep returns null
+      expect(autoCompleteStep(idleGame)).toBeNull();
+
+      // rule checks return false
+      expect(hasAvailableMoves(idleGame)).toBe(false);
+      expect(canAutoComplete(idleGame)).toBe(false);
+    });
   });
 });
 

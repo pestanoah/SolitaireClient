@@ -50,7 +50,7 @@ export interface GameState {
   score: number;
   moves: number;
   elapsedSeconds: number;
-  status: 'playing' | 'paused' | 'won' | 'lost';
+  status: 'idle' | 'playing' | 'paused' | 'won' | 'lost';
   history: MoveRecord[];
   createdAt: number;
   initialDeck?: Card[];
