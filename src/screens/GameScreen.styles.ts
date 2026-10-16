@@ -94,4 +94,44 @@ export const styles = StyleSheet.create({
     zIndex: 9999,
     ...shadows.floatingDrag,
   },
+  dealContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    width: '100%',
+  },
+  dealButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.felt.surface,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
+    borderRadius: borderRadius.full,
+    borderWidth: 2,
+    borderColor: colors.felt.accent,
+    gap: spacing.sm,
+    ...shadows.button,
+  },
+  dealButtonLandscape: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.lg,
+  },
+  dealButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  dealButtonIcon: {
+    fontSize: fontSize.title,
+    color: colors.white,
+  },
+  dealButtonText: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.heavy,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  dealButtonTextLandscape: {
+    fontSize: fontSize.md,
+  },
 });

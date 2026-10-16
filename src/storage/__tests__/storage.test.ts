@@ -46,6 +46,21 @@ describe('Local Storage Persistence', () => {
     expect(afterClear).toBeNull();
   });
 
+  test('loadGameState ignores saved game state if status is not playing (e.g. idle or won)', async () => {
+    const game = dealKlondike(1, 999);
+    game.status = 'idle';
+    await saveGameState(game);
+
+    const loadedIdle = await loadGameState();
+    expect(loadedIdle).toBeNull();
+
+    game.status = 'won';
+    await saveGameState(game);
+
+    const loadedWon = await loadGameState();
+    expect(loadedWon).toBeNull();
+  });
+
   test('records game end stats correctly', async () => {
     const initialStats = await loadStats();
     expect(initialStats.gamesPlayed).toBe(0);

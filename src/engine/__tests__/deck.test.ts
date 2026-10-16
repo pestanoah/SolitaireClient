@@ -1,4 +1,5 @@
 import {
+  createEmptyGame,
   createPrng,
   createStandardDeck,
   dealKlondike,
@@ -274,6 +275,35 @@ describe('Deck and Seed Engine', () => {
           expect(matchedStep!.faceUp).toBe(card.faceUp);
         }
       }
+    });
+  });
+
+  describe('createEmptyGame', () => {
+    test('creates an idle state with completely empty board piles', () => {
+      const state = createEmptyGame();
+
+      expect(state.status).toBe('idle');
+      expect(state.drawCount).toBe(1);
+      expect(state.score).toBe(0);
+      expect(state.moves).toBe(0);
+      expect(state.elapsedSeconds).toBe(0);
+      expect(state.stock).toEqual([]);
+      expect(state.waste).toEqual([]);
+      expect(state.foundations).toHaveLength(4);
+      for (const pile of state.foundations) {
+        expect(pile).toEqual([]);
+      }
+      expect(state.tableau).toHaveLength(7);
+      for (const col of state.tableau) {
+        expect(col).toEqual([]);
+      }
+      expect(state.history).toEqual([]);
+    });
+
+    test('respects specified drawCount', () => {
+      const state3 = createEmptyGame(3);
+      expect(state3.drawCount).toBe(3);
+      expect(state3.status).toBe('idle');
     });
   });
 });

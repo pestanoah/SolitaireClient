@@ -35,7 +35,7 @@ export async function loadGameState(): Promise<GameState | null> {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_GAME);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as GameState;
-    if (parsed && parsed.version === 1) {
+    if (parsed && parsed.version === 1 && parsed.status === 'playing') {
       return parsed;
     }
   } catch (e) {

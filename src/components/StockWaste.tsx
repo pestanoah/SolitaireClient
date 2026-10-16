@@ -26,6 +26,7 @@ interface StockWasteProps {
   onStockLayout?: (x: number, y: number) => void;
   onWasteLayout?: (x: number, y: number) => void;
   hideStockBadge?: boolean;
+  isIdle?: boolean;
 }
 
 export const StockWaste: React.FC<StockWasteProps> = React.memo(({
@@ -41,6 +42,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   selectedCardId,
   hiddenCardIds = [],
   hideStockBadge = false,
+  isIdle = false,
   isStockHintSource = false,
   isStockHintTarget = false,
   hintWasteCardId = null,
@@ -96,8 +98,17 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
               isStockHintTarget && styles.emptyStockHintTarget,
             ]}
           >
-            <Text style={styles.recycleIcon}>↺</Text>
-            {hasWaste && <Text style={styles.recycleSubtext}>Reset</Text>}
+            {isIdle ? (
+              <View style={styles.idleStock}>
+                <Text style={styles.idleStockIcon}>🂠</Text>
+                <Text style={styles.idleStockText}>Deal</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.recycleIcon}>↺</Text>
+                {hasWaste && <Text style={styles.recycleSubtext}>Reset</Text>}
+              </>
+            )}
           </View>
         )}
       </TouchableOpacity>
@@ -203,6 +214,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay.slotBg,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  idleStock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idleStockIcon: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 22,
+  },
+  idleStockText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: fontSize.caption,
+    marginTop: spacing.xxs,
+    fontWeight: fontWeight.bold,
   },
   recycleIcon: {
     color: 'rgba(255, 255, 255, 0.7)',

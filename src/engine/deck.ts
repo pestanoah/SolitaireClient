@@ -146,6 +146,31 @@ export function dealKlondikeFromDeck(
 }
 
 /**
+ * Creates an empty Klondike game state before any cards are dealt.
+ * - 4 empty foundation piles.
+ * - 7 empty tableau columns.
+ * - Empty stock and waste piles.
+ * - Status set to 'idle' with 0 moves, 0 score, 0 elapsed seconds.
+ */
+export function createEmptyGame(drawCount: 1 | 3 = 1): GameState {
+  return {
+    version: 1,
+    id: `klondike_empty_${Date.now()}`,
+    drawCount,
+    stock: [],
+    waste: [],
+    foundations: [[], [], [], []],
+    tableau: [[], [], [], [], [], [], []],
+    score: 0,
+    moves: 0,
+    elapsedSeconds: 0,
+    status: 'idle',
+    history: [],
+    createdAt: Date.now(),
+  };
+}
+
+/**
  * Deals a new Classic Klondike game.
  * - 7 tableau columns (total 28 cards), top card of each column is face-up.
  * - Remaining 24 cards: first card(s) drawn into waste face-up according to drawCount, remainder in stock face-down.

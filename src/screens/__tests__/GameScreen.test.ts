@@ -13,7 +13,7 @@ import {
   PilePositionParams,
 } from '../GameScreen';
 import { Card } from '../../engine/types';
-import { dealKlondike } from '../../engine/deck';
+import { createEmptyGame, dealKlondike } from '../../engine/deck';
 
 describe('Auto-complete Speed Timing', () => {
   test('auto-complete delay and animation duration are configured for 2x speed', () => {
@@ -322,3 +322,25 @@ describe('Tableau Offsets and Dynamic Cascade Compression', () => {
     expect(col1Pos.x - col0Pos.x).toBe(cardWidth + gap);
   });
 });
+
+describe('Empty Board Initial Load', () => {
+  test('empty columns compute height equal to cardHeight with no vertical cascading', () => {
+    const cardHeight = 90;
+    const { offsets, columnHeight } = calculateTableauOffsets([], cardHeight, 20, 10);
+    expect(offsets).toEqual([]);
+    expect(columnHeight).toBe(cardHeight);
+  });
+
+  test('createEmptyGame provides initial idle state with empty piles and zeroed metrics', () => {
+    const state = createEmptyGame(1);
+    expect(state.status).toBe('idle');
+    expect(state.moves).toBe(0);
+    expect(state.score).toBe(0);
+    expect(state.elapsedSeconds).toBe(0);
+    expect(state.stock).toHaveLength(0);
+    expect(state.waste).toHaveLength(0);
+    expect(state.foundations).toHaveLength(4);
+    expect(state.tableau).toHaveLength(7);
+  });
+});
+
