@@ -2030,6 +2030,12 @@ export const GameScreen: React.FC = () => {
               { gap },
               isLandscape && styles.tableauRowLandscape,
               isRightHanded && styles.tableauRowRightHanded,
+              {
+                minHeight: isLandscape
+                  ? maxColumnHeight
+                  : Math.max(Math.floor(cardHeight * 2.2), cardHeight + spacing.lg + 54),
+                position: 'relative',
+              },
             ]}
           >
             {gameState.tableau.map((col, idx) => {
@@ -2070,29 +2076,35 @@ export const GameScreen: React.FC = () => {
                 </View>
               );
             })}
-          </View>
 
-          {/* Deal Cards Action for Empty Board on Initial Load */}
-          {gameState.status === 'idle' && !isDealing && (
-            <View style={styles.dealContainer}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.dealButton,
-                  isLandscape && styles.dealButtonLandscape,
-                  pressed && styles.dealButtonPressed,
+            {/* Deal Cards Action for Empty Board on Initial Load */}
+            {gameState.status === 'idle' && !isDealing && (
+              <View
+                style={[
+                  styles.dealOverlay,
+                  { top: cardHeight + (isLandscape ? spacing.sm : spacing.lg) },
                 ]}
-                onPress={() => startNewGame()}
-                testID="deal-button"
-                accessibilityLabel="Deal cards"
-                accessibilityRole="button"
+                pointerEvents="box-none"
               >
-                <Text style={styles.dealButtonIcon}>🂠</Text>
-                <Text style={[styles.dealButtonText, isLandscape && styles.dealButtonTextLandscape]}>
-                  Deal Cards
-                </Text>
-              </Pressable>
-            </View>
-          )}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.dealButton,
+                    isLandscape && styles.dealButtonLandscape,
+                    pressed && styles.dealButtonPressed,
+                  ]}
+                  onPress={() => startNewGame()}
+                  testID="deal-button"
+                  accessibilityLabel="Deal cards"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.dealButtonIcon}>🂠</Text>
+                  <Text style={[styles.dealButtonText, isLandscape && styles.dealButtonTextLandscape]}>
+                    Deal Cards
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
 
           {/* Flying Animated Card Overlay */}
           {animatingCard && (
