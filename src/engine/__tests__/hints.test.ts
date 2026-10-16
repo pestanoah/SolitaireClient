@@ -1,4 +1,5 @@
 import { findAvailableHints, findHint, formatCardShort } from '../hints';
+import { hasAvailableMoves } from '../rules';
 import { Card, GameState } from '../types';
 
 function createDummyCard(id: string, suit: 'spades' | 'hearts' | 'diamonds' | 'clubs', rank: number, faceUp = true): Card {
@@ -373,4 +374,29 @@ describe('Hints Engine', () => {
     // No cards anywhere
     expect(findHint(emptyDead)).toBeNull();
   });
+
+  test('findAvailableHints and hasAvailableMoves both agree on reversing move deadlocks', () => {
+    const state = createBaseState();
+    state.foundations[1] = [
+      createDummyCard('ah', 'hearts', 1, true),
+      createDummyCard('2h', 'hearts', 2, true),
+      createDummyCard('3h', 'hearts', 3, true),
+    ];
+    state.tableau[0] = [
+      createDummyCard('5s', 'spades', 5, true),
+      createDummyCard('4h', 'hearts', 4, true),
+    ];
+    state.history = [
+      {
+        from: { type: 'foundation', index: 1 },
+        to: { type: 'tableau', index: 0 },
+        cardIds: ['4h'],
+        pointsEarned: -15,
+      },
+    ];
+
+    expect(findAvailableHints(state)).toHaveLength(0);
+    expect(hasAvailableMoves(state)).toBe(false);
+  });
 });
+

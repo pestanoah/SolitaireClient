@@ -6,6 +6,8 @@ import {
   hasAvailableMoves,
   hasExhaustedStockCycles,
   isGameWon,
+  isReversingFoundationMove,
+  isReversingTableauMove,
 } from './rules';
 import { Card, FOUNDATION_SUITS, GameState, PileLocation } from './types';
 
@@ -40,52 +42,6 @@ export function formatCardShort(card: Card): string {
   const rank = RANK_LABELS[card.rank] ?? card.rank.toString();
   const suit = SUIT_SYMBOLS[card.suit] ?? card.suit;
   return `${rank}${suit}`;
-}
-
-/**
- * Checks if moving a card from tableau column `tableauIndex` to foundation
- * would directly reverse the most recent move of that card.
- */
-function isReversingFoundationMove(
-  state: GameState,
-  cardId: string,
-  tableauIndex: number
-): boolean {
-  if (!state.history || state.history.length === 0) return false;
-  for (let i = state.history.length - 1; i >= 0; i--) {
-    const move = state.history[i];
-    if (move.cardIds.includes(cardId)) {
-      return (
-        move.from.type === 'foundation' &&
-        move.to.type === 'tableau' &&
-        move.to.index === tableauIndex
-      );
-    }
-  }
-  return false;
-}
-
-/**
- * Checks if moving a card from foundation pile to tableau column `tableauIndex`
- * would directly reverse the most recent move of that card.
- */
-function isReversingTableauMove(
-  state: GameState,
-  cardId: string,
-  tableauIndex: number
-): boolean {
-  if (!state.history || state.history.length === 0) return false;
-  for (let i = state.history.length - 1; i >= 0; i--) {
-    const move = state.history[i];
-    if (move.cardIds.includes(cardId)) {
-      return (
-        move.from.type === 'tableau' &&
-        move.from.index === tableauIndex &&
-        move.to.type === 'foundation'
-      );
-    }
-  }
-  return false;
 }
 
 /**
