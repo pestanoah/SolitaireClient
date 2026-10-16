@@ -326,12 +326,20 @@ export const GameScreen: React.FC = () => {
   const handleHint = useCallback(() => {
     const current = latestGameStateRef.current;
     if (isAnimatingRef.current || isAutoCompletingRef.current) return;
-    if (current.status !== 'playing') return;
+    if (current.status !== 'playing') {
+      if (current.status === 'lost') {
+        setGameOverDismissed(false);
+      }
+      return;
+    }
 
     const hints = findAvailableHints(current);
     if (hints.length === 0) {
-      showHint('No valid moves available.');
       clearActiveHint();
+      showHint('No valid moves available.');
+      playGameOverSound();
+      setLossReason('no_moves');
+      setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
       return;
     }
 
@@ -603,28 +611,42 @@ export const GameScreen: React.FC = () => {
 
   // Check for game over (no legal moves left)
   useEffect(() => {
-    const current = latestGameStateRef.current;
-    if (
-      current.status === 'playing' &&
-      !isGameWon(current.foundations)
-    ) {
-      const timer = setTimeout(() => {
-        const activeState = latestGameStateRef.current;
-        if (
-          activeState.status === 'playing' &&
-          !isAnimatingRef.current &&
-          !dragStateRef.current &&
-          !isAutoCompletingRef.current &&
-          !isGameWon(activeState.foundations) &&
-          !hasAvailableMoves(activeState)
-        ) {
-          playGameOverSound();
-          setLossReason('no_moves');
-          setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
-        }
-      }, 300);
-      return () => clearTimeout(timer);
-    }
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let isCancelled = false;
+
+    const checkGameOver = () => {
+      const activeState = latestGameStateRef.current;
+      if (
+        activeState.status !== 'playing' ||
+        isGameWon(activeState.foundations) ||
+        isCancelled
+      ) {
+        return;
+      }
+
+      if (
+        isAnimatingRef.current ||
+        dragStateRef.current ||
+        isAutoCompletingRef.current
+      ) {
+        // Reschedule check while animations or drag gestures are in progress
+        timer = setTimeout(checkGameOver, 150);
+        return;
+      }
+
+      if (!hasAvailableMoves(activeState) || findAvailableHints(activeState).length === 0) {
+        playGameOverSound();
+        setLossReason('no_moves');
+        setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+      }
+    };
+
+    timer = setTimeout(checkGameOver, 300);
+
+    return () => {
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [gameState.id, gameState.history.length, gameState.status]);
 
   const boardWidth = measuredBoardWidth > 0 ? measuredBoardWidth : maxBoardWidth;
@@ -722,6 +744,16 @@ export const GameScreen: React.FC = () => {
   const handleDealComplete = useCallback(() => {
     setDealingState(null);
     isAnimatingRef.current = false;
+    const activeState = latestGameStateRef.current;
+    if (
+      activeState.status === 'playing' &&
+      !isGameWon(activeState.foundations) &&
+      (!hasAvailableMoves(activeState) || findAvailableHints(activeState).length === 0)
+    ) {
+      playGameOverSound();
+      setLossReason('no_moves');
+      setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+    }
   }, []);
 
   // Animate and execute move

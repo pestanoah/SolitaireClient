@@ -1387,4 +1387,102 @@ describe('Automatic First Card Draw on Start and Waste Reset', () => {
     const undone = undo(moved!);
     expect(undone.score).toBe(5);
   });
+
+  test('hasAvailableMoves ignores reversing foundation moves and detects deadlock', () => {
+    // 4h was moved from foundation 1 to tableau 0 onto 5s.
+    // Foundations: 1h, 2h, 3h.
+    // Tableau 0: 5s, 4h.
+    // No other cards or moves exist anywhere.
+    const state: GameState = {
+      version: 1,
+      id: 'test_reverse_foundation_deadlock',
+      drawCount: 1,
+      stock: [],
+      waste: [],
+      foundations: [
+        [],
+        [
+          { id: 'ah', suit: 'hearts', rank: 1, faceUp: true },
+          { id: '2h', suit: 'hearts', rank: 2, faceUp: true },
+          { id: '3h', suit: 'hearts', rank: 3, faceUp: true },
+        ],
+        [],
+        [],
+      ],
+      tableau: [
+        [
+          { id: '5s', suit: 'spades', rank: 5, faceUp: true },
+          { id: '4h', suit: 'hearts', rank: 4, faceUp: true },
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+      score: 10,
+      moves: 5,
+      elapsedSeconds: 20,
+      status: 'playing',
+      history: [
+        {
+          from: { type: 'foundation', index: 1 },
+          to: { type: 'tableau', index: 0 },
+          cardIds: ['4h'],
+          pointsEarned: -15,
+        },
+      ],
+      createdAt: Date.now(),
+    };
+
+    // 4h moving right back to foundation is an un-advancing reversal, so deadlock must be detected
+    expect(hasAvailableMoves(state)).toBe(false);
+  });
+
+  test('hasAvailableMoves detects deadlock when stock cycles are exhausted and buried waste cards cannot be reached', () => {
+    // In Draw 1 mode, stock is empty, waste has 2 cards:
+    // w1 (7 of Hearts) at bottom of waste (index 0), w2 (9 of Spades) at top of waste (index 1).
+    // Tableau col 0 has 8 of Spades (which 7 of Hearts would match).
+    // But stock cycles are exhausted (player has already recycled through the deck without moves).
+    // w2 cannot move anywhere. w1 cannot be reached because recycling is exhausted.
+    const state: GameState = {
+      version: 1,
+      id: 'test_exhausted_cycles_deadlock',
+      drawCount: 1,
+      stock: [],
+      waste: [
+        { id: 'w1', suit: 'hearts', rank: 7, faceUp: true },
+        { id: 'w2', suit: 'spades', rank: 9, faceUp: true },
+      ],
+      foundations: [[], [], [], []],
+      tableau: [
+        [{ id: '8s', suit: 'spades', rank: 8, faceUp: true }],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+      ],
+      score: 0,
+      moves: 20,
+      elapsedSeconds: 60,
+      status: 'playing',
+      history: [
+        {
+          from: { type: 'waste', index: 0 },
+          to: { type: 'stock', index: 0 },
+          cardIds: ['w1', 'w2'],
+          pointsEarned: -20,
+        },
+      ],
+      createdAt: Date.now(),
+    };
+
+    expect(hasExhaustedStockCycles(state)).toBe(true);
+    // Even though buried card w1 matches tableau 8s, it cannot be reached
+    expect(hasAvailableMoves(state)).toBe(false);
+  });
 });
+

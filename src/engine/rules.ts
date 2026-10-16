@@ -126,6 +126,52 @@ export function hasExhaustedStockCycles(state: GameState): boolean {
 }
 
 /**
+ * Checks if moving a card from tableau column `tableauIndex` to foundation
+ * would directly reverse the most recent move of that card.
+ */
+export function isReversingFoundationMove(
+  state: GameState,
+  cardId: string,
+  tableauIndex: number
+): boolean {
+  if (!state.history || state.history.length === 0) return false;
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const move = state.history[i];
+    if (move.cardIds.includes(cardId)) {
+      return (
+        move.from.type === 'foundation' &&
+        move.to.type === 'tableau' &&
+        move.to.index === tableauIndex
+      );
+    }
+  }
+  return false;
+}
+
+/**
+ * Checks if moving a card from foundation pile to tableau column `tableauIndex`
+ * would directly reverse the most recent move of that card.
+ */
+export function isReversingTableauMove(
+  state: GameState,
+  cardId: string,
+  tableauIndex: number
+): boolean {
+  if (!state.history || state.history.length === 0) return false;
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const move = state.history[i];
+    if (move.cardIds.includes(cardId)) {
+      return (
+        move.from.type === 'tableau' &&
+        move.from.index === tableauIndex &&
+        move.to.type === 'foundation'
+      );
+    }
+  }
+  return false;
+}
+
+/**
  * Returns all cards from the stock/waste deck that could ever appear on top
  * of the waste pile without playing any cards, given the current drawCount.
  * In Draw 1 mode, every card remaining in stock and waste will eventually appear.
@@ -135,6 +181,12 @@ export function hasExhaustedStockCycles(state: GameState): boolean {
 export function getAccessibleDeckCards(state: GameState): Card[] {
   if (state.stock.length === 0 && state.waste.length === 0) {
     return [];
+  }
+
+  // If stock is empty and recycling cycles have been exhausted, no more cards from stock/waste can ever be accessed.
+  // Only the single currently exposed waste card (if any) is accessible.
+  if (state.stock.length === 0 && hasExhaustedStockCycles(state)) {
+    return state.waste.length > 0 ? [state.waste[state.waste.length - 1]] : [];
   }
 
   // Draw 1: Every card in stock and waste will eventually be exposed at the top of waste
@@ -437,11 +489,12 @@ export function hasAvailableMoves(state: GameState, allowAnyCardOnEmpty = false)
     }
   }
 
-  // Fast path 2: Any tableau card can move to foundation immediately
+  // Fast path 2: Any tableau card can move to foundation immediately (ignoring un-advancing reversals)
   for (let t = 0; t < state.tableau.length; t++) {
     const col = state.tableau[t];
     if (col.length === 0) continue;
     const topCard = col[col.length - 1];
+    if (isReversingFoundationMove(state, topCard.id, t)) continue;
     for (let f = 0; f < state.foundations.length; f++) {
       if (canPlaceOnFoundation(topCard, state.foundations[f], f)) {
         return true;
@@ -525,6 +578,7 @@ export function hasAvailableMoves(state: GameState, allowAnyCardOnEmpty = false)
 
     for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
       if (topCard.rank === 13 && state.tableau[toIdx].length === 0) continue;
+      if (isReversingTableauMove(state, topCard.id, toIdx)) continue;
 
       if (canPlaceOnTableau(topCard, state.tableau[toIdx], allowAnyCardOnEmpty)) {
         if (
