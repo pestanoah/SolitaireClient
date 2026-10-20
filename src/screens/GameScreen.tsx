@@ -56,6 +56,7 @@ import {
   hasAvailableMoves,
   isGameWon,
 } from '../engine/rules';
+import { checkWinnable } from '../engine/solver';
 import { Card, FOUNDATION_SUITS, GameState, PileLocation, PileType, PlayerStats, UserSettings } from '../engine/types';
 import {
   clearGameState,
@@ -362,6 +363,47 @@ export const GameScreen: React.FC = () => {
       setActiveHint(null);
     }, 4000);
   }, [activeHint, clearActiveHint, showHint]);
+
+  // Winnability Solver State
+  const [isCheckingWinnable, setIsCheckingWinnable] = useState(false);
+  const isCheckingWinnableRef = useRef(false);
+
+  const handleCheckWinnable = useCallback(async () => {
+    const current = latestGameStateRef.current;
+    if (isAnimatingRef.current || isAutoCompletingRef.current || isCheckingWinnableRef.current) return;
+    if (current.status !== 'playing') return;
+
+    setIsCheckingWinnable(true);
+    isCheckingWinnableRef.current = true;
+
+    try {
+      const result = await checkWinnable(current, {
+        maxStates: 5000,
+        timeoutMs: 1500,
+      });
+
+      // Ensure the board hasn't changed or reset while the solver was computing
+      if (
+        latestGameStateRef.current.id !== current.id ||
+        latestGameStateRef.current.moves !== current.moves
+      ) {
+        return;
+      }
+
+      if (result.status === 'winnable') {
+        showHint('✨ Game is still winnable!', 4000);
+      } else if (result.status === 'unwinnable') {
+        showHint('🚫 No winning path from this position.', 4000);
+      } else {
+        showHint('⏳ Complex position — could not confirm a win.', 4000);
+      }
+    } catch {
+      showHint('Unable to check winnability.', 3000);
+    } finally {
+      setIsCheckingWinnable(false);
+      isCheckingWinnableRef.current = false;
+    }
+  }, [showHint]);
 
   // Measured Board Layout Positions (Relative to styles.board)
   const topRowLayoutRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -775,6 +817,8 @@ export const GameScreen: React.FC = () => {
       setLossReason('no_moves');
       setGameOverDismissed(false);
       setWinDismissed(false);
+      setIsCheckingWinnable(false);
+      isCheckingWinnableRef.current = false;
       const newGame = dealKlondike(
         count ?? settings.drawCount,
         undefined,
@@ -1886,11 +1930,14 @@ export const GameScreen: React.FC = () => {
         canUndo={gameState.history.length > 0 && !isDealing}
         canHint={gameState.status === 'playing' && !isDealing}
         canGiveUp={gameState.status === 'playing' && gameState.moves > 0 && !isDealing}
+        canCheckWinnable={gameState.status === 'playing' && !isDealing && !isCheckingWinnable}
+        isCheckingWinnable={isCheckingWinnable}
         soundEnabled={settings.soundEnabled !== false}
         isLandscape={isLandscape}
         seed={gameState.seed}
         onUndo={handleUndo}
         onHint={handleHint}
+        onCheckWinnable={handleCheckWinnable}
         onGiveUp={handleGiveUp}
         onNewGame={handleNewGame}
         onOpenStats={() => setStatsVisible(true)}

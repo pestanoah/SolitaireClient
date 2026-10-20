@@ -11,11 +11,14 @@ interface GameHeaderProps {
   canUndo: boolean;
   canHint?: boolean;
   canGiveUp?: boolean;
+  canCheckWinnable?: boolean;
+  isCheckingWinnable?: boolean;
   soundEnabled?: boolean;
   isLandscape?: boolean;
   seed?: string;
   onUndo: () => void;
   onHint?: () => void;
+  onCheckWinnable?: () => void;
   onGiveUp?: () => void;
   onNewGame: () => void;
   onOpenStats: () => void;
@@ -33,11 +36,14 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   canUndo,
   canHint = true,
   canGiveUp = false,
+  canCheckWinnable = true,
+  isCheckingWinnable = false,
   soundEnabled = true,
   isLandscape,
   seed,
   onUndo,
   onHint,
+  onCheckWinnable,
   onGiveUp,
   onNewGame,
   onOpenStats,
@@ -131,6 +137,30 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             >
               <Text style={[styles.actionBtnTextLandscape, !canHint && styles.btnTextDisabled]}>
                 Hint
+              </Text>
+            </Pressable>
+          )}
+
+          {onCheckWinnable && (
+            <Pressable
+              disabled={!canCheckWinnable || isCheckingWinnable}
+              onPress={onCheckWinnable}
+              style={({ pressed }) => [
+                styles.actionBtnLandscape,
+                (!canCheckWinnable || isCheckingWinnable) && styles.btnDisabled,
+                pressed && canCheckWinnable && !isCheckingWinnable && { opacity: 0.7 },
+              ]}
+              accessibilityLabel={isCheckingWinnable ? 'Checking winnability' : 'Check if game is winnable'}
+              accessibilityRole="button"
+            >
+              <Text
+                style={[
+                  styles.actionBtnTextLandscape,
+                  (!canCheckWinnable || isCheckingWinnable) && styles.btnTextDisabled,
+                ]}
+                numberOfLines={1}
+              >
+                {isCheckingWinnable ? 'Checking…' : 'Winnable?'}
               </Text>
             </Pressable>
           )}
@@ -269,6 +299,30 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           >
             <Text style={[styles.actionBtnText, !canHint && styles.btnTextDisabled]}>
               Hint
+            </Text>
+          </Pressable>
+        )}
+
+        {onCheckWinnable && (
+          <Pressable
+            disabled={!canCheckWinnable || isCheckingWinnable}
+            onPress={onCheckWinnable}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              (!canCheckWinnable || isCheckingWinnable) && styles.btnDisabled,
+              pressed && canCheckWinnable && !isCheckingWinnable && { opacity: 0.7 },
+            ]}
+            accessibilityLabel={isCheckingWinnable ? 'Checking winnability' : 'Check if game is winnable'}
+            accessibilityRole="button"
+          >
+            <Text
+              style={[
+                styles.actionBtnText,
+                (!canCheckWinnable || isCheckingWinnable) && styles.btnTextDisabled,
+              ]}
+              numberOfLines={1}
+            >
+              {isCheckingWinnable ? 'Checking…' : 'Winnable?'}
             </Text>
           </Pressable>
         )}
