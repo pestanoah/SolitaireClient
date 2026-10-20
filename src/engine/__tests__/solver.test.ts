@@ -245,10 +245,20 @@ describe('solver', () => {
         1,
         '10688'
       );
-      const result = await checkWinnable(game, { maxStates: 300, timeoutMs: 500 });
-      expect(['winnable', 'timeout', 'unwinnable']).toContain(result.status);
+      const result = await checkWinnable(game, { maxStates: 30000, timeoutMs: 3000 });
+      expect(result.status).toBe('winnable');
       expect(result.statesEvaluated).toBeGreaterThan(0);
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('solves another verified winnable seed rapidly', async () => {
+      const game = dealKlondikeFromDeck(
+        require('../deck').shuffleCards(require('../deck').createStandardDeck(), '10690'),
+        1,
+        '10690'
+      );
+      const result = await checkWinnable(game, { maxStates: 100000, timeoutMs: 8000 });
+      expect(result.status).toBe('winnable');
     });
   });
 });

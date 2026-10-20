@@ -378,8 +378,8 @@ export const GameScreen: React.FC = () => {
 
     try {
       const result = await checkWinnable(current, {
-        maxStates: 5000,
-        timeoutMs: 1500,
+        maxStates: 100000,
+        timeoutMs: 8000,
       });
 
       // Ensure the board hasn't changed or reset while the solver was computing

@@ -2,6 +2,7 @@ import { Card, FOUNDATION_SUITS, GameState, getCardColor, MoveRecord, PileLocati
 import {
   canPlaceOnFoundation,
   canPlaceOnTableau,
+  getAccessibleDeckCards,
   hasAvailableMoves,
   hasExhaustedStockCycles,
   isGameWon,
@@ -192,8 +193,125 @@ export function getCanonicalStateKey(state: GameState): string {
 
 interface CandidateMove {
   nextState: GameState;
-  moveRecord: MoveRecord;
+  moves: MoveRecord[];
   priority: number;
+}
+
+/**
+ * Draws through the deck until targetCardId is exposed at the top of the waste,
+ * then plays it to the target location.
+ */
+function playCardFromDeck(
+  state: GameState,
+  targetCardId: string,
+  to: PileLocation,
+  allowAnyCardOnEmpty: boolean
+): { nextState: GameState; moves: MoveRecord[] } | null {
+  const moves: MoveRecord[] = [];
+
+  // If card is already on top of waste, move directly
+  if (state.waste.length > 0 && state.waste[state.waste.length - 1].id === targetCardId) {
+    const next = moveCards(state, { type: 'waste', index: 0 }, to, [targetCardId], allowAnyCardOnEmpty);
+    if (!next) return null;
+    moves.push(next.history[next.history.length - 1]);
+    return { nextState: next, moves };
+  }
+
+  let curr = state;
+  let safety = 0;
+  const maxDraws = (state.stock.length + state.waste.length) * (state.drawCount + 1) + 10;
+
+  while (safety++ < maxDraws) {
+    if (curr.stock.length === 0 && curr.waste.length === 0) {
+      return null;
+    }
+    if (curr.stock.length === 0 && hasExhaustedStockCycles(curr)) {
+      return null;
+    }
+    const next = drawCards(curr);
+    if (next === curr) return null;
+    moves.push(next.history[next.history.length - 1]);
+    curr = next;
+
+    if (curr.waste.length > 0 && curr.waste[curr.waste.length - 1].id === targetCardId) {
+      const moved = moveCards(curr, { type: 'waste', index: 0 }, to, [targetCardId], allowAnyCardOnEmpty);
+      if (!moved) return null;
+      moves.push(moved.history[moved.history.length - 1]);
+      return { nextState: moved, moves };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Evaluates the closeness of a state toward winning.
+ */
+function getHeuristicScore(state: GameState): number {
+  let foundationCards = 0;
+  for (const pile of state.foundations) {
+    foundationCards += pile.length;
+  }
+
+  let faceDownCount = 0;
+  for (const col of state.tableau) {
+    for (const card of col) {
+      if (!card.faceUp) faceDownCount++;
+    }
+  }
+
+  return foundationCards * 100 - faceDownCount * 25;
+}
+
+class PriorityQueue<T> {
+  private heap: { item: T; priority: number }[] = [];
+
+  push(item: T, priority: number) {
+    this.heap.push({ item, priority });
+    this.bubbleUp(this.heap.length - 1);
+  }
+
+  pop(): T | undefined {
+    if (this.heap.length === 0) return undefined;
+    const top = this.heap[0].item;
+    const bottom = this.heap.pop()!;
+    if (this.heap.length > 0) {
+      this.heap[0] = bottom;
+      this.bubbleDown(0);
+    }
+    return top;
+  }
+
+  get length() {
+    return this.heap.length;
+  }
+
+  private bubbleUp(idx: number) {
+    while (idx > 0) {
+      const parentIdx = (idx - 1) >> 1;
+      if (this.heap[idx].priority <= this.heap[parentIdx].priority) break;
+      [this.heap[idx], this.heap[parentIdx]] = [this.heap[parentIdx], this.heap[idx]];
+      idx = parentIdx;
+    }
+  }
+
+  private bubbleDown(idx: number) {
+    const len = this.heap.length;
+    while (true) {
+      const left = (idx << 1) + 1;
+      const right = left + 1;
+      let largest = idx;
+      if (left < len && this.heap[left].priority > this.heap[largest].priority) {
+        largest = left;
+      }
+      if (right < len && this.heap[right].priority > this.heap[largest].priority) {
+        largest = right;
+      }
+      if (largest === idx) break;
+      [this.heap[idx], this.heap[largest]] = [this.heap[largest], this.heap[idx]];
+      idx = largest;
+    }
+  }
 }
 
 /**
@@ -215,7 +333,7 @@ function generateCandidateMoves(
     }
   }
 
-  // 1. Tableau-to-Tableau moves
+  // 1. Tableau-to-Tableau moves that uncover a face-down card or empty a column
   for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
     const fromCol = state.tableau[fromIdx];
     if (fromCol.length === 0) continue;
@@ -229,6 +347,11 @@ function generateCandidateMoves(
 
       // Avoid moving a King already sitting at the base of an empty column to another empty column
       if (card.rank === 13 && emptiesColumn) {
+        continue;
+      }
+
+      // Prune redundant moves that neither uncover a face-down card nor empty a column
+      if (!uncoversFaceDown && !emptiesColumn) {
         continue;
       }
 
@@ -251,13 +374,13 @@ function generateCandidateMoves(
           );
           if (next) {
             let priority = 10;
-            if (uncoversFaceDown) priority = 100; // Highest priority
-            else if (emptiesColumn) priority = 45; // Empties column for a King
-            else if (card.rank === 13) priority = 35; // Placing a King
+            if (uncoversFaceDown) priority = 100;
+            else if (emptiesColumn) priority = 45;
+            else if (card.rank === 13) priority = 35;
 
             candidates.push({
               nextState: next,
-              moveRecord: next.history[next.history.length - 1],
+              moves: [next.history[next.history.length - 1]],
               priority,
             });
           }
@@ -266,28 +389,47 @@ function generateCandidateMoves(
     }
   }
 
-  // 2. Waste-to-Tableau moves
-  if (state.waste.length > 0) {
-    const topWaste = state.waste[state.waste.length - 1];
+  // 2. Play accessible deck cards (stock/waste) directly to foundation or tableau
+  const accessibleCards = getAccessibleDeckCards(state);
+  for (const card of accessibleCards) {
+    // Foundation target
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (canPlaceOnFoundation(card, state.foundations[f], f)) {
+        const played = playCardFromDeck(
+          state,
+          card.id,
+          { type: 'foundation', index: f },
+          allowAnyCardOnEmpty
+        );
+        if (played) {
+          candidates.push({
+            nextState: played.nextState,
+            moves: played.moves,
+            priority: 75,
+          });
+        }
+      }
+    }
+
+    // Tableau target
     for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
       const toCol = state.tableau[toIdx];
       if (toCol.length === 0 && toIdx !== firstEmptyColumnIdx) {
         continue;
       }
 
-      if (canPlaceOnTableau(topWaste, toCol, allowAnyCardOnEmpty)) {
-        const next = moveCards(
+      if (canPlaceOnTableau(card, toCol, allowAnyCardOnEmpty)) {
+        const played = playCardFromDeck(
           state,
-          { type: 'waste', index: 0 },
+          card.id,
           { type: 'tableau', index: toIdx },
-          [topWaste.id],
           allowAnyCardOnEmpty
         );
-        if (next) {
-          const priority = topWaste.rank === 13 ? 65 : 60;
+        if (played) {
+          const priority = card.rank === 13 ? 65 : 60;
           candidates.push({
-            nextState: next,
-            moveRecord: next.history[next.history.length - 1],
+            nextState: played.nextState,
+            moves: played.moves,
             priority,
           });
         }
@@ -312,54 +454,11 @@ function generateCandidateMoves(
         if (next) {
           candidates.push({
             nextState: next,
-            moveRecord: next.history[next.history.length - 1],
+            moves: [next.history[next.history.length - 1]],
             priority: 50,
           });
         }
       }
-    }
-  }
-
-  // 4. Waste-to-Foundation (non-safe)
-  if (state.waste.length > 0) {
-    const topWaste = state.waste[state.waste.length - 1];
-    for (let f = 0; f < state.foundations.length; f++) {
-      if (canPlaceOnFoundation(topWaste, state.foundations[f], f)) {
-        const next = moveCards(
-          state,
-          { type: 'waste', index: 0 },
-          { type: 'foundation', index: f },
-          [topWaste.id]
-        );
-        if (next) {
-          candidates.push({
-            nextState: next,
-            moveRecord: next.history[next.history.length - 1],
-            priority: 55,
-          });
-        }
-      }
-    }
-  }
-
-  // 5. Stock Draw / Waste Recycle
-  if (state.stock.length > 0) {
-    const next = drawCards(state);
-    if (next !== state) {
-      candidates.push({
-        nextState: next,
-        moveRecord: next.history[next.history.length - 1],
-        priority: 5,
-      });
-    }
-  } else if (state.waste.length > 0 && !hasExhaustedStockCycles(state)) {
-    const next = drawCards(state);
-    if (next !== state) {
-      candidates.push({
-        nextState: next,
-        moveRecord: next.history[next.history.length - 1],
-        priority: 2,
-      });
     }
   }
 
@@ -379,8 +478,8 @@ export async function checkWinnable(
   options: SolverOptions = {}
 ): Promise<SolverResult> {
   const startTime = Date.now();
-  const maxStates = options.maxStates ?? 5000;
-  const timeoutMs = options.timeoutMs ?? 1500;
+  const maxStates = options.maxStates ?? 100000;
+  const timeoutMs = options.timeoutMs ?? 8000;
   const maxDepth = options.maxDepth ?? 120;
   const allowAnyCardOnEmpty = options.allowAnyCardOnEmpty ?? false;
 
@@ -417,26 +516,28 @@ export async function checkWinnable(
   let statesEvaluated = 0;
   let didTimeout = false;
 
-  interface SearchStackFrame {
+  interface SearchNode {
     state: GameState;
     depth: number;
     path: MoveRecord[];
   }
 
-  const stack: SearchStackFrame[] = [
+  const queue = new PriorityQueue<SearchNode>();
+  queue.push(
     {
       state,
       depth: 0,
       path: [],
     },
-  ];
+    getHeuristicScore(state)
+  );
 
-  while (stack.length > 0) {
-    const frame = stack.pop()!;
+  while (queue.length > 0) {
+    const frame = queue.pop()!;
     statesEvaluated++;
 
-    // Yield to the event loop every 150 states to prevent UI hitching
-    if (statesEvaluated % 150 === 0) {
+    // Yield to the event loop every 250 states to prevent UI hitching
+    if (statesEvaluated % 250 === 0) {
       if (Date.now() - startTime > timeoutMs) {
         didTimeout = true;
         break;
@@ -488,14 +589,17 @@ export async function checkWinnable(
     // Generate prioritized candidate moves
     const candidates = generateCandidateMoves(reducedState, allowAnyCardOnEmpty);
 
-    // Push candidates in reverse order so highest priority is popped first
-    for (let i = candidates.length - 1; i >= 0; i--) {
-      const cand = candidates[i];
-      stack.push({
-        state: cand.nextState,
-        depth: frame.depth + 1,
-        path: [...safeMoves, cand.moveRecord],
-      });
+    for (const cand of candidates) {
+      const nextScore =
+        getHeuristicScore(cand.nextState) + cand.priority + (frame.depth + 1) * 4;
+      queue.push(
+        {
+          state: cand.nextState,
+          depth: frame.depth + 1,
+          path: [...safeMoves, ...cand.moves],
+        },
+        nextScore
+      );
     }
   }
 
