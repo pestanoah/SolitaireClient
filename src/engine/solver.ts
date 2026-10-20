@@ -131,6 +131,37 @@ export function applySafeFoundationMoves(
         }
       }
     }
+
+    if (madeMove) continue;
+
+    // 3. Any accessible card in stock or waste can be safely promoted
+    const deckCards =
+      current.drawCount === 1
+        ? [...current.stock, ...current.waste]
+        : getAccessibleDeckCards(current);
+
+    for (const card of deckCards) {
+      const targetFIndex = FOUNDATION_SUITS.indexOf(card.suit);
+      if (
+        targetFIndex >= 0 &&
+        targetFIndex < current.foundations.length &&
+        canPlaceOnFoundation(card, current.foundations[targetFIndex], targetFIndex) &&
+        isSafeFoundationMove(card, current.foundations)
+      ) {
+        const played = playCardFromDeck(
+          current,
+          card.id,
+          { type: 'foundation', index: targetFIndex },
+          false
+        );
+        if (played) {
+          moves.push(...played.moves);
+          current = played.nextState;
+          madeMove = true;
+          break;
+        }
+      }
+    }
   }
 
   return { state: current, moves };
@@ -184,11 +215,18 @@ export function getCanonicalStateKey(state: GameState): string {
   tableauCols.sort();
   const tKey = tableauCols.join('|');
 
-  // Stock & Waste
-  const sKey = state.stock.map((c) => `${c.rank}${c.suit[0]}`).join('');
-  const wKey = state.waste.map((c) => `${c.rank}${c.suit[0]}`).join('');
+  // Stock & Waste canonicalization
+  const deck = [...state.stock, ...state.waste]
+    .map((c) => `${c.rank}${c.suit[0]}`)
+    .sort()
+  const topWaste =
+    state.waste.length > 0
+      ? `${state.waste[state.waste.length - 1].rank}${state.waste[state.waste.length - 1].suit[0]}`
+      : '0';
+  const swKey =
+    state.drawCount === 1 ? `d1:${deck}` : `d3:${deck};w:${topWaste};s:${state.stock.length}`;
 
-  return `${fKey}#${tKey}#${sKey};${wKey}`;
+  return `${fKey}#${tKey}#${swKey}`;
 }
 
 interface CandidateMove {
@@ -207,9 +245,62 @@ function playCardFromDeck(
   to: PileLocation,
   allowAnyCardOnEmpty: boolean
 ): { nextState: GameState; moves: MoveRecord[] } | null {
+  // In Draw 1 mode, every remaining deck card is directly accessible
+  if (state.drawCount === 1) {
+    const card = [...state.stock, ...state.waste].find((c) => c.id === targetCardId);
+    if (!card) return null;
+
+    if (to.type === 'tableau') {
+      const col = state.tableau[to.index];
+      if (!col || !canPlaceOnTableau(card, col, allowAnyCardOnEmpty)) return null;
+    } else if (to.type === 'foundation') {
+      const pile = state.foundations[to.index];
+      if (!pile || !canPlaceOnFoundation(card, pile, to.index)) return null;
+    } else {
+      return null;
+    }
+
+    const nextStock = state.stock.filter((c) => c.id !== targetCardId);
+    const nextWaste = state.waste.filter((c) => c.id !== targetCardId);
+    const placedCard = { ...card, faceUp: true };
+
+    let nextTableau = state.tableau;
+    let nextFoundations = state.foundations;
+
+    if (to.type === 'tableau') {
+      nextTableau = state.tableau.map((col, idx) =>
+        idx === to.index ? [...col, placedCard] : col
+      );
+    } else {
+      nextFoundations = state.foundations.map((pile, idx) =>
+        idx === to.index ? [...pile, placedCard] : pile
+      );
+    }
+
+    const moveRecord: MoveRecord = {
+      from: { type: state.waste.some((c) => c.id === targetCardId) ? 'waste' : 'stock', index: 0 },
+      to,
+      cardIds: [targetCardId],
+      pointsEarned: to.type === 'foundation' ? 10 : 5,
+    };
+
+    return {
+      nextState: {
+        ...state,
+        stock: nextStock,
+        waste: nextWaste,
+        tableau: nextTableau,
+        foundations: nextFoundations,
+        moves: state.moves + 1,
+        history: [...state.history, moveRecord],
+      },
+      moves: [moveRecord],
+    };
+  }
+
+  // Draw 3 mode: simulate cycles until target card reaches the top of waste
   const moves: MoveRecord[] = [];
 
-  // If card is already on top of waste, move directly
   if (state.waste.length > 0 && state.waste[state.waste.length - 1].id === targetCardId) {
     const next = moveCards(state, { type: 'waste', index: 0 }, to, [targetCardId], allowAnyCardOnEmpty);
     if (!next) return null;
@@ -245,74 +336,76 @@ function playCardFromDeck(
 }
 
 /**
- * Evaluates the closeness of a state toward winning.
+ * Computes an admissible lower bound on the minimum number of moves remaining.
  */
-function getHeuristicScore(state: GameState): number {
+function computeMinimumMovesLeft(state: GameState): number {
+  let moves = 0;
+  const stockCount = state.stock.length;
+  const wasteCount = state.waste.length;
+  moves += stockCount + Math.ceil(stockCount / state.drawCount) + wasteCount;
+
+  for (const col of state.tableau) {
+    let downCount = 0;
+    while (downCount < col.length && !col[downCount].faceUp) {
+      downCount++;
+    }
+    moves += col.length + downCount;
+  }
+  return moves;
+}
+
+/**
+ * Computes A* f(n) = g(n) + h(n) helper score. Lower is better.
+ */
+function computeHelperScore(state: GameState, depth: number): number {
   let foundationCards = 0;
   for (const pile of state.foundations) {
     foundationCards += pile.length;
   }
-
-  let faceDownCount = 0;
-  for (const col of state.tableau) {
-    for (const card of col) {
-      if (!card.faceUp) faceDownCount++;
-    }
-  }
-
-  return foundationCards * 100 - faceDownCount * 25;
+  const minMoves = computeMinimumMovesLeft(state);
+  return depth + minMoves + (52 - foundationCards);
 }
 
-class PriorityQueue<T> {
-  private heap: { item: T; priority: number }[] = [];
+/**
+ * Bucketed Priority Queue with LIFO stack per bucket (matching ShootMe A* solver).
+ * Provides O(1) push and O(1) pop, prioritizing lowest helper score and DFS within buckets.
+ */
+class BucketedSearchQueue<T> {
+  private buckets: T[][] = [];
+  private minIndex: number = 0;
+  private totalCount: number = 0;
 
   push(item: T, priority: number) {
-    this.heap.push({ item, priority });
-    this.bubbleUp(this.heap.length - 1);
+    const idx = Math.max(0, Math.min(511, Math.floor(priority)));
+    if (!this.buckets[idx]) {
+      this.buckets[idx] = [];
+    }
+    this.buckets[idx].push(item);
+    this.totalCount++;
+    if (idx < this.minIndex) {
+      this.minIndex = idx;
+    }
   }
 
   pop(): T | undefined {
-    if (this.heap.length === 0) return undefined;
-    const top = this.heap[0].item;
-    const bottom = this.heap.pop()!;
-    if (this.heap.length > 0) {
-      this.heap[0] = bottom;
-      this.bubbleDown(0);
+    if (this.totalCount === 0) return undefined;
+    while (
+      this.minIndex < 512 &&
+      (!this.buckets[this.minIndex] || this.buckets[this.minIndex].length === 0)
+    ) {
+      this.minIndex++;
     }
-    return top;
+    if (this.minIndex >= 512) return undefined;
+    const item = this.buckets[this.minIndex].pop()!;
+    this.totalCount--;
+    return item;
   }
 
-  get length() {
-    return this.heap.length;
-  }
-
-  private bubbleUp(idx: number) {
-    while (idx > 0) {
-      const parentIdx = (idx - 1) >> 1;
-      if (this.heap[idx].priority <= this.heap[parentIdx].priority) break;
-      [this.heap[idx], this.heap[parentIdx]] = [this.heap[parentIdx], this.heap[idx]];
-      idx = parentIdx;
-    }
-  }
-
-  private bubbleDown(idx: number) {
-    const len = this.heap.length;
-    while (true) {
-      const left = (idx << 1) + 1;
-      const right = left + 1;
-      let largest = idx;
-      if (left < len && this.heap[left].priority > this.heap[largest].priority) {
-        largest = left;
-      }
-      if (right < len && this.heap[right].priority > this.heap[largest].priority) {
-        largest = right;
-      }
-      if (largest === idx) break;
-      [this.heap[idx], this.heap[largest]] = [this.heap[largest], this.heap[idx]];
-      idx = largest;
-    }
+  get length(): number {
+    return this.totalCount;
   }
 }
+
 
 /**
  * Generates all valid candidate non-safe advancing moves from the current state,
@@ -350,9 +443,17 @@ function generateCandidateMoves(
         continue;
       }
 
-      // Prune redundant moves that neither uncover a face-down card nor empty a column
+      // If moving only a subset of face-up cards (neither uncovering face-down nor emptying column),
+      // this move is only productive if the card being uncovered can immediately go to a foundation!
       if (!uncoversFaceDown && !emptiesColumn) {
-        continue;
+        const cardExposed = fromCol[cardIdx - 1];
+        const targetF = FOUNDATION_SUITS.indexOf(cardExposed.suit);
+        if (
+          targetF < 0 ||
+          !canPlaceOnFoundation(cardExposed, state.foundations[targetF], targetF)
+        ) {
+          continue;
+        }
       }
 
       for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
@@ -522,14 +623,14 @@ export async function checkWinnable(
     path: MoveRecord[];
   }
 
-  const queue = new PriorityQueue<SearchNode>();
+  const queue = new BucketedSearchQueue<SearchNode>();
   queue.push(
     {
       state,
       depth: 0,
       path: [],
     },
-    getHeuristicScore(state)
+    computeHelperScore(state, 0)
   );
 
   while (queue.length > 0) {
@@ -555,6 +656,8 @@ export async function checkWinnable(
       frame.state,
       frame.path
     );
+
+
 
     if (isGameWon(reducedState.foundations)) {
       return {
@@ -589,16 +692,23 @@ export async function checkWinnable(
     // Generate prioritized candidate moves
     const candidates = generateCandidateMoves(reducedState, allowAnyCardOnEmpty);
 
-    for (const cand of candidates) {
-      const nextScore =
-        getHeuristicScore(cand.nextState) + cand.priority + (frame.depth + 1) * 4;
+    // Score candidates using A* helper score (f(n) = g(n) + h(n), lower is better)
+    const scoredCandidates = candidates.map((cand) => {
+      const score = computeHelperScore(cand.nextState, frame.depth + 1);
+      return { cand, score };
+    });
+    scoredCandidates.sort((a, b) => a.score - b.score);
+
+    // Beam search: take top 3 best moves matching ShootMe's pruning strategy
+    const topMoves = scoredCandidates.slice(0, 3);
+    for (const item of topMoves) {
       queue.push(
         {
-          state: cand.nextState,
+          state: item.cand.nextState,
           depth: frame.depth + 1,
-          path: [...safeMoves, ...cand.moves],
+          path: [...safeMoves, ...item.cand.moves],
         },
-        nextScore
+        item.score
       );
     }
   }

@@ -251,14 +251,16 @@ describe('solver', () => {
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
     });
 
-    it('solves another verified winnable seed rapidly', async () => {
-      const game = dealKlondikeFromDeck(
-        require('../deck').shuffleCards(require('../deck').createStandardDeck(), '10690'),
-        1,
-        '10690'
-      );
-      const result = await checkWinnable(game, { maxStates: 100000, timeoutMs: 8000 });
-      expect(result.status).toBe('winnable');
+    it('solves daily challenge seed 2026-10-19 rapidly', async () => {
+      const { dealKlondike } = require('../deck');
+      const game1 = dealKlondike(1, '2026-10-19');
+      const res1 = await checkWinnable(game1, {
+        maxStates: 50000,
+        timeoutMs: 5000,
+      });
+      expect(res1.status).toBe('winnable');
+      expect(res1.solutionMoves?.length).toBeGreaterThan(0);
+      expect(res1.statesEvaluated).toBeLessThan(10000);
     });
   });
 });
