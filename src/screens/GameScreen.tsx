@@ -391,11 +391,11 @@ export const GameScreen: React.FC = () => {
       }
 
       if (result.status === 'winnable') {
-        showHint('✨ Game is still winnable!', 4000);
+        showHint('Game is still winnable.', 4000);
       } else if (result.status === 'unwinnable') {
-        showHint('🚫 No winning path from this position.', 4000);
+        showHint('No winning path from this position.', 4000);
       } else {
-        showHint('⏳ Complex position — could not confirm a win.', 4000);
+        showHint('Complex position — could not confirm a win.', 4000);
       }
     } catch {
       showHint('Unable to check winnability.', 3000);
