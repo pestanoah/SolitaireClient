@@ -455,6 +455,108 @@ export function canMoveUnlockAdvancement(
 }
 
 /**
+ * Checks whether any legal physical move can be made anywhere on the board.
+ * This is the ultimate ground truth for physical deadlock:
+ * - Cards in stock can be drawn.
+ * - Cards in waste can be recycled into stock.
+ * - Top card of waste can be placed on foundation or tableau.
+ * - Any tableau card or stack can be moved to another tableau column (excluding redundant empty column swaps).
+ * - Any tableau card can be placed on foundation.
+ * - Any foundation card can be moved to tableau.
+ *
+ * If this returns false, there is literally zero legal action the player can take.
+ */
+export function hasLegalMoves(
+  state: GameState,
+  allowAnyCardOnEmpty = false
+): boolean {
+  if (state.status !== 'playing') {
+    return false;
+  }
+  if (isGameWon(state.foundations)) {
+    return false;
+  }
+
+  // 1. Stock can be drawn
+  if (state.stock.length > 0) {
+    return true;
+  }
+
+  // 2. Waste can be recycled into stock
+  if (state.waste.length > 0 && state.stock.length === 0) {
+    return true;
+  }
+
+  // 3. Waste top card can move to foundation or tableau
+  if (state.waste.length > 0) {
+    const topWaste = state.waste[state.waste.length - 1];
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (canPlaceOnFoundation(topWaste, state.foundations[f], f)) {
+        return true;
+      }
+    }
+    for (let t = 0; t < state.tableau.length; t++) {
+      if (canPlaceOnTableau(topWaste, state.tableau[t], allowAnyCardOnEmpty)) {
+        return true;
+      }
+    }
+  }
+
+  // 4. Tableau top cards to foundation
+  for (let t = 0; t < state.tableau.length; t++) {
+    const col = state.tableau[t];
+    if (col.length === 0) continue;
+    const topCard = col[col.length - 1];
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (canPlaceOnFoundation(topCard, state.foundations[f], f)) {
+        return true;
+      }
+    }
+  }
+
+  // 5. Tableau to tableau
+  for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
+    const fromCol = state.tableau[fromIdx];
+    if (fromCol.length === 0) continue;
+
+    for (let cardIdx = 0; cardIdx < fromCol.length; cardIdx++) {
+      const card = fromCol[cardIdx];
+      if (!card.faceUp) continue;
+
+      for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
+        if (toIdx === fromIdx) continue;
+        const toCol = state.tableau[toIdx];
+
+        // Redundant swap: moving base card of a column to an empty column leaves an empty column
+        if (cardIdx === 0 && toCol.length === 0) {
+          continue;
+        }
+
+        if (canPlaceOnTableau(card, toCol, allowAnyCardOnEmpty)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // 6. Foundation down to tableau
+  for (let f = 0; f < state.foundations.length; f++) {
+    const pile = state.foundations[f];
+    if (pile.length === 0) continue;
+    const topCard = pile[pile.length - 1];
+
+    for (let t = 0; t < state.tableau.length; t++) {
+      if (topCard.rank === 13 && state.tableau[t].length === 0) continue;
+      if (canPlaceOnTableau(topCard, state.tableau[t], allowAnyCardOnEmpty)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Checks if there are any moves available in the game that can advance progress toward winning.
  * A move or sequence of moves advances the game if it:
  * 1. Moves a card to a foundation pile.

@@ -5,6 +5,7 @@ import {
   getAccessibleDeckCards,
   hasAvailableMoves,
   hasExhaustedStockCycles,
+  hasLegalMoves,
   isGameWon,
 } from './rules';
 import { autoCompleteStep, drawCards, moveCards } from './klondike';
@@ -604,7 +605,7 @@ export async function checkWinnable(
     };
   }
 
-  if (!hasAvailableMoves(state, allowAnyCardOnEmpty)) {
+  if (!hasLegalMoves(state, allowAnyCardOnEmpty)) {
     return {
       status: 'unwinnable',
       statesEvaluated: 1,

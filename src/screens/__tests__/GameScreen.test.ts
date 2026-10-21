@@ -372,3 +372,39 @@ describe('Empty Board Initial Load', () => {
   });
 });
 
+describe('Loss Detection and False-Positive Prevention', () => {
+  const { hasLegalMoves, hasAvailableMoves } = require('../../engine/rules');
+  const { findAvailableHints } = require('../../engine/hints');
+
+  test('does not consider game physically deadlocked when legal stock or waste moves exist', () => {
+    const state = createEmptyGame(1);
+    state.status = 'playing';
+    state.stock = [{ id: 's_1', suit: 'spades', rank: 5, faceUp: false }];
+
+    expect(hasLegalMoves(state)).toBe(true);
+  });
+
+  test('does not treat an empty hints list as physical deadlock when legal moves remain', () => {
+    const state = createEmptyGame(1);
+    state.status = 'playing';
+    // Col 0 has 8 of Spades; Col 1 has 9 of Hearts. Stock has unplaceable card.
+    state.tableau[0] = [{ id: '8s', suit: 'spades', rank: 8, faceUp: true }];
+    state.tableau[1] = [{ id: '9h', suit: 'hearts', rank: 9, faceUp: true }];
+    state.stock = [{ id: '2c', suit: 'clubs', rank: 2, faceUp: false }];
+
+    // Legal moves definitely exist (can draw stock, or move 8s onto 9h)
+    expect(hasLegalMoves(state)).toBe(true);
+  });
+
+  test('accurately detects physical deadlock when zero legal moves exist anywhere', () => {
+    const state = createEmptyGame(1);
+    state.status = 'playing';
+    state.stock = [];
+    state.waste = [];
+    state.tableau[0] = [{ id: '4s', suit: 'spades', rank: 4, faceUp: true }];
+    state.tableau[1] = [{ id: '4c', suit: 'clubs', rank: 4, faceUp: true }];
+
+    expect(hasLegalMoves(state)).toBe(false);
+  });
+});
+

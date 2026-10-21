@@ -54,6 +54,7 @@ import {
   canPlaceOnFoundation,
   canPlaceOnTableau,
   hasAvailableMoves,
+  hasLegalMoves,
   isGameWon,
 } from '../engine/rules';
 import { checkWinnable } from '../engine/solver';
@@ -378,10 +379,31 @@ export const GameScreen: React.FC = () => {
 
       if (!result) {
         clearActiveHint();
-        showHint('No valid moves available.');
-        playGameOverSound();
-        setLossReason('no_moves');
-        setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+        if (!hasLegalMoves(current)) {
+          showHint('No valid moves available.');
+          playGameOverSound();
+          setLossReason('no_moves');
+          setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+          return;
+        }
+
+        // Legal moves exist, but no optimal or heuristic hint found within budget.
+        // Query solver to verify if the game is mathematically unwinnable.
+        const winCheck = await checkWinnable(current, { timeoutMs: 1200, maxStates: 12000 });
+        if (
+          latestGameStateRef.current.id === current.id &&
+          latestGameStateRef.current.moves === current.moves &&
+          latestGameStateRef.current.status === 'playing'
+        ) {
+          if (winCheck.status === 'unwinnable') {
+            showHint('No valid moves available.');
+            playGameOverSound();
+            setLossReason('no_moves');
+            setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+          } else {
+            showHint('No strategic hint found. Try exploring other moves.');
+          }
+        }
         return;
       }
 
@@ -726,10 +748,36 @@ export const GameScreen: React.FC = () => {
         return;
       }
 
-      if (!hasAvailableMoves(activeState) || findAvailableHints(activeState).length === 0) {
+      // 1. Literal physical deadlock: zero moves possible anywhere on the board
+      if (!hasLegalMoves(activeState)) {
         playGameOverSound();
         setLossReason('no_moves');
         setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+        return;
+      }
+
+      // 2. Suspected strategic deadlock: fast heuristic indicates no advancing moves.
+      // Query solver to verify if the position is mathematically unwinnable.
+      if (!hasAvailableMoves(activeState)) {
+        checkWinnable(activeState, { timeoutMs: 1500, maxStates: 15000 })
+          .then((solverResult) => {
+            if (isCancelled) return;
+            const currentNow = latestGameStateRef.current;
+            if (
+              currentNow.id === activeState.id &&
+              currentNow.moves === activeState.moves &&
+              currentNow.status === 'playing'
+            ) {
+              if (solverResult.status === 'unwinnable') {
+                playGameOverSound();
+                setLossReason('no_moves');
+                setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+              }
+            }
+          })
+          .catch(() => {
+            // Keep playing on any unexpected solver failure
+          });
       }
     };
 
@@ -840,7 +888,7 @@ export const GameScreen: React.FC = () => {
     if (
       activeState.status === 'playing' &&
       !isGameWon(activeState.foundations) &&
-      (!hasAvailableMoves(activeState) || findAvailableHints(activeState).length === 0)
+      !hasLegalMoves(activeState)
     ) {
       playGameOverSound();
       setLossReason('no_moves');
