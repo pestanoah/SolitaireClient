@@ -40,7 +40,7 @@ import {
   isDateSeed,
   isSeedWinnable,
 } from '../engine/deck';
-import { findAvailableHints, Hint } from '../engine/hints';
+import { findAvailableHints, findOptimalHint, Hint } from '../engine/hints';
 import {
   autoCompleteStep,
   drawCards,
@@ -326,9 +326,12 @@ export const GameScreen: React.FC = () => {
     }, duration);
   }, []);
 
-  const handleHint = useCallback(() => {
+  const [isCheckingHint, setIsCheckingHint] = useState(false);
+  const isCheckingHintRef = useRef(false);
+
+  const handleHint = useCallback(async () => {
     const current = latestGameStateRef.current;
-    if (isAnimatingRef.current || isAutoCompletingRef.current) return;
+    if (isAnimatingRef.current || isAutoCompletingRef.current || isCheckingHintRef.current) return;
     if (current.status !== 'playing') {
       if (current.status === 'lost') {
         setGameOverDismissed(false);
@@ -336,32 +339,74 @@ export const GameScreen: React.FC = () => {
       return;
     }
 
-    const hints = findAvailableHints(current);
-    if (hints.length === 0) {
-      clearActiveHint();
-      showHint('No valid moves available.');
-      playGameOverSound();
-      setLossReason('no_moves');
-      setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
-      return;
-    }
-
-    let nextIndex = 0;
+    // If an active hint is already showing and the player taps again, cycle through heuristic hints
     if (activeHint) {
-      nextIndex = (hintIndexRef.current + 1) % hints.length;
-    }
-    hintIndexRef.current = nextIndex;
-    const hint = hints[nextIndex];
+      const hints = findAvailableHints(current);
+      if (hints.length > 0) {
+        const nextIndex = (hintIndexRef.current + 1) % hints.length;
+        hintIndexRef.current = nextIndex;
+        const hint = hints[nextIndex];
+        setActiveHint(hint);
+        showHint(`💡 ${hint.message}`, 4000);
 
-    setActiveHint(hint);
-    showHint(`💡 ${hint.message}`, 4000);
-
-    if (hintHighlightTimeoutRef.current) {
-      clearTimeout(hintHighlightTimeoutRef.current);
+        if (hintHighlightTimeoutRef.current) {
+          clearTimeout(hintHighlightTimeoutRef.current);
+        }
+        hintHighlightTimeoutRef.current = setTimeout(() => {
+          setActiveHint(null);
+        }, 4000);
+        return;
+      }
     }
-    hintHighlightTimeoutRef.current = setTimeout(() => {
-      setActiveHint(null);
-    }, 4000);
+
+    isCheckingHintRef.current = true;
+    setIsCheckingHint(true);
+
+    try {
+      const result = await findOptimalHint(current, {
+        timeoutMs: 300,
+        maxStates: 10000,
+      });
+
+      // Discard if state changed while finding hint
+      if (
+        latestGameStateRef.current.id !== current.id ||
+        latestGameStateRef.current.moves !== current.moves
+      ) {
+        return;
+      }
+
+      if (!result) {
+        clearActiveHint();
+        showHint('No valid moves available.');
+        playGameOverSound();
+        setLossReason('no_moves');
+        setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+        return;
+      }
+
+      hintIndexRef.current = 0;
+      setActiveHint(result.hint);
+      showHint(`💡 ${result.hint.message}`, 4000);
+
+      if (hintHighlightTimeoutRef.current) {
+        clearTimeout(hintHighlightTimeoutRef.current);
+      }
+      hintHighlightTimeoutRef.current = setTimeout(() => {
+        setActiveHint(null);
+      }, 4000);
+    } catch {
+      // Fallback to synchronous hints on any unexpected error
+      const hints = findAvailableHints(current);
+      if (hints.length > 0) {
+        const hint = hints[0];
+        setActiveHint(hint);
+        showHint(`💡 ${hint.message}`, 4000);
+      }
+    } finally {
+      setIsCheckingHint(false);
+      isCheckingHintRef.current = false;
+    }
   }, [activeHint, clearActiveHint, showHint]);
 
   // Winnability Solver State
@@ -1928,7 +1973,7 @@ export const GameScreen: React.FC = () => {
         elapsedSeconds={gameState.elapsedSeconds}
         drawCount={gameState.drawCount}
         canUndo={gameState.history.length > 0 && !isDealing}
-        canHint={gameState.status === 'playing' && !isDealing}
+        canHint={gameState.status === 'playing' && !isDealing && !isCheckingHint}
         canGiveUp={gameState.status === 'playing' && gameState.moves > 0 && !isDealing}
         canCheckWinnable={gameState.status === 'playing' && !isDealing && !isCheckingWinnable}
         isCheckingWinnable={isCheckingWinnable}
