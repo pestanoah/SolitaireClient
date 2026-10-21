@@ -1,4 +1,4 @@
-import { findAvailableHints, findHint, formatCardShort } from '../hints';
+import { findAvailableHints, findHint, findOptimalHint, formatCardShort, moveRecordToHint } from '../hints';
 import { hasAvailableMoves } from '../rules';
 import { Card, GameState } from '../types';
 
@@ -401,6 +401,187 @@ describe('Hints Engine', () => {
 
     expect(findAvailableHints(state)).toHaveLength(0);
     expect(hasAvailableMoves(state)).toBe(false);
+  });
+
+  describe('moveRecordToHint', () => {
+    test('translates draw move from stock to waste', () => {
+      const state = createBaseState();
+      state.stock = [createDummyCard('c1', 'spades', 5, false)];
+      const hint = moveRecordToHint(state, {
+        from: { type: 'stock', index: 0 },
+        to: { type: 'waste', index: 0 },
+        cardIds: ['c1'],
+        pointsEarned: 0,
+      });
+      expect(hint).toEqual({
+        from: { type: 'stock', index: 0 },
+        type: 'draw',
+        message: 'Draw from the stock pile',
+      });
+    });
+
+    test('translates recycle move from waste to stock', () => {
+      const state = createBaseState();
+      state.waste = [createDummyCard('c1', 'spades', 5, true)];
+      const hint = moveRecordToHint(state, {
+        from: { type: 'waste', index: 0 },
+        to: { type: 'stock', index: 0 },
+        cardIds: ['c1'],
+        pointsEarned: -20,
+      });
+      expect(hint).toEqual({
+        from: { type: 'waste', index: 0 },
+        to: { type: 'stock', index: 0 },
+        type: 'recycle',
+        message: 'Reset waste back to stock',
+      });
+    });
+
+    test('translates waste to tableau and foundation moves when card is atop waste', () => {
+      const state = createBaseState();
+      state.waste = [createDummyCard('w_2s', 'spades', 2, true)];
+      state.tableau[0] = [createDummyCard('t_3h', 'hearts', 3, true)];
+
+      const tableauHint = moveRecordToHint(state, {
+        from: { type: 'waste', index: 0 },
+        to: { type: 'tableau', index: 0 },
+        cardIds: ['w_2s'],
+        pointsEarned: 5,
+      });
+      expect(tableauHint).toEqual({
+        from: { type: 'waste', index: 0 },
+        to: { type: 'tableau', index: 0 },
+        cardIds: ['w_2s'],
+        type: 'move',
+        message: 'Move 2♠ onto 3♥',
+      });
+
+      const foundationHint = moveRecordToHint(state, {
+        from: { type: 'waste', index: 0 },
+        to: { type: 'foundation', index: 0 },
+        cardIds: ['w_2s'],
+        pointsEarned: 10,
+      });
+      expect(foundationHint).toEqual({
+        from: { type: 'waste', index: 0 },
+        to: { type: 'foundation', index: 0 },
+        cardIds: ['w_2s'],
+        type: 'move',
+        message: 'Move 2♠ to Foundation',
+      });
+    });
+
+    test('translates macro deck move to draw when card is not yet on top of waste', () => {
+      const state = createBaseState();
+      state.stock = [createDummyCard('buried', 'hearts', 8, false)];
+      state.waste = [createDummyCard('top', 'clubs', 10, true)];
+      state.tableau[0] = [createDummyCard('target', 'spades', 9, true)];
+
+      const hint = moveRecordToHint(state, {
+        from: { type: 'stock', index: 0 },
+        to: { type: 'tableau', index: 0 },
+        cardIds: ['buried'],
+        pointsEarned: 5,
+      });
+      expect(hint).toEqual({
+        from: { type: 'stock', index: 0 },
+        type: 'draw',
+        message: 'Draw from the stock pile',
+      });
+    });
+
+    test('translates tableau to tableau and foundation moves', () => {
+      const state = createBaseState();
+      state.tableau[0] = [createDummyCard('t_as', 'spades', 1, true)];
+      state.tableau[1] = [createDummyCard('t_7h', 'hearts', 7, true)];
+      state.tableau[2] = [createDummyCard('t_8s', 'spades', 8, true)];
+
+      const fHint = moveRecordToHint(state, {
+        from: { type: 'tableau', index: 0 },
+        to: { type: 'foundation', index: 0 },
+        cardIds: ['t_as'],
+        pointsEarned: 10,
+      });
+      expect(fHint).toEqual({
+        from: { type: 'tableau', index: 0 },
+        to: { type: 'foundation', index: 0 },
+        cardIds: ['t_as'],
+        type: 'move',
+        message: 'Move A♠ to Foundation',
+      });
+
+      const tHint = moveRecordToHint(state, {
+        from: { type: 'tableau', index: 1 },
+        to: { type: 'tableau', index: 2 },
+        cardIds: ['t_7h'],
+        pointsEarned: 5,
+      });
+      expect(tHint).toEqual({
+        from: { type: 'tableau', index: 1 },
+        to: { type: 'tableau', index: 2 },
+        cardIds: ['t_7h'],
+        type: 'move',
+        message: 'Move 7♥ onto 8♠',
+      });
+    });
+
+    test('translates foundation down to tableau', () => {
+      const state = createBaseState();
+      state.foundations[1] = [
+        createDummyCard('ah', 'hearts', 1, true),
+        createDummyCard('2h', 'hearts', 2, true),
+        createDummyCard('3h', 'hearts', 3, true),
+      ];
+      state.tableau[0] = [createDummyCard('4s', 'spades', 4, true)];
+
+      const hint = moveRecordToHint(state, {
+        from: { type: 'foundation', index: 1 },
+        to: { type: 'tableau', index: 0 },
+        cardIds: ['3h'],
+        pointsEarned: -15,
+      });
+      expect(hint).toEqual({
+        from: { type: 'foundation', index: 1 },
+        to: { type: 'tableau', index: 0 },
+        cardIds: ['3h'],
+        type: 'move',
+        message: 'Move 3♥ down onto 4♠',
+      });
+    });
+  });
+
+  describe('findOptimalHint', () => {
+    test('returns null when game is won or status is not playing', async () => {
+      const state = createBaseState();
+      state.status = 'won';
+      expect(await findOptimalHint(state)).toBeNull();
+
+      state.status = 'lost';
+      expect(await findOptimalHint(state)).toBeNull();
+    });
+
+    test('finds winning path on a verified winnable deal seed', async () => {
+      const { dealKlondike } = require('../deck');
+      const game = dealKlondike(1, '2026-10-19');
+
+      const result = await findOptimalHint(game, { timeoutMs: 3000, maxStates: 20000 });
+      expect(result).not.toBeNull();
+      expect(result?.isWinningPath).toBe(true);
+      expect(result?.hint).toBeDefined();
+      expect(result?.hint.message).toBeTruthy();
+    });
+
+    test('gracefully falls back to heuristic when position cannot be solved within budget', async () => {
+      const state = createBaseState();
+      // Setup a basic state with a legal move
+      state.tableau[0] = [createDummyCard('t_as', 'spades', 1, true)];
+
+      // Budget of 0 states forces fallback
+      const result = await findOptimalHint(state, { maxStates: 0, timeoutMs: 1 });
+      expect(result).not.toBeNull();
+      expect(result?.hint.message).toBe('Move A♠ to Foundation');
+      expect(result?.isWinningPath).toBe(false);
+    });
   });
 });
 

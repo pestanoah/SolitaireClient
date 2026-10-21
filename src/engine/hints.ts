@@ -9,7 +9,8 @@ import {
   isReversingFoundationMove,
   isReversingTableauMove,
 } from './rules';
-import { Card, FOUNDATION_SUITS, GameState, PileLocation } from './types';
+import { Card, FOUNDATION_SUITS, GameState, MoveRecord, PileLocation } from './types';
+import { checkWinnable } from './solver';
 
 export interface Hint {
   from: PileLocation;
@@ -462,3 +463,204 @@ export function findHint(
   const hints = findAvailableHints(state, allowAnyCardOnEmpty);
   return hints.length > 0 ? hints[0] : null;
 }
+
+/**
+ * Searches the entire game state to find a card object by its unique ID.
+ */
+function findCardById(state: GameState, cardId: string): Card | null {
+  for (const col of state.tableau) {
+    for (const c of col) {
+      if (c.id === cardId) return c;
+    }
+  }
+  for (const c of state.waste) {
+    if (c.id === cardId) return c;
+  }
+  for (const c of state.stock) {
+    if (c.id === cardId) return c;
+  }
+  for (const pile of state.foundations) {
+    for (const c of pile) {
+      if (c.id === cardId) return c;
+    }
+  }
+  return null;
+}
+
+/**
+ * Translates a solver MoveRecord into a player-facing Hint object with human-readable
+ * action descriptions and precise source/destination pile coordinates.
+ */
+export function moveRecordToHint(state: GameState, move: MoveRecord): Hint | null {
+  // 1. Draw from stock
+  if (move.from.type === 'stock' && move.to.type === 'waste') {
+    return {
+      from: { type: 'stock', index: 0 },
+      type: 'draw',
+      message: 'Draw from the stock pile',
+    };
+  }
+
+  // 2. Recycle waste to stock
+  if (move.from.type === 'waste' && move.to.type === 'stock') {
+    return {
+      from: { type: 'waste', index: 0 },
+      to: { type: 'stock', index: 0 },
+      type: 'recycle',
+      message: 'Reset waste back to stock',
+    };
+  }
+
+  // 3. Move from stock or waste
+  if (move.from.type === 'waste' || move.from.type === 'stock') {
+    const cardId = move.cardIds[0];
+    const topWaste = state.waste.length > 0 ? state.waste[state.waste.length - 1] : null;
+
+    // If the required card is not currently at the top of the waste, the player must draw toward it
+    if (!topWaste || topWaste.id !== cardId) {
+      if (state.stock.length > 0) {
+        return {
+          from: { type: 'stock', index: 0 },
+          type: 'draw',
+          message: 'Draw from the stock pile',
+        };
+      } else if (state.waste.length > 0) {
+        return {
+          from: { type: 'waste', index: 0 },
+          to: { type: 'stock', index: 0 },
+          type: 'recycle',
+          message: 'Reset waste back to stock',
+        };
+      }
+      return null;
+    }
+
+    const card = topWaste;
+    if (move.to.type === 'foundation') {
+      return {
+        from: { type: 'waste', index: 0 },
+        to: move.to,
+        cardIds: [card.id],
+        type: 'move',
+        message: `Move ${formatCardShort(card)} to Foundation`,
+      };
+    } else if (move.to.type === 'tableau') {
+      const toCol = state.tableau[move.to.index];
+      const targetCard = toCol && toCol.length > 0 ? toCol[toCol.length - 1] : null;
+      const targetDesc = targetCard ? formatCardShort(targetCard) : 'empty column';
+      return {
+        from: { type: 'waste', index: 0 },
+        to: move.to,
+        cardIds: [card.id],
+        type: 'move',
+        message: `Move ${formatCardShort(card)} onto ${targetDesc}`,
+      };
+    }
+  }
+
+  // 4. Move from tableau
+  if (move.from.type === 'tableau') {
+    const card = findCardById(state, move.cardIds[0]);
+    if (!card) return null;
+
+    if (move.to.type === 'foundation') {
+      return {
+        from: move.from,
+        to: move.to,
+        cardIds: [card.id],
+        type: 'move',
+        message: `Move ${formatCardShort(card)} to Foundation`,
+      };
+    } else if (move.to.type === 'tableau') {
+      const toCol = state.tableau[move.to.index];
+      const targetCard = toCol && toCol.length > 0 ? toCol[toCol.length - 1] : null;
+      const targetDesc = targetCard ? formatCardShort(targetCard) : 'empty column';
+      return {
+        from: move.from,
+        to: move.to,
+        cardIds: move.cardIds,
+        type: 'move',
+        message: `Move ${formatCardShort(card)} onto ${targetDesc}`,
+      };
+    }
+  }
+
+  // 5. Move from foundation down to tableau
+  if (move.from.type === 'foundation' && move.to.type === 'tableau') {
+    const card = findCardById(state, move.cardIds[0]);
+    if (!card) return null;
+    const toCol = state.tableau[move.to.index];
+    const targetCard = toCol && toCol.length > 0 ? toCol[toCol.length - 1] : null;
+    const targetDesc = targetCard ? formatCardShort(targetCard) : 'empty column';
+    return {
+      from: move.from,
+      to: move.to,
+      cardIds: [card.id],
+      type: 'move',
+      message: `Move ${formatCardShort(card)} down onto ${targetDesc}`,
+    };
+  }
+
+  return null;
+}
+
+export interface OptimalHintResult {
+  hint: Hint;
+  isWinningPath: boolean;
+}
+
+/**
+ * Finds an optimal hint for the current game state by querying the A* solver
+ * within a fast budget (default 250ms). If a proven winning path is found,
+ * returns the exact first move of that winning path ('isWinningPath: true').
+ * Otherwise, seamlessly falls back to the strategic 1-step heuristic.
+ */
+export async function findOptimalHint(
+  state: GameState,
+  options: {
+    timeoutMs?: number;
+    maxStates?: number;
+    allowAnyCardOnEmpty?: boolean;
+  } = {}
+): Promise<OptimalHintResult | null> {
+  const timeoutMs = options.timeoutMs ?? 250;
+  const maxStates = options.maxStates ?? 10000;
+  const allowAnyCardOnEmpty = options.allowAnyCardOnEmpty ?? false;
+
+  if (state.status !== 'playing' || isGameWon(state.foundations)) {
+    return null;
+  }
+
+  // 1. Query the bounded A* solver
+  try {
+    const result = await checkWinnable(state, {
+      timeoutMs,
+      maxStates,
+      allowAnyCardOnEmpty,
+    });
+
+    if (result.status === 'winnable' && result.solutionMoves && result.solutionMoves.length > 0) {
+      const hint = moveRecordToHint(state, result.solutionMoves[0]);
+      if (hint) {
+        return {
+          hint,
+          isWinningPath: true,
+        };
+      }
+    }
+  } catch {
+    // Seamless fallback to heuristic on any solver error
+  }
+
+  // 2. Fallback to strategic 1-step heuristic
+  const heuristicHint = findHint(state, allowAnyCardOnEmpty);
+  if (heuristicHint) {
+    return {
+      hint: heuristicHint,
+      isWinningPath: false,
+    };
+  }
+
+  return null;
+}
+
