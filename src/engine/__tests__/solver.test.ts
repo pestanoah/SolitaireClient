@@ -262,5 +262,52 @@ describe('solver', () => {
       expect(res1.solutionMoves?.length).toBeGreaterThan(0);
       expect(res1.statesEvaluated).toBeLessThan(10000);
     });
+
+    it('does not falsely declare unwinnable when hasAvailableMoves is false due to exhausted stock cycles but winning moves exist after recycle', async () => {
+      const state = makeBaseState();
+      state.drawCount = 1;
+      state.stock = [];
+      // Waste has King of Clubs underneath a non-playable 8 of Spades
+      state.waste = [
+        makeCard('kc', 'clubs', 13, true),
+        makeCard('8s', 'spades', 8, true),
+      ];
+      // Foundations: Spades, Hearts, Diamonds are complete (1..13). Clubs is at 12 (needs King of Clubs).
+      const suits: ('spades' | 'hearts' | 'diamonds' | 'clubs')[] = [
+        'spades',
+        'hearts',
+        'diamonds',
+        'clubs',
+      ];
+      state.foundations = suits.map((suit) => {
+        const count = suit === 'clubs' ? 12 : 13;
+        return Array.from({ length: count }, (_, i) =>
+          makeCard(`${suit}_${i + 1}`, suit, (i + 1) as any, true)
+        );
+      });
+      // Tableau has cards that cannot move to foundation or to each other
+      state.tableau[0] = [makeCard('h6', 'hearts', 6, true)];
+      state.tableau[1] = [makeCard('d8', 'diamonds', 8, true)];
+      state.tableau[2] = [makeCard('s10', 'spades', 10, true)];
+
+      // Simulate an exhausted stock cycle
+      state.history = [
+        {
+          from: { type: 'waste', index: 0 },
+          to: { type: 'stock', index: 0 },
+          cardIds: ['kc', '8s'],
+          pointsEarned: -20,
+        },
+      ];
+
+      // Verify that hasAvailableMoves indeed reports false due to stock cycle exhaustion
+      const { hasAvailableMoves } = require('../rules');
+      expect(hasAvailableMoves(state)).toBe(false);
+
+      // But checkWinnable must not falsely abort; it must explore and find the winning path!
+      const result = await checkWinnable(state);
+      expect(result.status).toBe('winnable');
+      expect(result.solutionMoves?.length).toBeGreaterThan(0);
+    });
   });
 });

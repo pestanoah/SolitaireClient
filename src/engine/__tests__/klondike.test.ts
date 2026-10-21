@@ -7,6 +7,7 @@ import {
   areAllTableauCardsUncovered,
   hasAvailableMoves,
   hasExhaustedStockCycles,
+  hasLegalMoves,
 } from '../rules';
 import { drawCards, moveCards, undo, findSmartMove, autoCompleteStep, replayGame } from '../klondike';
 import { Card, GameState, getCardColor } from '../types';
@@ -1511,7 +1512,92 @@ describe('Automatic First Card Draw on Start and Waste Reset', () => {
 
       // rule checks return false
       expect(hasAvailableMoves(idleGame)).toBe(false);
+      expect(hasLegalMoves(idleGame)).toBe(false);
       expect(canAutoComplete(idleGame)).toBe(false);
+    });
+  });
+
+  describe('hasLegalMoves Ground Truth Deadlock Detection', () => {
+    test('returns true when stock contains cards to draw', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.stock = [{ id: 'c1', rank: 5, suit: 'hearts', faceUp: false }];
+      expect(hasLegalMoves(state)).toBe(true);
+    });
+
+    test('returns true when waste has cards to recycle into empty stock', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.stock = [];
+      state.waste = [{ id: 'c1', rank: 5, suit: 'hearts', faceUp: true }];
+      expect(hasLegalMoves(state)).toBe(true);
+    });
+
+    test('returns true when top waste card can be placed on foundation or tableau', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.stock = [];
+      state.waste = [{ id: 'ace_hearts', rank: 1, suit: 'hearts', faceUp: true }];
+      expect(hasLegalMoves(state)).toBe(true);
+    });
+
+    test('returns true when tableau card can move to foundation', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.tableau[0] = [{ id: 'ace_spades', rank: 1, suit: 'spades', faceUp: true }];
+      expect(hasLegalMoves(state)).toBe(true);
+    });
+
+    test('returns true when tableau card can build onto another tableau column', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.tableau[0] = [{ id: 'eight_spades', rank: 8, suit: 'spades', faceUp: true }];
+      state.tableau[1] = [{ id: 'nine_hearts', rank: 9, suit: 'hearts', faceUp: true }];
+      expect(hasLegalMoves(state)).toBe(true);
+    });
+
+    test('returns true when foundation card can move down to tableau', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.foundations[0] = [
+        { id: 'as', rank: 1, suit: 'spades', faceUp: true },
+        { id: '2s', rank: 2, suit: 'spades', faceUp: true },
+        { id: '3s', rank: 3, suit: 'spades', faceUp: true },
+      ];
+      state.tableau[0] = [{ id: '4h', rank: 4, suit: 'hearts', faceUp: true }];
+      expect(hasLegalMoves(state)).toBe(true);
+    });
+
+    test('returns false for redundant King swap between empty columns with no other moves', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.stock = [];
+      state.waste = [];
+      // Col 0 has King of Spades alone; Col 1 has King of Clubs alone; other columns empty
+      state.tableau[0] = [{ id: 'ks', rank: 13, suit: 'spades', faceUp: true }];
+      state.tableau[1] = [{ id: 'kc', rank: 13, suit: 'clubs', faceUp: true }];
+      expect(hasLegalMoves(state)).toBe(false);
+    });
+
+    test('returns false when no moves exist anywhere on the board (physical deadlock)', () => {
+      const state = createEmptyGame(1);
+      state.status = 'playing';
+      state.stock = [];
+      state.waste = [];
+      // Two cards of same color/rank that cannot be placed on each other
+      state.tableau[0] = [{ id: '8s', rank: 8, suit: 'spades', faceUp: true }];
+      state.tableau[1] = [{ id: '6c', rank: 6, suit: 'clubs', faceUp: true }];
+      expect(hasLegalMoves(state)).toBe(false);
+    });
+
+    test('returns false when game is won or status is not playing', () => {
+      const state = createEmptyGame(1);
+      state.status = 'won';
+      state.stock = [{ id: 'c1', rank: 5, suit: 'hearts', faceUp: false }];
+      expect(hasLegalMoves(state)).toBe(false);
+
+      state.status = 'lost';
+      expect(hasLegalMoves(state)).toBe(false);
     });
   });
 });
