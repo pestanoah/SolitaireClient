@@ -306,11 +306,14 @@ export function findAvailableHints(
             continue;
           }
 
+          const emptiesColumn = cardIdx === 0;
           let score = 50;
           if (uncoversCard) {
             score = 85;
+          } else if (emptiesColumn) {
+            score = 75;
           } else if (card.rank === 13 && toCol.length === 0) {
-            score = 55;
+            score = 65;
           } else if (toCol.length > 0) {
             score = 60;
           }
@@ -345,11 +348,15 @@ export function findAvailableHints(
       if (canPlaceOnTableau(topWaste, toCol, allowAnyCardOnEmpty)) {
         const targetCard = toCol.length > 0 ? toCol[toCol.length - 1] : null;
         const targetDesc = targetCard ? formatCardShort(targetCard) : 'empty column';
-        // Moving waste down to tableau yields +5 pts, and card remains eligible for +10 pts foundation
-        // later (+15 total vs +10 directly). When both are available, prioritize tableau first.
-        let score = toCol.length > 0 ? 62 : 54;
+        // Playing waste card to tableau is prioritized below tableau reorganization moves
+        // so that players uncover face-down cards, empty columns, and consolidate sequences first.
+        // However, if the card can also move to foundation, moving to tableau yields +5 pts while
+        // remaining eligible for +10 pts foundation later (+15 total vs +10 directly).
+        let score = toCol.length > 0 ? 45 : 42;
         if (toCol.length > 0 && canAlsoMoveToFoundation) {
           score = topWaste.rank <= 2 ? 97 : 67;
+        } else if (topWaste.rank === 13 && toCol.length === 0) {
+          score = 50;
         }
 
         scored.push({
@@ -640,7 +647,25 @@ export async function findOptimalHint(
     });
 
     if (result.status === 'winnable' && result.solutionMoves && result.solutionMoves.length > 0) {
-      const hint = moveRecordToHint(state, result.solutionMoves[0]);
+      const solverMove = result.solutionMoves[0];
+      const isDeckMove =
+        solverMove.from.type === 'stock' ||
+        solverMove.from.type === 'waste';
+
+      // If the solver suggests drawing or playing from waste, but there is an immediate,
+      // productive tableau move available on the board (uncovering a card, clearing a column,
+      // or promoting to foundation), prioritize the visible tableau advancement first.
+      if (isDeckMove) {
+        const topHeuristic = findHint(state, allowAnyCardOnEmpty);
+        if (topHeuristic && topHeuristic.from.type === 'tableau') {
+          return {
+            hint: topHeuristic,
+            isWinningPath: true,
+          };
+        }
+      }
+
+      const hint = moveRecordToHint(state, solverMove);
       if (hint) {
         return {
           hint,

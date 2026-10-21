@@ -475,10 +475,10 @@ function generateCandidateMoves(
             allowAnyCardOnEmpty
           );
           if (next) {
-            let priority = 10;
+            let priority = 40;
             if (uncoversFaceDown) priority = 100;
-            else if (emptiesColumn) priority = 45;
-            else if (card.rank === 13) priority = 35;
+            else if (emptiesColumn) priority = 75;
+            else if (card.rank === 13) priority = 65;
 
             candidates.push({
               nextState: next,
@@ -494,6 +494,9 @@ function generateCandidateMoves(
   // 2. Play accessible deck cards (stock/waste) directly to foundation or tableau
   const accessibleCards = getAccessibleDeckCards(state);
   for (const card of accessibleCards) {
+    const isTopWaste =
+      state.waste.length > 0 && state.waste[state.waste.length - 1].id === card.id;
+
     // Foundation target
     for (let f = 0; f < state.foundations.length; f++) {
       if (canPlaceOnFoundation(card, state.foundations[f], f)) {
@@ -504,10 +507,12 @@ function generateCandidateMoves(
           allowAnyCardOnEmpty
         );
         if (played) {
+          const priority =
+            card.rank <= 2 && isTopWaste ? 95 : card.rank <= 2 ? 80 : 50;
           candidates.push({
             nextState: played.nextState,
             moves: played.moves,
-            priority: 75,
+            priority,
           });
         }
       }
@@ -528,7 +533,8 @@ function generateCandidateMoves(
           allowAnyCardOnEmpty
         );
         if (played) {
-          const priority = card.rank === 13 ? 65 : 60;
+          const priority =
+            card.rank === 13 ? (isTopWaste ? 55 : 45) : isTopWaste ? 45 : 30;
           candidates.push({
             nextState: played.nextState,
             moves: played.moves,
@@ -698,7 +704,10 @@ export async function checkWinnable(
       const score = computeHelperScore(cand.nextState, frame.depth + 1);
       return { cand, score };
     });
-    scoredCandidates.sort((a, b) => a.score - b.score);
+    scoredCandidates.sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      return b.cand.priority - a.cand.priority;
+    });
 
     // Beam search: take top 3 best moves matching ShootMe's pruning strategy
     const topMoves = scoredCandidates.slice(0, 3);
