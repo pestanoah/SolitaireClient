@@ -23,6 +23,7 @@ export interface SettingsModalProps {
   visible: boolean;
   settings: UserSettings;
   currentSeed?: string;
+  dailyStreak?: number;
   onClose: () => void;
   onChangeDrawCount: (drawCount: 1 | 3) => void;
   onToggleSound: (enabled: boolean) => void;
@@ -31,12 +32,14 @@ export interface SettingsModalProps {
   onToggleWinningDeals?: (enabled: boolean) => void;
   onOpenSeedModal?: () => void;
   onPlayDailyChallenge?: () => void;
+  onOpenDailyModal?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   visible,
   settings,
   currentSeed,
+  dailyStreak,
   onClose,
   onChangeDrawCount,
   onToggleSound,
@@ -45,6 +48,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleWinningDeals,
   onOpenSeedModal,
   onPlayDailyChallenge,
+  onOpenDailyModal,
 }) => {
   const isSoundOn = settings.soundEnabled !== false;
 
@@ -239,13 +243,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </View>
 
-            {onOpenSeedModal && (
+            {(onOpenSeedModal || onOpenDailyModal) && (
               <>
                 <View style={styles.divider} />
                 <View style={styles.settingBlock}>
                   <View style={styles.settingHeader}>
                     <Text style={styles.settingTitle}>Daily Challenge & Seeds</Text>
                     <Text style={styles.settingDescription}>
+                      {dailyStreak !== undefined && dailyStreak > 0
+                        ? `${dailyStreak} day streak! `
+                        : ''}
                       {isDailyChallenge(currentSeed)
                         ? `Playing Daily Challenge: #${currentSeed}`
                         : currentSeed
@@ -269,18 +276,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </TouchableOpacity>
                     )}
 
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => {
-                        onClose();
-                        onOpenSeedModal();
-                      }}
-                      style={[styles.seedModalBtn, onPlayDailyChallenge ? { flex: 1 } : null]}
-                      accessibilityLabel="Manage seed and challenge"
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.seedModalBtnText}>Custom Seed</Text>
-                    </TouchableOpacity>
+                    {onOpenDailyModal && (
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          onClose();
+                          onOpenDailyModal();
+                        }}
+                        style={styles.calendarModalBtn}
+                        accessibilityLabel="View daily challenges calendar and history"
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.calendarModalBtnText}>Calendar</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {onOpenSeedModal && (
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          onClose();
+                          onOpenSeedModal();
+                        }}
+                        style={[styles.seedModalBtn, onPlayDailyChallenge ? { flex: 1 } : null]}
+                        accessibilityLabel="Manage seed and challenge"
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.seedModalBtnText}>Custom Seed</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               </>
@@ -451,6 +475,21 @@ const styles = StyleSheet.create({
   },
   dailyChallengeBtnText: {
     color: colors.white,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  calendarModalBtn: {
+    backgroundColor: colors.slate[800],
+    borderWidth: 1,
+    borderColor: colors.action.info,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarModalBtnText: {
+    color: colors.action.info,
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
   },

@@ -115,4 +115,45 @@ describe('GameHeader Winnable Button', () => {
     btn.props.onPress();
     expect(onCheckWinnable).toHaveBeenCalledTimes(1);
   });
+
+  it('renders Daily button and triggers onOpenDailyChallenge', () => {
+    const onOpenDailyChallenge = jest.fn();
+    const tree = renderHeader({
+      ...baseProps,
+      onOpenDailyChallenge,
+    });
+
+    const btn = findByAccessibilityLabel(tree, 'Open daily challenges');
+    expect(btn).not.toBeNull();
+    expect(findTextContaining(btn, 'Daily')).not.toBeNull();
+
+    btn.props.onPress();
+    expect(onOpenDailyChallenge).toHaveBeenCalledTimes(1);
+  });
+
+  it('displays streak count when dailyStreak is positive', () => {
+    const tree = renderHeader({
+      ...baseProps,
+      onOpenDailyChallenge: jest.fn(),
+      dailyStreak: 4,
+    });
+
+    const btn = findByAccessibilityLabel(tree, 'Open daily challenges');
+    expect(btn).not.toBeNull();
+    expect(findTextContaining(btn, 'Daily (4)')).not.toBeNull();
+  });
+
+  it('tapping Daily challenge seed badge opens daily challenge modal', () => {
+    const onOpenDailyChallenge = jest.fn();
+    const tree = renderHeader({
+      ...baseProps,
+      seed: '2026-10-22',
+      onOpenDailyChallenge,
+    });
+
+    const badge = findByAccessibilityLabel(tree, 'Daily challenge: #2026-10-22. Tap to view calendar.');
+    expect(badge).not.toBeNull();
+    badge.props.onPress();
+    expect(onOpenDailyChallenge).toHaveBeenCalledTimes(1);
+  });
 });

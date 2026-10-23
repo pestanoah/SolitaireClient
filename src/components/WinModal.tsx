@@ -10,12 +10,14 @@ export interface WinModalProps {
   moves: number;
   elapsedSeconds: number;
   seed?: string;
+  dailyStreak?: number;
   onNewGame: () => void;
   onReplaySeed?: () => void;
   onReplayDraw?: () => void;
   onReplay?: () => void;
   onClose?: () => void;
   onShare?: (stats?: { score: number; elapsedSeconds: number }) => void;
+  onOpenDailyModal?: () => void;
 }
 
 export const WinModal: React.FC<WinModalProps> = ({
@@ -24,12 +26,14 @@ export const WinModal: React.FC<WinModalProps> = ({
   moves,
   elapsedSeconds,
   seed,
+  dailyStreak,
   onNewGame,
   onReplaySeed,
   onReplayDraw,
   onReplay,
   onClose,
   onShare,
+  onOpenDailyModal,
 }) => {
   useEffect(() => {
     if (visible) {
@@ -88,6 +92,12 @@ export const WinModal: React.FC<WinModalProps> = ({
             </View>
           ) : null}
 
+          {isDateSeed(seed) && dailyStreak !== undefined && dailyStreak > 0 && (
+            <View style={styles.streakWinBadge}>
+              <Text style={styles.streakWinText}>{`${dailyStreak} Day Streak!`}</Text>
+            </View>
+          )}
+
           <View style={styles.buttonContainer}>
             <View style={modalStyles.buttonRow}>
               {handleReplay ? (
@@ -112,6 +122,21 @@ export const WinModal: React.FC<WinModalProps> = ({
                 <Text style={styles.newGameBtnText}>New Game</Text>
               </TouchableOpacity>
             </View>
+
+            {isDateSeed(seed) && onOpenDailyModal && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  onClose?.();
+                  onOpenDailyModal();
+                }}
+                style={[modalStyles.actionBtn, styles.calendarBtn]}
+                accessibilityLabel="View daily challenges calendar"
+                accessibilityRole="button"
+              >
+                <Text style={styles.calendarBtnText}>Daily Challenges Calendar</Text>
+              </TouchableOpacity>
+            )}
 
             {onShare ? (
               <TouchableOpacity
@@ -240,5 +265,30 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
     textDecorationLine: 'underline',
+  },
+  streakWinBadge: {
+    backgroundColor: colors.slate[800],
+    borderWidth: 1,
+    borderColor: colors.action.info,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.lg,
+  },
+  streakWinText: {
+    color: colors.white,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.heavy,
+  },
+  calendarBtn: {
+    backgroundColor: colors.slate[800],
+    borderWidth: 1,
+    borderColor: colors.felt.surface,
+    width: '100%',
+  },
+  calendarBtnText: {
+    color: colors.felt.accent,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
   },
 });

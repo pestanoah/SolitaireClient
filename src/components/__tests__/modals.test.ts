@@ -198,6 +198,28 @@ describe('Modal Backdrop Dismissal', () => {
       expect(setConfirmState).toHaveBeenCalledWith(false);
       expect(onReset).toHaveBeenCalledTimes(1);
     });
+
+    test('renders daily challenge streak and calendar navigation button when provided', () => {
+      const onOpenDailyModal = jest.fn();
+      const onClose = jest.fn();
+      const element: any = StatsModal({
+        visible: true,
+        stats: { gamesPlayed: 5, gamesWon: 3, highScore: 400, bestTimeSeconds: 100 },
+        dailyStreak: 3,
+        longestDailyStreak: 5,
+        onClose,
+        onOpenDailyModal,
+      });
+
+      expect(findTextContaining(element, 'Daily Streak')).not.toBeNull();
+      expect(findTextContaining(element, 'Best Streak')).not.toBeNull();
+
+      const calendarBtn = findByAccessibilityLabel(element, 'View daily challenges calendar and streak');
+      expect(calendarBtn).not.toBeNull();
+      calendarBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onOpenDailyModal).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('SettingsModal', () => {
@@ -268,6 +290,35 @@ describe('Modal Backdrop Dismissal', () => {
       customSeedBtn.props.onPress();
       expect(onClose).toHaveBeenCalledTimes(2);
       expect(onOpenSeedModal).toHaveBeenCalledTimes(1);
+    });
+
+    test('renders Calendar button in SettingsModal and triggers onOpenDailyModal', () => {
+      const onClose = jest.fn();
+      const onOpenDailyModal = jest.fn();
+      const settings = {
+        drawCount: 1 as const,
+        autoMoveOnTap: true,
+        soundEnabled: true,
+        rightHanded: false,
+      };
+
+      const element: any = SettingsModal({
+        visible: true,
+        settings,
+        onClose,
+        onChangeDrawCount: jest.fn(),
+        onToggleSound: jest.fn(),
+        onToggleAutoMove: jest.fn(),
+        onToggleRightHanded: jest.fn(),
+        onOpenDailyModal,
+        dailyStreak: 5,
+      });
+
+      const calBtn = findByAccessibilityLabel(element, 'View daily challenges calendar and history');
+      expect(calBtn).not.toBeNull();
+      calBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onOpenDailyModal).toHaveBeenCalledTimes(1);
     });
 
     test('renders Winnable Deals Only toggle and triggers callback', () => {
@@ -699,6 +750,29 @@ describe('Modal Backdrop Dismissal', () => {
       reviewBoardBtn.props.onPress();
       expect(onClose).toHaveBeenCalledTimes(1);
     });
+
+    test('renders streak badge and calendar button when seed is a daily challenge', () => {
+      const onOpenDailyModal = jest.fn();
+      const onClose = jest.fn();
+      const element: any = WinModal({
+        visible: true,
+        score: 800,
+        moves: 30,
+        elapsedSeconds: 75,
+        seed: '2026-10-22',
+        dailyStreak: 6,
+        onNewGame: jest.fn(),
+        onClose,
+        onOpenDailyModal,
+      });
+
+      expect(findTextContaining(element, '6 Day Streak!')).not.toBeNull();
+      const calBtn = findByAccessibilityLabel(element, 'View daily challenges calendar');
+      expect(calBtn).not.toBeNull();
+      calBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onOpenDailyModal).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('GameOverModal Seed & Share', () => {
@@ -880,6 +954,25 @@ describe('Modal Backdrop Dismissal', () => {
 
       const note = findTextContaining(element, 'Custom seeds are not guaranteed to be winnable');
       expect(note).not.toBeNull();
+    });
+
+    test('renders Calendar button in SeedModal and triggers onOpenDailyModal', () => {
+      const onClose = jest.fn();
+      const onOpenDailyModal = jest.fn();
+      const element: any = SeedModal({
+        visible: true,
+        drawCount: 1,
+        onClose,
+        onPlaySeed: jest.fn(),
+        onOpenDailyModal,
+        dailyStreak: 3,
+      });
+
+      const calBtn = findByAccessibilityLabel(element, 'Open daily challenges calendar');
+      expect(calBtn).not.toBeNull();
+      calBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onOpenDailyModal).toHaveBeenCalledTimes(1);
     });
   });
 });

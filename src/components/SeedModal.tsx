@@ -23,18 +23,22 @@ export interface SeedModalProps {
   visible: boolean;
   currentSeed?: string;
   drawCount: 1 | 3;
+  dailyStreak?: number;
   onClose: () => void;
   onPlaySeed: (seed: string) => void;
   onShareSeed?: (seed: string) => void;
+  onOpenDailyModal?: () => void;
 }
 
 export const SeedModal: React.FC<SeedModalProps> = ({
   visible,
   currentSeed,
   drawCount,
+  dailyStreak,
   onClose,
   onPlaySeed,
   onShareSeed,
+  onOpenDailyModal,
 }) => {
   const [inputSeed, setInputSeed] = useState('');
   const [copied, setCopied] = useState(false);
@@ -111,20 +115,37 @@ export const SeedModal: React.FC<SeedModalProps> = ({
                 <Text style={styles.dailySubtitle}>{todaySeed}</Text>
               </View>
 
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => {
-                  onPlaySeed(todaySeed);
-                  onClose();
-                }}
-                style={[styles.dailyBtn, isCurrentDaily && styles.dailyBtnActive]}
-                accessibilityLabel="Play today's daily challenge"
-                accessibilityRole="button"
-              >
-                <Text style={styles.dailyBtnText}>
-                  {isCurrentDaily ? 'Replay' : 'Play Today'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.dailyActionsGroup}>
+                {onOpenDailyModal && (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      onClose();
+                      onOpenDailyModal();
+                    }}
+                    style={styles.calendarBtn}
+                    accessibilityLabel="Open daily challenges calendar"
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.calendarBtnText}>Calendar</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    onPlaySeed(todaySeed);
+                    onClose();
+                  }}
+                  style={[styles.dailyBtn, isCurrentDaily && styles.dailyBtnActive]}
+                  accessibilityLabel="Play today's daily challenge"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.dailyBtnText}>
+                    {isCurrentDaily ? 'Replay' : 'Play Today'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -288,6 +309,24 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     marginTop: 2,
     fontWeight: fontWeight.semibold,
+  },
+  dailyActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  calendarBtn: {
+    backgroundColor: colors.slate[700],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarBtnText: {
+    color: colors.action.info,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
   },
   dailyBtn: {
     backgroundColor: colors.felt.surface,

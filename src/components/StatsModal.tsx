@@ -7,17 +7,25 @@ import { ConfirmModal } from './ConfirmModal';
 export interface StatsModalProps {
   visible: boolean;
   stats: PlayerStats;
+  dailyStreak?: number;
+  longestDailyStreak?: number;
+  dailyWonCount?: number;
   onClose: () => void;
   onResetStats?: () => void;
   onReset?: () => void;
+  onOpenDailyModal?: () => void;
 }
 
 export const StatsModal: React.FC<StatsModalProps> = ({
   visible,
   stats,
+  dailyStreak,
+  longestDailyStreak,
+  dailyWonCount,
   onClose,
   onResetStats,
   onReset,
+  onOpenDailyModal,
 }) => {
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -84,7 +92,38 @@ export const StatsModal: React.FC<StatsModalProps> = ({
               <Text style={styles.statValue}>{formatTime(stats.bestTimeSeconds)}</Text>
               <Text style={styles.statLabel}>Best Time</Text>
             </View>
+
+            {dailyStreak !== undefined && (
+              <>
+                <View style={[styles.statBox, styles.streakBox]}>
+                  <Text style={styles.streakValue}>{dailyStreak}</Text>
+                  <Text style={styles.statLabel}>Daily Streak</Text>
+                </View>
+
+                <View style={[styles.statBox, styles.streakBox]}>
+                  <Text style={styles.streakValue}>{longestDailyStreak ?? dailyStreak}</Text>
+                  <Text style={styles.statLabel}>Best Streak</Text>
+                </View>
+              </>
+            )}
           </View>
+
+          {onOpenDailyModal && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                handleClose();
+                onOpenDailyModal();
+              }}
+              style={styles.dailyCalendarLinkBtn}
+              accessibilityLabel="View daily challenges calendar and streak"
+              accessibilityRole="button"
+            >
+              <Text style={styles.dailyCalendarLinkText}>
+                View Daily Challenge Calendar
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <View style={modalStyles.buttonRow}>
             <TouchableOpacity
@@ -182,6 +221,29 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: colors.white,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  streakBox: {
+    borderColor: colors.action.info,
+  },
+  streakValue: {
+    color: colors.white,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.heavy,
+  },
+  dailyCalendarLinkBtn: {
+    backgroundColor: colors.slate[800],
+    borderWidth: 1,
+    borderColor: colors.felt.surface,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: spacing.section,
+  },
+  dailyCalendarLinkText: {
+    color: colors.felt.accent,
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
   },
