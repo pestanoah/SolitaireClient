@@ -250,161 +250,113 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
     );
   }
 
+  const showModeBadge = !seed && (!onOpenDailyChallenge || width >= 390);
+  const showDailyBtn = Boolean(onOpenDailyChallenge && (!seed || !isDateSeed(seed)));
+
   return (
     <View style={styles.header}>
-      {/* Metrics Row */}
-      <View style={styles.metricsRow}>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>SCORE</Text>
-          <Text style={styles.metricValue}>{score}</Text>
+      {/* Top Header Row (Single Compact Row in Portrait) */}
+      <View style={styles.headerRowPortrait}>
+        {/* Left: Metrics */}
+        <View style={styles.metricsGroupPortrait}>
+          <View style={styles.metricPortrait}>
+            <Text style={styles.metricLabelPortrait}>SCORE</Text>
+            <Text style={styles.metricValuePortrait}>{score}</Text>
+          </View>
+
+          <View style={styles.metricPortrait}>
+            <Text style={styles.metricLabelPortrait}>MOVES</Text>
+            <Text style={styles.metricValuePortrait}>{moves}</Text>
+          </View>
+
+          <View style={styles.metricPortrait}>
+            <Text style={styles.metricLabelPortrait}>TIME</Text>
+            <Text style={styles.metricValuePortrait}>{timeFormatted}</Text>
+          </View>
         </View>
 
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>MOVES</Text>
-          <Text style={styles.metricValue}>{moves}</Text>
-        </View>
-
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>TIME</Text>
-          <Text style={styles.metricValue}>{timeFormatted}</Text>
-        </View>
-
-        {seed && (onOpenDailyChallenge || onOpenSeed) && (
-          <Pressable
-            onPress={isDateSeed(seed) && onOpenDailyChallenge ? onOpenDailyChallenge : onOpenSeed}
-            style={({ pressed }) => [styles.seedBadgeHeader, pressed && { opacity: 0.7 }]}
-            accessibilityLabel={
-              isDateSeed(seed)
-                ? `Daily challenge: #${seed}. Tap to view calendar.`
-                : `Seed: ${seed}. Tap to manage seed.`
-            }
-            accessibilityRole="button"
-          >
-            <Text style={styles.seedBadgeLabel}>
-              {isDateSeed(seed) ? 'DAILY' : 'SEED'}
-            </Text>
-            <Text style={styles.seedBadgeValue} numberOfLines={1}>
-              #{seed.length > 7 ? `${seed.slice(0, 6)}…` : seed}
-            </Text>
-          </Pressable>
-        )}
-
-        <Pressable
-          onPress={handleOpenSettings}
-          style={({ pressed }) => [styles.modeBadge, pressed && { opacity: 0.7 }]}
-          accessibilityLabel={`Draw mode: Draw ${drawCount}. Tap to open settings.`}
-          accessibilityRole="button"
-        >
-          <Text style={styles.modeLabel}>Draw Mode</Text>
-          <Text style={styles.modeValue}>Draw {drawCount}</Text>
-        </Pressable>
-      </View>
-
-      {/* Actions Row */}
-      <View style={styles.actionsRow}>
-        <Pressable
-          disabled={!canUndo}
-          onPress={onUndo}
-          style={({ pressed }) => [styles.actionBtn, !canUndo && styles.btnDisabled, pressed && canUndo && { opacity: 0.7 }]}
-          accessibilityLabel="Undo move"
-          accessibilityRole="button"
-        >
-          <Text style={[styles.actionBtnText, !canUndo && styles.btnTextDisabled]}>
-            Undo
-          </Text>
-        </Pressable>
-
-        {onHint && (
-          <Pressable
-            disabled={!canHint}
-            onPress={onHint}
-            style={({ pressed }) => [styles.actionBtn, !canHint && styles.btnDisabled, pressed && canHint && { opacity: 0.7 }]}
-            accessibilityLabel="Show hint"
-            accessibilityRole="button"
-          >
-            <Text style={[styles.actionBtnText, !canHint && styles.btnTextDisabled]}>
-              Hint
-            </Text>
-          </Pressable>
-        )}
-
-        {onCheckWinnable && (
-          <Pressable
-            disabled={!canCheckWinnable || isCheckingWinnable}
-            onPress={onCheckWinnable}
-            style={({ pressed }) => [
-              styles.actionBtn,
-              (!canCheckWinnable || isCheckingWinnable) && styles.btnDisabled,
-              pressed && canCheckWinnable && !isCheckingWinnable && { opacity: 0.7 },
-            ]}
-            accessibilityLabel={isCheckingWinnable ? 'Checking winnability' : 'Check if game is winnable'}
-            accessibilityRole="button"
-          >
-            <Text
-              style={[
-                styles.actionBtnText,
-                (!canCheckWinnable || isCheckingWinnable) && styles.btnTextDisabled,
-              ]}
-              numberOfLines={1}
+        {/* Right: Badges & System Actions */}
+        <View style={styles.navGroupPortrait}>
+          {seed && (onOpenDailyChallenge || onOpenSeed) && (
+            <Pressable
+              onPress={isDateSeed(seed) && onOpenDailyChallenge ? onOpenDailyChallenge : onOpenSeed}
+              style={({ pressed }) => [styles.seedBadgePortrait, pressed && { opacity: 0.7 }]}
+              accessibilityLabel={
+                isDateSeed(seed)
+                  ? `Daily challenge: #${seed}. Tap to view calendar.`
+                  : `Seed: ${seed}. Tap to manage seed.`
+              }
+              accessibilityRole="button"
             >
-              {isCheckingWinnable ? 'Checking…' : 'Winnable?'}
-            </Text>
-          </Pressable>
-        )}
+              <Text style={styles.seedBadgeLabelPortrait}>
+                {isDateSeed(seed) ? 'DAILY' : 'SEED'}
+              </Text>
+              <Text style={styles.seedBadgeValuePortrait} numberOfLines={1}>
+                #{seed.length > 7 ? `${seed.slice(0, 6)}…` : seed}
+              </Text>
+            </Pressable>
+          )}
 
-        {onGiveUp && (
+          {showModeBadge && (
+            <Pressable
+              onPress={handleOpenSettings}
+              style={({ pressed }) => [styles.modeBadgePortrait, pressed && { opacity: 0.7 }]}
+              accessibilityLabel={`Draw mode: Draw ${drawCount}. Tap to open settings.`}
+              accessibilityRole="button"
+            >
+              <Text style={styles.modeLabelPortrait}>MODE</Text>
+              <Text style={styles.modeValuePortrait}>Draw {drawCount}</Text>
+            </Pressable>
+          )}
+
+          {showDailyBtn && onOpenDailyChallenge && (
+            <Pressable
+              onPress={onOpenDailyChallenge}
+              style={({ pressed }) => [styles.actionBtnPortrait, pressed && { opacity: 0.7 }]}
+              accessibilityLabel="Open daily challenges"
+              accessibilityRole="button"
+            >
+              <Text style={styles.actionBtnTextPortrait}>
+                {dailyStreak && dailyStreak > 0 ? `Daily (${dailyStreak})` : 'Daily'}
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
-            disabled={!canGiveUp}
-            onPress={onGiveUp}
-            style={({ pressed }) => [styles.actionBtn, !canGiveUp && styles.btnDisabled, pressed && canGiveUp && { opacity: 0.7 }]}
-            accessibilityLabel="Give up game"
+            onPress={onOpenStats}
+            style={({ pressed }) => [styles.actionBtnPortrait, pressed && { opacity: 0.7 }]}
+            accessibilityLabel="View statistics"
             accessibilityRole="button"
           >
-            <Text style={[styles.actionBtnText, !canGiveUp && styles.btnTextDisabled]}>
-              Give Up
-            </Text>
+            <Text style={styles.actionBtnTextPortrait}>Stats</Text>
           </Pressable>
-        )}
 
-        {onOpenDailyChallenge && (
           <Pressable
-            onPress={onOpenDailyChallenge}
-            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
-            accessibilityLabel="Open daily challenges"
+            onPress={handleOpenSettings}
+            style={({ pressed }) => [
+              styles.actionBtnPortrait,
+              styles.settingsBtnPortrait,
+              pressed && { opacity: 0.7 },
+            ]}
+            accessibilityLabel="Open settings"
             accessibilityRole="button"
           >
-            <Text style={styles.actionBtnText}>
-              {dailyStreak && dailyStreak > 0 ? `Daily (${dailyStreak})` : 'Daily'}
-            </Text>
+            <Text style={styles.actionBtnTextPortrait}>⚙️</Text>
           </Pressable>
-        )}
 
-        <Pressable
-          onPress={onOpenStats}
-          style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
-          accessibilityLabel="View statistics"
-          accessibilityRole="button"
-        >
-          <Text style={styles.actionBtnText}>Stats</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={handleOpenSettings}
-          style={({ pressed }) => [styles.actionBtn, styles.settingsBtn, pressed && { opacity: 0.7 }]}
-          accessibilityLabel="Open settings"
-          accessibilityRole="button"
-        >
-          <Text style={styles.actionBtnText}>⚙️</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={onNewGame}
-          style={({ pressed }) => [styles.actionBtn, styles.newGameBtn, pressed && { opacity: 0.7 }]}
-          accessibilityLabel="Deal new game"
-          accessibilityRole="button"
-        >
-          <Text style={[styles.actionBtnText, styles.newGameText]}>New Game</Text>
-        </Pressable>
+          <Pressable
+            onPress={onNewGame}
+            style={({ pressed }) => [
+              styles.actionBtnPortrait,
+              styles.newGameBtnPortrait,
+              pressed && { opacity: 0.7 },
+            ]}
+            accessibilityLabel="Deal new game"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.actionBtnTextPortrait, styles.newGameText]}>New Game</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -415,99 +367,52 @@ const styles = StyleSheet.create({
     backgroundColor: colors.felt.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.felt.border,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  metricsRow: {
+  headerRowPortrait: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: 36,
+    gap: spacing.xs,
   },
-  metric: {
+  metricsGroupPortrait: {
+    flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 56,
+    gap: spacing.sm,
   },
-  metricLabel: {
+  metricPortrait: {
+    alignItems: 'center',
+    minWidth: 38,
+  },
+  metricLabelPortrait: {
     color: colors.felt.textMuted,
     fontSize: fontSize.micro,
     fontWeight: fontWeight.bold,
     letterSpacing: letterSpacing.wide,
-    lineHeight: 12,
+    lineHeight: 11,
     textAlign: 'center',
   },
-  metricValue: {
-    color: colors.white,
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.heavy,
-    fontVariant: ['tabular-nums'],
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  modeBadge: {
-    backgroundColor: colors.overlay.panelMedium,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs - 1,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.overlay.borderWhiteMedium,
-    minHeight: 36,
-  },
-  seedBadgeHeader: {
-    backgroundColor: colors.overlay.panelMedium,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs - 1,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.overlay.borderWhiteMedium,
-    minHeight: 36,
-    maxWidth: 84,
-  },
-  seedBadgeLabel: {
-    color: colors.felt.accent,
-    fontSize: fontSize.tiny,
-    fontWeight: fontWeight.bold,
-    lineHeight: 10,
-    textAlign: 'center',
-  },
-  seedBadgeValue: {
-    color: colors.white,
-    fontSize: fontSize.subtext,
-    fontWeight: fontWeight.bold,
-    lineHeight: 16,
-    textAlign: 'center',
-    fontFamily: 'monospace',
-  },
-  modeLabel: {
-    color: colors.felt.accent,
-    fontSize: fontSize.tiny,
-    fontWeight: fontWeight.bold,
-    lineHeight: 10,
-    textAlign: 'center',
-  },
-  modeValue: {
+  metricValuePortrait: {
     color: colors.white,
     fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    lineHeight: 16,
+    fontWeight: fontWeight.heavy,
+    fontVariant: ['tabular-nums'],
+    lineHeight: 18,
     textAlign: 'center',
   },
-  actionsRow: {
+  navGroupPortrait: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  actionBtn: {
-    flex: 1,
-    backgroundColor: colors.overlay.whiteFillSubtle,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
+  modeBadgePortrait: {
+    backgroundColor: colors.overlay.panelMedium,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
     borderRadius: borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -515,30 +420,70 @@ const styles = StyleSheet.create({
     borderColor: colors.overlay.borderWhiteMedium,
     minHeight: 32,
   },
-  settingsBtn: {
-    flex: 0,
-    minWidth: 36,
-    paddingHorizontal: spacing.sm,
-  },
-  soundBtn: {
-    flex: 0,
-    minWidth: 36,
-    paddingHorizontal: spacing.sm,
-  },
-  actionBtnText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    lineHeight: 16,
+  modeLabelPortrait: {
+    color: colors.felt.accent,
+    fontSize: fontSize.tiny,
+    fontWeight: fontWeight.bold,
+    lineHeight: 10,
     textAlign: 'center',
   },
-  btnDisabled: {
-    opacity: 0.4,
+  modeValuePortrait: {
+    color: colors.white,
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.bold,
+    lineHeight: 14,
+    textAlign: 'center',
   },
-  btnTextDisabled: {
-    color: colors.slate[400],
+  seedBadgePortrait: {
+    backgroundColor: colors.overlay.panelMedium,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.overlay.borderWhiteMedium,
+    minHeight: 32,
+    maxWidth: 86,
   },
-  newGameBtn: {
+  seedBadgeLabelPortrait: {
+    color: colors.felt.accent,
+    fontSize: fontSize.tiny,
+    fontWeight: fontWeight.bold,
+    lineHeight: 10,
+    textAlign: 'center',
+  },
+  seedBadgeValuePortrait: {
+    color: colors.white,
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.bold,
+    lineHeight: 14,
+    textAlign: 'center',
+    fontFamily: 'monospace',
+  },
+  actionBtnPortrait: {
+    backgroundColor: colors.overlay.whiteFillSubtle,
+    paddingVertical: spacing.xs + 1,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.overlay.borderWhiteMedium,
+    minHeight: 32,
+  },
+  actionBtnTextPortrait: {
+    color: colors.white,
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.semibold,
+    lineHeight: 15,
+    textAlign: 'center',
+  },
+  settingsBtnPortrait: {
+    minWidth: 32,
+    paddingHorizontal: spacing.xs,
+  },
+  newGameBtnPortrait: {
     backgroundColor: colors.felt.surface,
     borderColor: colors.action.success,
   },
@@ -621,5 +566,11 @@ const styles = StyleSheet.create({
   newGameBtnLandscape: {
     backgroundColor: colors.felt.surface,
     borderColor: colors.action.success,
+  },
+  btnDisabled: {
+    opacity: 0.4,
+  },
+  btnTextDisabled: {
+    color: colors.slate[400],
   },
 });
