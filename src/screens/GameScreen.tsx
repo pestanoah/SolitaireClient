@@ -17,6 +17,7 @@ import { CardView } from '../components/CardView';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { FoundationPile } from '../components/FoundationPile';
 import { GameHeader } from '../components/GameHeader';
+import { BottomBar } from '../components/BottomBar';
 import { GameOverModal } from '../components/GameOverModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { StatsModal } from '../components/StatsModal';
@@ -514,8 +515,9 @@ export const GameScreen: React.FC = () => {
     rowGap,
     maxColumnHeight,
   } = useMemo(() => {
-    // Header & paddings based on orientation
-    const headerHeight = isLandscape ? 38 : 95;
+    // Header, bottom bar & paddings based on orientation
+    const headerHeight = isLandscape ? 38 : 44;
+    const bottomBarHeight = isLandscape ? 0 : 52;
     const boardPaddingVertical = isLandscape ? 6 : spacing.xl;
     const tableauPaddingBottom = isLandscape ? 0 : spacing.bottomBarPadding;
     const rowGap = isLandscape
@@ -531,7 +533,7 @@ export const GameScreen: React.FC = () => {
     // Available height calculation
     const availableBoardHeight = Math.max(
       200,
-      windowHeight - headerHeight - boardPaddingVertical * 2 - tableauPaddingBottom
+      windowHeight - headerHeight - bottomBarHeight - boardPaddingVertical * 2 - tableauPaddingBottom
     );
     const heightBudget = Math.max(160, availableBoardHeight - rowGap);
 
@@ -2465,6 +2467,21 @@ export const GameScreen: React.FC = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Mobile Portrait Bottom Action Bar */}
+      {!isLandscape && (
+        <BottomBar
+          canUndo={gameState.history.length > 0 && !isDealing}
+          canHint={gameState.status === 'playing' && !isDealing && !isCheckingHint}
+          canCheckWinnable={gameState.status === 'playing' && !isDealing && !isCheckingWinnable}
+          isCheckingWinnable={isCheckingWinnable}
+          canGiveUp={gameState.status === 'playing' && gameState.moves > 0 && !isDealing}
+          onUndo={handleUndo}
+          onHint={handleHint}
+          onCheckWinnable={handleCheckWinnable}
+          onGiveUp={handleGiveUp}
+        />
+      )}
 
       {/* Modals */}
       <StatsModal
