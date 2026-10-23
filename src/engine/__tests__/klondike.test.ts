@@ -8,6 +8,7 @@ import {
   hasAvailableMoves,
   hasExhaustedStockCycles,
   hasLegalMoves,
+  getVisibleWasteCount,
 } from '../rules';
 import { drawCards, moveCards, undo, findSmartMove, autoCompleteStep, replayGame } from '../klondike';
 import { Card, GameState, getCardColor } from '../types';
@@ -1600,5 +1601,140 @@ describe('Automatic First Card Draw on Start and Waste Reset', () => {
       expect(hasLegalMoves(state)).toBe(false);
     });
   });
+
+  describe('getVisibleWasteCount and Partial Stock Draw Visibility', () => {
+    test('returns 0 when waste is empty', () => {
+      const state = createEmptyGame(3);
+      expect(getVisibleWasteCount(state)).toBe(0);
+    });
+
+    test('returns 1 in Draw 1 mode when waste has cards', () => {
+      let state = dealKlondike(1, 42);
+      expect(getVisibleWasteCount(state)).toBe(1);
+
+      state = drawCards(state);
+      expect(getVisibleWasteCount(state)).toBe(1);
+    });
+
+    test('returns 3 for initial deal in Draw 3 mode', () => {
+      const state = dealKlondike(3, 42);
+      expect(state.waste.length).toBe(3);
+      expect(getVisibleWasteCount(state)).toBe(3);
+    });
+
+    test('returns 1 when exactly 1 card remained in stock and is drawn in Draw 3 mode', () => {
+      let state = dealKlondike(3, 42);
+      // Force stock to have only 1 card and waste to have 3 cards
+      state.stock = [{ id: 'last_stock_card', rank: 7, suit: 'diamonds', faceUp: false }];
+      state.waste = [
+        { id: 'w1', rank: 2, suit: 'hearts', faceUp: true },
+        { id: 'w2', rank: 5, suit: 'spades', faceUp: true },
+        { id: 'w3', rank: 9, suit: 'clubs', faceUp: true },
+      ];
+
+      expect(getVisibleWasteCount(state)).toBe(3);
+
+      // Draw the final single card
+      state = drawCards(state);
+      expect(state.stock.length).toBe(0);
+      expect(state.waste.length).toBe(4);
+      expect(state.waste[3].id).toBe('last_stock_card');
+
+      // Crucial: Only 1 card should be visible in the fan for this draw
+      expect(getVisibleWasteCount(state)).toBe(1);
+    });
+
+    test('returns 2 when exactly 2 cards remained in stock and are drawn in Draw 3 mode', () => {
+      let state = dealKlondike(3, 42);
+      state.stock = [
+        { id: 'penultimate_card', rank: 4, suit: 'clubs', faceUp: false },
+        { id: 'last_card', rank: 11, suit: 'diamonds', faceUp: false },
+      ];
+      state.waste = [
+        { id: 'w1', rank: 2, suit: 'hearts', faceUp: true },
+        { id: 'w2', rank: 5, suit: 'spades', faceUp: true },
+        { id: 'w3', rank: 9, suit: 'clubs', faceUp: true },
+      ];
+
+      state = drawCards(state);
+      expect(state.stock.length).toBe(0);
+      expect(state.waste.length).toBe(5);
+
+      // Exactly 2 cards should be visible in the fan for this draw
+      expect(getVisibleWasteCount(state)).toBe(2);
+    });
+
+    test('decrements visible count as cards are played away from waste and reveals previous packet', () => {
+      let state = dealKlondike(3, 42);
+      // Give tableau an empty column so any king can move
+      state.tableau[0] = [];
+      state.waste = [
+        { id: 'w0', rank: 8, suit: 'clubs', faceUp: true },
+        { id: 'w1', rank: 13, suit: 'hearts', faceUp: true },
+      ];
+      // Draw 3 cards
+      state.stock = [
+        { id: 'k_spades', rank: 13, suit: 'spades', faceUp: false },
+        { id: 'k_diamonds', rank: 13, suit: 'diamonds', faceUp: false },
+        { id: 'k_clubs', rank: 13, suit: 'clubs', faceUp: false },
+      ];
+
+      state = drawCards(state);
+      expect(getVisibleWasteCount(state)).toBe(3);
+
+      // Play top card (k_clubs) to empty tableau 0
+      state = moveCards(state, { type: 'waste', index: 0 }, { type: 'tableau', index: 0 }, ['k_clubs'])!;
+      expect(getVisibleWasteCount(state)).toBe(2);
+
+      // Empty tableau 1 and play second card (k_diamonds)
+      state.tableau[1] = [];
+      state = moveCards(state, { type: 'waste', index: 0 }, { type: 'tableau', index: 1 }, ['k_diamonds'])!;
+      expect(getVisibleWasteCount(state)).toBe(1);
+
+      // Empty tableau 2 and play third card (k_spades)
+      state.tableau[2] = [];
+      state = moveCards(state, { type: 'waste', index: 0 }, { type: 'tableau', index: 2 }, ['k_spades'])!;
+
+      // All 3 cards from current draw have been played: previous draw packet is exposed (up to 3, here 2 cards)
+      expect(state.waste.length).toBe(2);
+      expect(getVisibleWasteCount(state)).toBe(2);
+    });
+
+    test('reverts visible count when undoing draw or waste moves', () => {
+      let state = dealKlondike(3, 42);
+      state.stock = [{ id: 's1', rank: 10, suit: 'spades', faceUp: false }];
+      state.waste = [
+        { id: 'w1', rank: 2, suit: 'hearts', faceUp: true },
+        { id: 'w2', rank: 5, suit: 'spades', faceUp: true },
+        { id: 'w3', rank: 9, suit: 'clubs', faceUp: true },
+      ];
+
+      const beforeDrawVisible = getVisibleWasteCount(state);
+      expect(beforeDrawVisible).toBe(3);
+
+      // Draw 1 card
+      state = drawCards(state);
+      expect(getVisibleWasteCount(state)).toBe(1);
+
+      // Undo draw
+      state = undo(state);
+      expect(getVisibleWasteCount(state)).toBe(3);
+    });
+
+    test('handles recycling when waste has fewer than 3 cards', () => {
+      let state = createEmptyGame(3);
+      state.status = 'playing';
+      state.stock = [];
+      state.waste = [
+        { id: 'w1', rank: 10, suit: 'hearts', faceUp: true },
+      ];
+
+      state = drawCards(state);
+      // Recycle 1 card into stock and immediately auto-draws it into waste
+      expect(state.waste.length).toBe(1);
+      expect(getVisibleWasteCount(state)).toBe(1);
+    });
+  });
 });
+
 

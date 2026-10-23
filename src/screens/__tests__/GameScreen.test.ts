@@ -199,6 +199,84 @@ describe('Right-Handed Mode Pile Positions and Animations', () => {
     expect(topCardPos.x).toBe(570);
     expect(topCardPos.x + baseParams.cardWidth + 10).toBe(700 - baseParams.cardWidth);
   });
+
+  test('Draw 3 waste fanning when only 1 card is drawn positions base and top card without extra fan width', () => {
+    const state = {
+      ...dealKlondike(3),
+      drawCount: 3 as const,
+      waste: [
+        { id: 'w1', rank: 1 as const, suit: 'hearts' as const, faceUp: true },
+        { id: 'w2', rank: 2 as const, suit: 'hearts' as const, faceUp: true },
+        { id: 'w3', rank: 3 as const, suit: 'hearts' as const, faceUp: true },
+        { id: 'last_drawn', rank: 4 as const, suit: 'spades' as const, faceUp: true },
+      ],
+    };
+
+    // Right-handed mode with visibleWasteCount = 1:
+    const rhParams: PilePositionParams = {
+      ...baseParams,
+      drawCount: 3,
+      wasteCount: 4,
+      visibleWasteCount: 1,
+      isRightHanded: true,
+    };
+
+    const rhBasePos = calculatePileBasePosition({ type: 'waste' }, rhParams);
+    // Base waste should be at boardWidth - cardWidth - spacing.lg - cardWidth: 700 - 60 - 10 - 60 = 570
+    expect(rhBasePos.x).toBe(570);
+
+    const rhTopCardPos = calculatePileCardPosition({ type: 'waste' }, 3, state, rhParams);
+    // Since only 1 card is visible, top card has hOffset = 0
+    expect(rhTopCardPos.x).toBe(570);
+    expect(rhTopCardPos.x + baseParams.cardWidth + 10).toBe(700 - baseParams.cardWidth);
+
+    // Left-handed mode with visibleWasteCount = 1:
+    const lhParams: PilePositionParams = {
+      ...baseParams,
+      drawCount: 3,
+      wasteCount: 4,
+      visibleWasteCount: 1,
+      isRightHanded: false,
+    };
+
+    const lhBasePos = calculatePileBasePosition({ type: 'waste' }, lhParams);
+    // In left-handed mode: cardWidth + spacing.lg = 70
+    expect(lhBasePos.x).toBe(70);
+
+    const lhTopCardPos = calculatePileCardPosition({ type: 'waste' }, 3, state, lhParams);
+    expect(lhTopCardPos.x).toBe(70);
+  });
+
+  test('Draw 3 waste fanning when 2 cards are drawn positions base and top card for 2-card fan', () => {
+    const state = {
+      ...dealKlondike(3),
+      drawCount: 3 as const,
+      waste: [
+        { id: 'w1', rank: 1 as const, suit: 'hearts' as const, faceUp: true },
+        { id: 'w2', rank: 2 as const, suit: 'hearts' as const, faceUp: true },
+        { id: 'penultimate', rank: 3 as const, suit: 'hearts' as const, faceUp: true },
+        { id: 'last_drawn', rank: 4 as const, suit: 'spades' as const, faceUp: true },
+      ],
+    };
+
+    const rhParams: PilePositionParams = {
+      ...baseParams,
+      drawCount: 3,
+      wasteCount: 4,
+      visibleWasteCount: 2,
+      isRightHanded: true,
+    };
+
+    const rhBasePos = calculatePileBasePosition({ type: 'waste' }, rhParams);
+    // Base waste width = 60 + 1 * 18 = 78
+    // Base waste at 700 - 60 - 10 - 78 = 552
+    expect(rhBasePos.x).toBe(552);
+
+    const rhTopCardPos = calculatePileCardPosition({ type: 'waste' }, 3, state, rhParams);
+    // Top card at 552 + 1 * 18 = 570
+    expect(rhTopCardPos.x).toBe(570);
+    expect(rhTopCardPos.x + baseParams.cardWidth + 10).toBe(700 - baseParams.cardWidth);
+  });
 });
 
 describe('Tableau Offsets and Dynamic Cascade Compression', () => {

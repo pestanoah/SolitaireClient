@@ -126,6 +126,56 @@ export function hasExhaustedStockCycles(state: GameState): boolean {
 }
 
 /**
+ * Calculates the number of cards that should be visibly fanned in the waste pile.
+ * In Draw 1 mode, at most 1 card is visible.
+ * In Draw 3 mode:
+ * - When drawing from the stock, only the cards drawn in that specific deal are visible (up to 3, or fewer if fewer remained in stock).
+ * - When cards from the current draw are played away from the waste, the visible count decreases.
+ * - If all cards from the current draw are played, the cards from the previous deal packet underneath are exposed.
+ */
+export function getVisibleWasteCount(state: GameState): number {
+  if (state.waste.length === 0) return 0;
+  if (state.drawCount === 1) return 1;
+
+  let cardsPlayedFromWaste = 0;
+
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const move = state.history[i];
+
+    if (move.from.type === 'stock' && move.to.type === 'waste') {
+      const drawnCount = move.cardIds.length;
+      if (drawnCount > cardsPlayedFromWaste) {
+        return Math.min(drawnCount - cardsPlayedFromWaste, state.waste.length);
+      }
+      cardsPlayedFromWaste -= drawnCount;
+      continue;
+    }
+
+    if (move.from.type === 'waste' && move.to.type === 'stock') {
+      // Recycle move: in drawCards(), drawCount cards are drawn from recycled into waste
+      const drawnCount = Math.min(state.drawCount, move.cardIds.length);
+      if (drawnCount > cardsPlayedFromWaste) {
+        return Math.min(drawnCount - cardsPlayedFromWaste, state.waste.length);
+      }
+      cardsPlayedFromWaste -= drawnCount;
+      continue;
+    }
+
+    if (move.from.type === 'waste') {
+      cardsPlayedFromWaste += move.cardIds.length;
+    }
+  }
+
+  // Initial deal (prior to any stock moves in history)
+  const initialDrawn = Math.min(state.drawCount, state.waste.length + cardsPlayedFromWaste);
+  if (initialDrawn > cardsPlayedFromWaste) {
+    return Math.min(initialDrawn - cardsPlayedFromWaste, state.waste.length);
+  }
+
+  return Math.min(state.drawCount, state.waste.length);
+}
+
+/**
  * Checks if moving a card from tableau column `tableauIndex` to foundation
  * would directly reverse the most recent move of that card.
  */

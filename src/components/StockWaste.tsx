@@ -9,6 +9,7 @@ interface StockWasteProps {
   stock: Card[];
   waste: Card[];
   drawCount: 1 | 3;
+  visibleWasteCount?: number;
   cardWidth: number;
   cardHeight: number;
   onStockPress: () => void;
@@ -33,6 +34,7 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   stock,
   waste,
   drawCount,
+  visibleWasteCount: propVisibleWasteCount,
   cardWidth,
   cardHeight,
   rightHanded = false,
@@ -55,8 +57,14 @@ export const StockWaste: React.FC<StockWasteProps> = React.memo(({
   const hasStock = stock.length > 0;
   const hasWaste = waste.length > 0;
 
-  // In Turn 3 mode, show up to 3 fanned cards from waste
-  const visibleWasteCount = drawCount === 3 ? Math.min(3, waste.length) : Math.min(1, waste.length);
+  // Show up to visibleWasteCount cards fanned from waste (falling back to standard drawCount limit)
+  const maxVisibleCount =
+    propVisibleWasteCount !== undefined
+      ? propVisibleWasteCount
+      : drawCount === 3
+      ? Math.min(3, waste.length)
+      : Math.min(1, waste.length);
+  const visibleWasteCount = Math.min(maxVisibleCount, waste.length);
   const visibleWaste = waste.slice(-visibleWasteCount);
   const fanOffset = propFanOffset ?? Math.max(10, Math.floor(cardWidth * 0.28));
   const underlyingCard =
