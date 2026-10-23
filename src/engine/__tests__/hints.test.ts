@@ -582,6 +582,54 @@ describe('Hints Engine', () => {
       expect(result?.hint.message).toBe('Move A♠ to Foundation');
       expect(result?.isWinningPath).toBe(false);
     });
+
+    test('prioritizes visible tableau reveals over drawing from stock on winning deals', async () => {
+      const { dealKlondike } = require('../deck');
+      const game = dealKlondike(1, '2026-10-20');
+
+      const result = await findOptimalHint(game, { timeoutMs: 1000 });
+      expect(result).not.toBeNull();
+      expect(result?.isWinningPath).toBe(true);
+      expect(result?.hint.from.type).toBe('tableau');
+      expect(result?.hint.message).toBe('Move J♥ onto Q♣');
+    });
+
+    test('prioritizes tableau uncover move over stock draw on deal 2', async () => {
+      const { dealKlondike } = require('../deck');
+      const game = dealKlondike(1, '2');
+
+      const result = await findOptimalHint(game, { timeoutMs: 1000 });
+      expect(result).not.toBeNull();
+      expect(result?.isWinningPath).toBe(true);
+      expect(result?.hint.from.type).toBe('tableau');
+      expect(result?.hint.message).toBe('Move 2♠ onto 3♥');
+    });
+
+    test('recommends waste card to tableau when tableau has no available moves', async () => {
+      const state = createBaseState();
+      state.tableau[0] = [createDummyCard('8s', 'spades', 8, true)];
+      state.tableau[1] = [createDummyCard('10s', 'spades', 10, true)];
+      state.waste = [createDummyCard('7h', 'hearts', 7, true)];
+
+      const result = await findOptimalHint(state);
+      expect(result?.hint.from.type).toBe('waste');
+      expect(result?.hint.message).toBe('Move 7♥ onto 8♠');
+    });
+
+    test('findAvailableHints prioritizes tableau column clearing and uncovering over general waste plays', () => {
+      const state = createBaseState();
+      state.tableau[0] = [
+        createDummyCard('hidden', 'clubs', 5, false),
+        createDummyCard('8s', 'spades', 8, true),
+      ];
+      state.tableau[1] = [createDummyCard('9h', 'hearts', 9, true)];
+      state.tableau[2] = [createDummyCard('7c', 'clubs', 7, true)];
+      state.waste = [createDummyCard('6h', 'hearts', 6, true)];
+
+      const hints = findAvailableHints(state);
+      expect(hints[0].from.type).toBe('tableau');
+      expect(hints[0].message).toBe('Move 8♠ onto 9♥');
+    });
   });
 });
 
