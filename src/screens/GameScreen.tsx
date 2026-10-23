@@ -55,6 +55,7 @@ import {
   canAutoComplete,
   canPlaceOnFoundation,
   canPlaceOnTableau,
+  getVisibleWasteCount,
   hasAvailableMoves,
   hasLegalMoves,
   isGameWon,
@@ -96,6 +97,7 @@ interface AnimatingCardData {
   hiddenCardIds: string[];
   direction?: 'horizontal' | 'vertical';
   isReset?: boolean;
+  isDraw?: boolean;
 }
 
 interface DragState {
@@ -122,6 +124,7 @@ export interface PilePositionParams {
   isRightHanded: boolean;
   drawCount: 1 | 3;
   wasteCount: number;
+  visibleWasteCount?: number;
   topRowY?: number;
   tableauRowY?: number;
   maxColumnHeight?: number;
@@ -140,6 +143,7 @@ export function calculatePileBasePosition(
     isRightHanded,
     drawCount,
     wasteCount,
+    visibleWasteCount: propVisibleWasteCount,
     topRowY = 0,
     tableauRowY = cardHeight + spacing.xxl,
   } = params;
@@ -158,7 +162,12 @@ export function calculatePileBasePosition(
   }
 
   if (pile.type === 'waste') {
-    const visibleCount = drawCount === 3 ? Math.min(3, wasteCount) : Math.min(1, wasteCount);
+    const visibleCount =
+      propVisibleWasteCount !== undefined
+        ? propVisibleWasteCount
+        : drawCount === 3
+        ? Math.min(3, wasteCount)
+        : Math.min(1, wasteCount);
     const currentWasteWidth = cardWidth + Math.max(0, visibleCount - 1) * fanOffset;
 
     if (isRightHanded) {
@@ -207,9 +216,15 @@ export function calculatePileCardPosition(
   state: GameState,
   params: PilePositionParams
 ): { x: number; y: number } {
+  const visibleWasteCount =
+    params.visibleWasteCount !== undefined
+      ? params.visibleWasteCount
+      : getVisibleWasteCount(state);
+
   const basePos = calculatePileBasePosition(pile, {
     ...params,
     wasteCount: state.waste.length,
+    visibleWasteCount,
     drawCount: state.drawCount,
   });
 
@@ -222,8 +237,7 @@ export function calculatePileCardPosition(
       1,
       cardIndexInPile !== undefined && cardIndexInPile >= 0 ? cardIndexInPile + 1 : state.waste.length
     );
-    const visibleCount =
-      state.drawCount === 3 ? Math.min(3, effectiveCount) : Math.min(1, effectiveCount);
+    const visibleCount = Math.min(visibleWasteCount, effectiveCount);
     const hOffset = Math.max(0, visibleCount - 1) * params.fanOffset;
     return {
       x: basePos.x + hOffset,
@@ -864,13 +878,25 @@ export const GameScreen: React.FC = () => {
   );
 
   const getPileBasePosition = useCallback(
-    (pile: { type: PileType; index?: number }, wasteCountOverride?: number): { x: number; y: number } => {
+    (
+      pile: { type: PileType; index?: number },
+      wasteCountOverride?: number,
+      visibleWasteCountOverride?: number
+    ): { x: number; y: number } => {
+      const activeState = latestGameStateRef.current;
+      const wasteCount =
+        wasteCountOverride !== undefined
+          ? wasteCountOverride
+          : activeState.waste.length;
+      const visibleWasteCount =
+        visibleWasteCountOverride !== undefined
+          ? visibleWasteCountOverride
+          : getVisibleWasteCount(activeState);
+
       return calculatePileBasePosition(pile, {
         ...pilePositionParams,
-        wasteCount:
-          wasteCountOverride !== undefined
-            ? wasteCountOverride
-            : latestGameStateRef.current.waste.length,
+        wasteCount,
+        visibleWasteCount,
       });
     },
     [pilePositionParams]
@@ -880,10 +906,14 @@ export const GameScreen: React.FC = () => {
     (
       pile: { type: PileType; index?: number },
       cardIndexInPile: number,
-      state?: GameState
+      state?: GameState,
+      visibleWasteCountOverride?: number
     ): { x: number; y: number } => {
       const activeState = state ?? latestGameStateRef.current;
-      return calculatePileCardPosition(pile, cardIndexInPile, activeState, pilePositionParams);
+      return calculatePileCardPosition(pile, cardIndexInPile, activeState, {
+        ...pilePositionParams,
+        visibleWasteCount: visibleWasteCountOverride,
+      });
     },
     [pilePositionParams]
   );
@@ -981,9 +1011,10 @@ export const GameScreen: React.FC = () => {
         const count = Math.min(current.drawCount, current.stock.length);
         const drawnCards = current.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
         const nextState = drawCards(current);
+        const nextVisibleCount = getVisibleWasteCount(nextState);
 
         const startPos = getPileBasePosition({ type: 'stock' });
-        const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+        const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
 
         isAnimatingRef.current = true;
         playDealSound();
@@ -995,6 +1026,7 @@ export const GameScreen: React.FC = () => {
           endY: endPos.y,
           hiddenCardIds: drawnCards.map((c) => c.id),
           direction: 'horizontal',
+          isDraw: true,
         });
 
         animProgress.setValue(0);
@@ -1046,7 +1078,8 @@ export const GameScreen: React.FC = () => {
             const drawnCards = nextState.waste;
             const drawnIds = drawnCards.map((c) => c.id);
             const drawStartPos = getPileBasePosition({ type: 'stock' });
-            const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+            const nextVisibleCount = getVisibleWasteCount(nextState);
+            const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
 
             setGameState(nextState);
             playDealSound();
@@ -1058,6 +1091,7 @@ export const GameScreen: React.FC = () => {
               endY: drawEndPos.y,
               hiddenCardIds: drawnIds,
               direction: 'horizontal',
+              isDraw: true,
             });
 
             animProgress.setValue(0);
@@ -1387,7 +1421,8 @@ export const GameScreen: React.FC = () => {
           const drawnCards = nextState.waste;
           const drawnIds = drawnCards.map((c) => c.id);
           const drawStartPos = getPileBasePosition({ type: 'stock' });
-          const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+          const nextVisibleCount = getVisibleWasteCount(nextState);
+          const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
 
           setGameState(nextState);
           playDealSound();
@@ -1399,6 +1434,7 @@ export const GameScreen: React.FC = () => {
             endY: drawEndPos.y,
             hiddenCardIds: drawnIds,
             direction: 'horizontal',
+            isDraw: true,
           });
 
           animProgress.setValue(0);
@@ -1423,9 +1459,10 @@ export const GameScreen: React.FC = () => {
     const count = Math.min(current.drawCount, current.stock.length);
     const drawnCards = current.stock.slice(-count).map((c) => ({ ...c, faceUp: true }));
     const nextState = drawCards(current);
+    const nextVisibleCount = getVisibleWasteCount(nextState);
 
     const startPos = getPileBasePosition({ type: 'stock' });
-    const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+    const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
 
     isAnimatingRef.current = true;
     playDealSound();
@@ -1437,6 +1474,7 @@ export const GameScreen: React.FC = () => {
       endY: endPos.y,
       hiddenCardIds: drawnCards.map((c) => c.id),
       direction: 'horizontal',
+      isDraw: true,
     });
 
     animProgress.setValue(0);
@@ -1920,8 +1958,9 @@ export const GameScreen: React.FC = () => {
       const count = lastMove.cardIds.length;
       const cardsToAnimate = current.waste.slice(-count);
       const allUndoneWasteIds = cardsToAnimate.map((c) => c.id);
+      const currentVisibleCount = getVisibleWasteCount(current);
 
-      const startPos = getPileBasePosition({ type: 'waste' }, current.waste.length);
+      const startPos = getPileBasePosition({ type: 'waste' }, current.waste.length, currentVisibleCount);
       const endPos = getPileBasePosition({ type: 'stock' });
 
       isAnimatingRef.current = true;
@@ -1955,9 +1994,10 @@ export const GameScreen: React.FC = () => {
     if (lastMove.from.type === 'waste' && lastMove.to.type === 'stock') {
       const count = Math.min(current.drawCount === 3 ? 3 : 1, current.stock.length);
       const cardsToAnimate = current.stock.slice(0, count).map((c) => ({ ...c, faceUp: true }));
+      const nextVisibleCount = getVisibleWasteCount(nextState);
 
       const startPos = getPileBasePosition({ type: 'stock' });
-      const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length);
+      const endPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
 
       isAnimatingRef.current = true;
       playResetSound();
@@ -2138,6 +2178,11 @@ export const GameScreen: React.FC = () => {
                 stock={gameState.stock}
                 waste={gameState.waste}
                 drawCount={gameState.drawCount}
+                visibleWasteCount={
+                  animatingCard?.isDraw
+                    ? Math.min(1, gameState.waste.length)
+                    : getVisibleWasteCount(gameState)
+                }
                 cardWidth={cardWidth}
                 cardHeight={cardHeight}
                 fanOffset={fanOffset}
