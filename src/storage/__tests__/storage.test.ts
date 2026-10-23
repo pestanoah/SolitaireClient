@@ -1,11 +1,15 @@
 import {
+  clearDailyChallenges,
   clearGameState,
   clearStats,
+  loadDailyChallenges,
   loadGameState,
   loadSettings,
   loadStats,
+  recordDailyChallengeWon,
   recordGameEnd,
   resetStats,
+  saveDailyChallenges,
   saveGameState,
   saveSettings,
 } from '../storage';
@@ -146,5 +150,55 @@ describe('Local Storage Persistence', () => {
 
     loaded = await loadSettings();
     expect(loaded.rightHanded).toBe(false);
+  });
+
+  describe('Daily Challenges Persistence', () => {
+    test('returns empty object when no daily challenges have been recorded', async () => {
+      const history = await loadDailyChallenges();
+      expect(history).toEqual({});
+    });
+
+    test('records a daily challenge victory and persists record', async () => {
+      const dateKey = '2026-10-22';
+      const updated = await recordDailyChallengeWon(dateKey, 520, 75, 110);
+
+      expect(updated[dateKey]).toBeDefined();
+      expect(updated[dateKey].completed).toBe(true);
+      expect(updated[dateKey].score).toBe(520);
+      expect(updated[dateKey].moves).toBe(75);
+      expect(updated[dateKey].elapsedSeconds).toBe(110);
+      expect(updated[dateKey].completedAt).toBeDefined();
+
+      const loaded = await loadDailyChallenges();
+      expect(loaded[dateKey]).toEqual(updated[dateKey]);
+    });
+
+    test('replaying a daily challenge retains highest score and best time', async () => {
+      const dateKey = '2026-10-21';
+      // First win: score 400, moves 90, time 150
+      await recordDailyChallengeWon(dateKey, 400, 90, 150);
+
+      // Second win: higher score 600, fewer moves 70, faster time 120
+      const afterBetter = await recordDailyChallengeWon(dateKey, 600, 70, 120);
+      expect(afterBetter[dateKey].score).toBe(600);
+      expect(afterBetter[dateKey].moves).toBe(70);
+      expect(afterBetter[dateKey].elapsedSeconds).toBe(120);
+
+      // Third win: lower score 300, more moves 100, slower time 200 -> should retain best stats
+      const afterLower = await recordDailyChallengeWon(dateKey, 300, 100, 200);
+      expect(afterLower[dateKey].score).toBe(600);
+      expect(afterLower[dateKey].moves).toBe(70);
+      expect(afterLower[dateKey].elapsedSeconds).toBe(120);
+    });
+
+    test('clears daily challenges history', async () => {
+      await recordDailyChallengeWon('2026-10-20', 500, 80, 100);
+      const before = await loadDailyChallenges();
+      expect(Object.keys(before).length).toBe(1);
+
+      await clearDailyChallenges();
+      const after = await loadDailyChallenges();
+      expect(after).toEqual({});
+    });
   });
 });

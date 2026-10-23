@@ -71,6 +71,18 @@ export {
   isDateSeed,
   isSeedWinnable,
 } from './winnable';
+export {
+  DailyChallengeHistory,
+  DailyChallengeRecord,
+  DailyStreakInfo,
+  calculateDailyStreak,
+  extractDailyDate,
+  formatDateKey,
+  getMonthCalendarData,
+  isDateCompleted,
+  isFutureDate,
+  parseDateKey,
+} from './daily';
 import { getRandomWinnableSeed } from './winnable';
 
 /**

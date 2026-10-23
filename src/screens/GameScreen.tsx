@@ -24,6 +24,7 @@ import { StockWaste } from '../components/StockWaste';
 import { TableauColumn, calculateTableauOffsets } from '../components/TableauColumn';
 import { WinModal } from '../components/WinModal';
 import { SeedModal } from '../components/SeedModal';
+import { DailyChallengeModal } from '../components/DailyChallengeModal';
 import {
   DealingOverlay,
   DEFAULT_DEAL_STAGGER_MS,
@@ -60,10 +61,17 @@ import {
 import { checkWinnable } from '../engine/solver';
 import { Card, FOUNDATION_SUITS, GameState, PileLocation, PileType, PlayerStats, UserSettings } from '../engine/types';
 import {
+  calculateDailyStreak,
+  DailyChallengeHistory,
+  extractDailyDate,
+} from '../engine/daily';
+import {
   clearGameState,
+  loadDailyChallenges,
   loadGameState,
   loadSettings,
   loadStats,
+  recordDailyChallengeWon,
   recordGameEnd,
   resetStats,
   saveGameState,
@@ -268,6 +276,13 @@ export const GameScreen: React.FC = () => {
   const [statsVisible, setStatsVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [seedModalVisible, setSeedModalVisible] = useState(false);
+  const [dailyModalVisible, setDailyModalVisible] = useState(false);
+  const [dailyHistory, setDailyHistory] = useState<DailyChallengeHistory>({});
+
+  const dailyStreakInfo = useMemo(
+    () => calculateDailyStreak(dailyHistory),
+    [dailyHistory]
+  );
 
   // Active Game State
   const [gameState, setGameState] = useState<GameState>(() => createEmptyGame(1));
@@ -581,6 +596,10 @@ export const GameScreen: React.FC = () => {
       if (!isMounted) return;
       setStats(loadedStats);
 
+      const loadedDaily = await loadDailyChallenges();
+      if (!isMounted) return;
+      setDailyHistory(loadedDaily);
+
       const urlSeedData = parseSeedFromUrl();
       if (urlSeedData?.seed) {
         const count = urlSeedData.drawCount ?? loadedSettings.drawCount;
@@ -718,10 +737,30 @@ export const GameScreen: React.FC = () => {
         (async () => {
           const updated = await recordGameEnd(isWon, gameState.score, gameState.elapsedSeconds);
           setStats(updated);
+
+          if (isWon && gameState.seed && isDateSeed(gameState.seed)) {
+            const dateKey = extractDailyDate(gameState.seed);
+            if (dateKey) {
+              const updatedDaily = await recordDailyChallengeWon(
+                dateKey,
+                gameState.score,
+                gameState.moves,
+                gameState.elapsedSeconds
+              );
+              setDailyHistory(updatedDaily);
+            }
+          }
         })();
       }
     }
-  }, [gameState.status, gameState.id, gameState.score, gameState.elapsedSeconds]);
+  }, [
+    gameState.status,
+    gameState.id,
+    gameState.score,
+    gameState.moves,
+    gameState.elapsedSeconds,
+    gameState.seed,
+  ]);
 
   // Check for game over (no legal moves left)
   useEffect(() => {
@@ -1711,6 +1750,14 @@ export const GameScreen: React.FC = () => {
     startSeededGame(getDailyChallengeSeed());
   }, [startSeededGame]);
 
+  // Play selected daily challenge date
+  const handlePlayDailyChallengeDate = useCallback(
+    (dateStr: string, seed: string) => {
+      startSeededGame(seed);
+    },
+    [startSeededGame]
+  );
+
   // Share active game seed
   const handleShareDeck = useCallback(
     async (seedToShare?: string, stats?: ShareGameStats) => {
@@ -2028,6 +2075,7 @@ export const GameScreen: React.FC = () => {
         soundEnabled={settings.soundEnabled !== false}
         isLandscape={isLandscape}
         seed={gameState.seed}
+        dailyStreak={dailyStreakInfo.currentStreak}
         onUndo={handleUndo}
         onHint={handleHint}
         onCheckWinnable={handleCheckWinnable}
@@ -2036,6 +2084,7 @@ export const GameScreen: React.FC = () => {
         onOpenStats={() => setStatsVisible(true)}
         onOpenSettings={() => setSettingsVisible(true)}
         onOpenSeed={() => setSeedModalVisible(true)}
+        onOpenDailyChallenge={() => setDailyModalVisible(true)}
         onToggleDrawCount={handleToggleDrawCount}
         onToggleSound={handleToggleSound}
       />
@@ -2421,14 +2470,19 @@ export const GameScreen: React.FC = () => {
       <StatsModal
         visible={statsVisible}
         stats={stats}
+        dailyStreak={dailyStreakInfo.currentStreak}
+        longestDailyStreak={dailyStreakInfo.longestStreak}
+        dailyWonCount={dailyStreakInfo.totalCompleted}
         onClose={() => setStatsVisible(false)}
         onResetStats={handleResetStats}
+        onOpenDailyModal={() => setDailyModalVisible(true)}
       />
 
       <SettingsModal
         visible={settingsVisible}
         settings={settings}
         currentSeed={gameState.seed}
+        dailyStreak={dailyStreakInfo.currentStreak}
         onClose={() => setSettingsVisible(false)}
         onChangeDrawCount={handleChangeDrawCount}
         onToggleSound={handleToggleSound}
@@ -2437,6 +2491,7 @@ export const GameScreen: React.FC = () => {
         onToggleWinningDeals={handleToggleWinningDeals}
         onOpenSeedModal={() => setSeedModalVisible(true)}
         onPlayDailyChallenge={handlePlayDailyChallenge}
+        onOpenDailyModal={() => setDailyModalVisible(true)}
       />
 
       <WinModal
@@ -2445,10 +2500,12 @@ export const GameScreen: React.FC = () => {
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
         seed={gameState.seed}
+        dailyStreak={dailyStreakInfo.currentStreak}
         onReplaySeed={handleReplayDraw}
         onReplayDraw={handleReplayDraw}
         onNewGame={() => startNewGame()}
         onClose={() => setWinDismissed(true)}
+        onOpenDailyModal={() => setDailyModalVisible(true)}
         onShare={(stats) =>
           handleShareDeck(gameState.seed, {
             score: stats?.score ?? gameState.score,
@@ -2484,9 +2541,19 @@ export const GameScreen: React.FC = () => {
         visible={seedModalVisible}
         currentSeed={gameState.seed}
         drawCount={gameState.drawCount}
+        dailyStreak={dailyStreakInfo.currentStreak}
         onClose={() => setSeedModalVisible(false)}
         onPlaySeed={startSeededGame}
         onShareSeed={handleShareDeck}
+        onOpenDailyModal={() => setDailyModalVisible(true)}
+      />
+
+      <DailyChallengeModal
+        visible={dailyModalVisible}
+        dailyHistory={dailyHistory}
+        currentSeed={gameState.seed}
+        onClose={() => setDailyModalVisible(false)}
+        onPlayChallenge={handlePlayDailyChallengeDate}
       />
 
       {confirmModal && (

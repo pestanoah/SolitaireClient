@@ -1,10 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DailyChallengeHistory, DailyChallengeRecord } from '../engine/daily';
 import { GameState, PlayerStats, UserSettings } from '../engine/types';
 
 const STORAGE_KEYS = {
   ACTIVE_GAME: '@solitaire:active_game',
   STATS: '@solitaire:stats',
   SETTINGS: '@solitaire:settings',
+  DAILY_CHALLENGES: '@solitaire:daily_challenges',
 };
 
 export const DEFAULT_STATS: PlayerStats = {
@@ -117,5 +119,61 @@ export async function saveSettings(settings: UserSettings): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   } catch (e) {
     console.error('Failed to save settings', e);
+  }
+}
+
+export async function loadDailyChallenges(): Promise<DailyChallengeHistory> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.DAILY_CHALLENGES);
+    if (!raw) return {};
+    return JSON.parse(raw) as DailyChallengeHistory;
+  } catch (e) {
+    console.error('Failed to load daily challenges history', e);
+    return {};
+  }
+}
+
+export async function saveDailyChallenges(history: DailyChallengeHistory): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.DAILY_CHALLENGES, JSON.stringify(history));
+  } catch (e) {
+    console.error('Failed to save daily challenges history', e);
+  }
+}
+
+export async function recordDailyChallengeWon(
+  dateStr: string,
+  score: number,
+  moves: number,
+  elapsedSeconds: number
+): Promise<DailyChallengeHistory> {
+  const current = await loadDailyChallenges();
+  const dateKey = dateStr.slice(0, 10);
+  const existing = current[dateKey];
+
+  const updatedRecord: DailyChallengeRecord = {
+    completed: true,
+    score: existing ? Math.max(existing.score, score) : score,
+    moves: existing ? Math.min(existing.moves, moves) : moves,
+    elapsedSeconds: existing
+      ? Math.min(existing.elapsedSeconds, elapsedSeconds)
+      : elapsedSeconds,
+    completedAt: existing?.completedAt || new Date().toISOString(),
+  };
+
+  const nextHistory: DailyChallengeHistory = {
+    ...current,
+    [dateKey]: updatedRecord,
+  };
+
+  await saveDailyChallenges(nextHistory);
+  return nextHistory;
+}
+
+export async function clearDailyChallenges(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.DAILY_CHALLENGES);
+  } catch (e) {
+    console.error('Failed to clear daily challenges history', e);
   }
 }

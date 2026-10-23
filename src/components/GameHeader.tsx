@@ -16,6 +16,7 @@ interface GameHeaderProps {
   soundEnabled?: boolean;
   isLandscape?: boolean;
   seed?: string;
+  dailyStreak?: number;
   onUndo: () => void;
   onHint?: () => void;
   onCheckWinnable?: () => void;
@@ -24,6 +25,7 @@ interface GameHeaderProps {
   onOpenStats: () => void;
   onOpenSettings: () => void;
   onOpenSeed?: () => void;
+  onOpenDailyChallenge?: () => void;
   onToggleDrawCount?: () => void;
   onToggleSound?: () => void;
 }
@@ -41,6 +43,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   soundEnabled = true,
   isLandscape,
   seed,
+  dailyStreak,
   onUndo,
   onHint,
   onCheckWinnable,
@@ -49,6 +52,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   onOpenStats,
   onOpenSettings,
   onOpenSeed,
+  onOpenDailyChallenge,
   onToggleDrawCount,
   onToggleSound,
 }) => {
@@ -89,11 +93,15 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             <Text style={styles.modeValueLandscape}>Draw {drawCount}</Text>
           </Pressable>
 
-          {seed && onOpenSeed && (
+          {seed && (onOpenDailyChallenge || onOpenSeed) && (
             <Pressable
-              onPress={onOpenSeed}
+              onPress={isDateSeed(seed) && onOpenDailyChallenge ? onOpenDailyChallenge : onOpenSeed}
               style={({ pressed }) => [styles.modeBadgeLandscape, pressed && { opacity: 0.7 }]}
-              accessibilityLabel={`Seed: ${seed}. Tap to manage seed.`}
+              accessibilityLabel={
+                isDateSeed(seed)
+                  ? `Daily challenge: #${seed}. Tap to view calendar.`
+                  : `Seed: ${seed}. Tap to manage seed.`
+              }
               accessibilityRole="button"
             >
               <Text style={styles.modeValueLandscape}>
@@ -190,6 +198,19 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             </Pressable>
           )}
 
+          {onOpenDailyChallenge && (
+            <Pressable
+              onPress={onOpenDailyChallenge}
+              style={({ pressed }) => [styles.actionBtnLandscape, pressed && { opacity: 0.7 }]}
+              accessibilityLabel="Open daily challenges"
+              accessibilityRole="button"
+            >
+              <Text style={styles.actionBtnTextLandscape}>
+                {dailyStreak && dailyStreak > 0 ? `🔥${dailyStreak}` : 'Daily'}
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
             onPress={onOpenStats}
             style={({ pressed }) => [styles.actionBtnLandscape, pressed && { opacity: 0.7 }]}
@@ -248,11 +269,15 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           <Text style={styles.metricValue}>{timeFormatted}</Text>
         </View>
 
-        {seed && onOpenSeed && (
+        {seed && (onOpenDailyChallenge || onOpenSeed) && (
           <Pressable
-            onPress={onOpenSeed}
+            onPress={isDateSeed(seed) && onOpenDailyChallenge ? onOpenDailyChallenge : onOpenSeed}
             style={({ pressed }) => [styles.seedBadgeHeader, pressed && { opacity: 0.7 }]}
-            accessibilityLabel={`Seed: ${seed}. Tap to manage seed.`}
+            accessibilityLabel={
+              isDateSeed(seed)
+                ? `Daily challenge: #${seed}. Tap to view calendar.`
+                : `Seed: ${seed}. Tap to manage seed.`
+            }
             accessibilityRole="button"
           >
             <Text style={styles.seedBadgeLabel}>
@@ -337,6 +362,19 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
           >
             <Text style={[styles.actionBtnText, !canGiveUp && styles.btnTextDisabled]}>
               Give Up
+            </Text>
+          </Pressable>
+        )}
+
+        {onOpenDailyChallenge && (
+          <Pressable
+            onPress={onOpenDailyChallenge}
+            style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
+            accessibilityLabel="Open daily challenges"
+            accessibilityRole="button"
+          >
+            <Text style={styles.actionBtnText}>
+              {dailyStreak && dailyStreak > 0 ? `🔥${dailyStreak}` : 'Daily'}
             </Text>
           </Pressable>
         )}
