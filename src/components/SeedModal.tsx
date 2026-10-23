@@ -127,9 +127,7 @@ export const SeedModal: React.FC<SeedModalProps> = ({
                     accessibilityLabel="Open daily challenges calendar"
                     accessibilityRole="button"
                   >
-                    <Text style={styles.calendarBtnText}>
-                      {dailyStreak && dailyStreak > 0 ? `🔥${dailyStreak}` : 'Calendar'}
-                    </Text>
+                    <Text style={styles.calendarBtnText}>Calendar</Text>
                   </TouchableOpacity>
                 )}
 

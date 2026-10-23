@@ -131,7 +131,7 @@ describe('GameHeader Winnable Button', () => {
     expect(onOpenDailyChallenge).toHaveBeenCalledTimes(1);
   });
 
-  it('displays streak flame icon and count when dailyStreak is positive', () => {
+  it('displays streak count when dailyStreak is positive', () => {
     const tree = renderHeader({
       ...baseProps,
       onOpenDailyChallenge: jest.fn(),
@@ -140,7 +140,7 @@ describe('GameHeader Winnable Button', () => {
 
     const btn = findByAccessibilityLabel(tree, 'Open daily challenges');
     expect(btn).not.toBeNull();
-    expect(findTextContaining(btn, '🔥4')).not.toBeNull();
+    expect(findTextContaining(btn, 'Daily (4)')).not.toBeNull();
   });
 
   it('tapping Daily challenge seed badge opens daily challenge modal', () => {

@@ -194,21 +194,21 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
             {/* Streak Metrics Banner */}
             <View style={styles.streakBanner}>
               <View style={styles.streakItem}>
-                <Text style={styles.streakValue}>🔥 {streakInfo.currentStreak}</Text>
+                <Text style={styles.streakValue}>{streakInfo.currentStreak}</Text>
                 <Text style={styles.streakLabel}>Current Streak</Text>
               </View>
 
               <View style={styles.streakDivider} />
 
               <View style={styles.streakItem}>
-                <Text style={styles.streakValue}>⭐ {streakInfo.longestStreak}</Text>
+                <Text style={styles.streakValue}>{streakInfo.longestStreak}</Text>
                 <Text style={styles.streakLabel}>Best Streak</Text>
               </View>
 
               <View style={styles.streakDivider} />
 
               <View style={styles.streakItem}>
-                <Text style={styles.streakValue}>🏆 {streakInfo.totalCompleted}</Text>
+                <Text style={styles.streakValue}>{streakInfo.totalCompleted}</Text>
                 <Text style={styles.streakLabel}>Completed</Text>
               </View>
             </View>
@@ -366,7 +366,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
               {isSelectedCompleted && selectedRecord ? (
                 <View style={styles.statusSection}>
                   <View style={styles.statusBadgeCompleted}>
-                    <Text style={styles.statusBadgeTextCompleted}>✅ Completed</Text>
+                    <Text style={styles.statusBadgeTextCompleted}>Completed</Text>
                   </View>
 
                   <View style={styles.detailMetricsRow}>
@@ -399,7 +399,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
               ) : isSelectedFuture ? (
                 <View style={styles.statusSection}>
                   <View style={styles.statusBadgeFuture}>
-                    <Text style={styles.statusBadgeTextFuture}>🔒 Upcoming Challenge</Text>
+                    <Text style={styles.statusBadgeTextFuture}>Upcoming Challenge</Text>
                   </View>
                   <Text style={styles.futureSubtext}>
                     This daily challenge unlocks on {selectedMonthName} {selectedDayNum}.
@@ -411,7 +411,7 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
               ) : (
                 <View style={styles.statusSection}>
                   <View style={styles.statusBadgeIncomplete}>
-                    <Text style={styles.statusBadgeTextIncomplete}>⏳ Not Completed</Text>
+                    <Text style={styles.statusBadgeTextIncomplete}>Not Completed</Text>
                   </View>
                   <Text style={styles.incompleteSubtext}>
                     Play this daily challenge to add to your consecutive streak!

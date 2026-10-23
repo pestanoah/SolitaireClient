@@ -94,7 +94,7 @@ export const WinModal: React.FC<WinModalProps> = ({
 
           {isDateSeed(seed) && dailyStreak !== undefined && dailyStreak > 0 && (
             <View style={styles.streakWinBadge}>
-              <Text style={styles.streakWinText}>{`🔥 ${dailyStreak} Day Streak!`}</Text>
+              <Text style={styles.streakWinText}>{`${dailyStreak} Day Streak!`}</Text>
             </View>
           )}
 

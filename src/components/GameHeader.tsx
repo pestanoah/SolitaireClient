@@ -206,7 +206,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
               accessibilityRole="button"
             >
               <Text style={styles.actionBtnTextLandscape}>
-                {dailyStreak && dailyStreak > 0 ? `🔥${dailyStreak}` : 'Daily'}
+                {dailyStreak && dailyStreak > 0 ? `Daily (${dailyStreak})` : 'Daily'}
               </Text>
             </Pressable>
           )}
@@ -374,7 +374,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             accessibilityRole="button"
           >
             <Text style={styles.actionBtnText}>
-              {dailyStreak && dailyStreak > 0 ? `🔥${dailyStreak}` : 'Daily'}
+              {dailyStreak && dailyStreak > 0 ? `Daily (${dailyStreak})` : 'Daily'}
             </Text>
           </Pressable>
         )}

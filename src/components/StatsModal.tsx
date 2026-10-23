@@ -96,12 +96,12 @@ export const StatsModal: React.FC<StatsModalProps> = ({
             {dailyStreak !== undefined && (
               <>
                 <View style={[styles.statBox, styles.streakBox]}>
-                  <Text style={styles.streakValue}>{`🔥 ${dailyStreak}`}</Text>
+                  <Text style={styles.streakValue}>{dailyStreak}</Text>
                   <Text style={styles.statLabel}>Daily Streak</Text>
                 </View>
 
                 <View style={[styles.statBox, styles.streakBox]}>
-                  <Text style={styles.streakValue}>{`⭐ ${longestDailyStreak ?? dailyStreak}`}</Text>
+                  <Text style={styles.streakValue}>{longestDailyStreak ?? dailyStreak}</Text>
                   <Text style={styles.statLabel}>Best Streak</Text>
                 </View>
               </>
@@ -120,7 +120,7 @@ export const StatsModal: React.FC<StatsModalProps> = ({
               accessibilityRole="button"
             >
               <Text style={styles.dailyCalendarLinkText}>
-                📅 View Daily Challenge Calendar
+                View Daily Challenge Calendar
               </Text>
             </TouchableOpacity>
           )}

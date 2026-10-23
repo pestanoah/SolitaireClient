@@ -251,7 +251,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Text style={styles.settingTitle}>Daily Challenge & Seeds</Text>
                     <Text style={styles.settingDescription}>
                       {dailyStreak !== undefined && dailyStreak > 0
-                        ? `🔥 ${dailyStreak} day streak! `
+                        ? `${dailyStreak} day streak! `
                         : ''}
                       {isDailyChallenge(currentSeed)
                         ? `Playing Daily Challenge: #${currentSeed}`
@@ -287,9 +287,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         accessibilityLabel="View daily challenges calendar and history"
                         accessibilityRole="button"
                       >
-                        <Text style={styles.calendarModalBtnText}>
-                          {dailyStreak && dailyStreak > 0 ? `🔥 ${dailyStreak}` : 'Calendar'}
-                        </Text>
+                        <Text style={styles.calendarModalBtnText}>Calendar</Text>
                       </TouchableOpacity>
                     )}
 

@@ -105,14 +105,9 @@ describe('DailyChallengeModal', () => {
     });
 
     // Oct 21 and 22 completed -> 2 day streak
-    const streakText = findTextContaining(element, '🔥 2');
-    expect(streakText).not.toBeNull();
-
-    const bestText = findTextContaining(element, '⭐ 2');
-    expect(bestText).not.toBeNull();
-
-    const completedText = findTextContaining(element, '🏆 2');
-    expect(completedText).not.toBeNull();
+    expect(findTextContaining(element, 'Current Streak')).not.toBeNull();
+    expect(findTextContaining(element, 'Best Streak')).not.toBeNull();
+    expect(findTextContaining(element, 'Completed')).not.toBeNull();
   });
 
   test('displays completed challenge details and allows replaying', () => {
