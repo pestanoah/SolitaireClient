@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { isDateSeed } from '../engine/deck';
 import { colors, spacing, borderRadius, fontSize, fontWeight, letterSpacing } from '../theme';
 
@@ -17,6 +17,7 @@ interface GameHeaderProps {
   isLandscape?: boolean;
   seed?: string;
   dailyStreak?: number;
+  topInset?: number;
   onUndo: () => void;
   onHint?: () => void;
   onCheckWinnable?: () => void;
@@ -44,6 +45,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   isLandscape,
   seed,
   dailyStreak,
+  topInset,
   onUndo,
   onHint,
   onCheckWinnable,
@@ -62,11 +64,18 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   const seconds = elapsedSeconds % 60;
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
+  const safePaddingTop: number | string =
+    Platform.OS === 'web'
+      ? isLand
+        ? `calc(env(safe-area-inset-top, ${topInset ?? 0}px) + ${spacing.xs}px)`
+        : `calc(env(safe-area-inset-top, ${topInset ?? 0}px) + ${spacing.sm}px)`
+      : (topInset ?? 0) + (isLand ? spacing.xs : spacing.sm);
+
   const handleOpenSettings = onOpenSettings || onToggleDrawCount || (() => {});
 
   if (isLand) {
     return (
-      <View style={[styles.header, styles.headerLandscape]}>
+      <View style={[styles.header, styles.headerLandscape, { paddingTop: safePaddingTop } as any]}>
         {/* Metrics Row (Landscape) */}
         <View style={styles.metricsGroupLandscape}>
           <View style={styles.compactMetric}>
@@ -254,7 +263,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   const showDailyBtn = Boolean(onOpenDailyChallenge && (!seed || !isDateSeed(seed)));
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: safePaddingTop } as any]}>
       {/* Top Header Row (Single Compact Row in Portrait) */}
       <View style={styles.headerRowPortrait}>
         {/* Left: Metrics */}
@@ -364,12 +373,14 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
+    position: (Platform.OS === 'web' ? 'sticky' : 'relative') as any,
+    top: 0,
+    zIndex: 100,
     backgroundColor: colors.felt.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.felt.border,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    minHeight: 44,
+    paddingBottom: spacing.sm,
     justifyContent: 'center',
   },
   headerRowPortrait: {
@@ -495,8 +506,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    minHeight: 36,
+    paddingBottom: spacing.xs,
     gap: spacing.sm,
   },
   metricsGroupLandscape: {
