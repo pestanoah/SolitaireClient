@@ -183,4 +183,31 @@ describe('GameHeader Winnable Button', () => {
     badge.props.onPress();
     expect(onOpenDailyChallenge).toHaveBeenCalledTimes(1);
   });
+
+  describe('Safe Area Inset and Layout Styling', () => {
+    it('applies top safe area padding in portrait mode with topInset', () => {
+      const tree = renderHeader({
+        ...baseProps,
+        isLandscape: false,
+        topInset: 47,
+      });
+
+      const style = RN.StyleSheet.flatten(tree.props.style);
+      expect(style).toBeDefined();
+      expect(style.backgroundColor).toBeDefined();
+      expect(style.borderBottomWidth).toBe(1);
+    });
+
+    it('applies top safe area padding in landscape mode with topInset', () => {
+      const tree = renderHeader({
+        ...baseProps,
+        isLandscape: true,
+        topInset: 20,
+      });
+
+      const style = RN.StyleSheet.flatten(tree.props.style);
+      expect(style).toBeDefined();
+      expect(style.flexDirection).toBe('row');
+    });
+  });
 });

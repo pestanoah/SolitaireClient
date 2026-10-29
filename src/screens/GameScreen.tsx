@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing } from '../theme';
 import { styles } from './GameScreen.styles';
 import { CardView } from '../components/CardView';
@@ -273,6 +273,7 @@ export function calculatePileCardPosition(
 
 export const GameScreen: React.FC = () => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isLandscape = windowWidth > windowHeight;
 
   // Settings & Stats
@@ -2103,8 +2104,9 @@ export const GameScreen: React.FC = () => {
     : EMPTY_CARD_IDS;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
       <GameHeader
+        topInset={insets.top}
         score={gameState.score}
         moves={gameState.moves}
         elapsedSeconds={gameState.elapsedSeconds}
@@ -2132,7 +2134,13 @@ export const GameScreen: React.FC = () => {
       />
 
       {hintMessage && (
-        <View style={[styles.hintBanner, isLandscape && styles.hintBannerLandscape]}>
+        <View
+          style={[
+            styles.hintBanner,
+            isLandscape && styles.hintBannerLandscape,
+            isLandscape && insets.top > 0 && { top: insets.top + 42 },
+          ]}
+        >
           <Text style={styles.hintText}>{hintMessage}</Text>
         </View>
       )}

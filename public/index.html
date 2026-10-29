@@ -35,6 +35,17 @@
         /* Match the felt so standalone launch / overscroll never flashes white. */
         background-color: #064e3b;
       }
+      /* Real fixed element for iOS standalone status bar color sampler. WebKit samples real DOM elements at top: 0, ignoring pseudo-elements. */
+      #ios-statusbar-anchor {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: env(safe-area-inset-top, 1px);
+        background-color: #064e3b;
+        z-index: 999999;
+        pointer-events: none;
+      }
       /* These styles make the root element full-height */
       #root {
         display: flex;
@@ -61,6 +72,8 @@
   </head>
 
   <body>
+    <!-- Real DOM anchor element at top: 0 for iOS WebKit status bar color sampler. -->
+    <div id="ios-statusbar-anchor" aria-hidden="true"></div>
     <!-- Use static rendering with Expo Router to support running without JavaScript. -->
     <noscript>
       You need to enable JavaScript to run this app.
