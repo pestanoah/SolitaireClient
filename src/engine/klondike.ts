@@ -1,5 +1,12 @@
 import { Card, FOUNDATION_SUITS, GameState, MoveRecord, PileLocation } from './types';
-import { canPlaceOnFoundation, canPlaceOnTableau, isGameWon, hasExhaustedStockCycles } from './rules';
+import {
+  canPlaceOnFoundation,
+  canPlaceOnTableau,
+  isGameWon,
+  hasExhaustedStockCycles,
+  canMoveUnlockAdvancement,
+  getAccessibleDeckCards,
+} from './rules';
 import { dealKlondike, dealKlondikeFromDeck } from './deck';
 
 /**
@@ -490,66 +497,90 @@ export function undo(state: GameState): GameState {
  * Automatically advances one eligible card towards completing the game:
  * 1. Tableau column top card -> foundation
  * 2. Waste top card -> foundation
- * 3. Waste top card -> tableau column
- * 4. Move tableau cards to empty column if King in waste
- * 5. Stock -> waste (draw)
- * 6. Waste -> stock (recycle if not exhausted)
+ * 3. Tableau stack -> another tableau column if it directly uncovers a card that can move to foundation
+ * 4. Waste top card -> tableau column
+ * 5. Move tableau cards to empty column if King in waste
+ * 6. Stock -> waste (draw)
+ * 7. Waste -> stock (recycle if not exhausted)
+ * 8. Tableau move that unlocks advancement
  */
 export function autoCompleteStep(state: GameState): GameState | null {
   if (state.status !== 'playing') return null;
+
+  const canCardMoveToFoundation = (card: Card): number => {
+    const suitIndex = FOUNDATION_SUITS.indexOf(card.suit);
+    if (
+      suitIndex >= 0 &&
+      suitIndex < state.foundations.length &&
+      canPlaceOnFoundation(card, state.foundations[suitIndex], suitIndex)
+    ) {
+      return suitIndex;
+    }
+    for (let f = 0; f < state.foundations.length; f++) {
+      if (f === suitIndex) continue;
+      if (canPlaceOnFoundation(card, state.foundations[f], f)) {
+        return f;
+      }
+    }
+    return -1;
+  };
 
   // 1. Try designated foundation for tableau column top cards
   for (let c = 0; c < state.tableau.length; c++) {
     const col = state.tableau[c];
     if (col.length === 0) continue;
     const topCard = col[col.length - 1];
-
-    const suitIndex = FOUNDATION_SUITS.indexOf(topCard.suit);
-    if (
-      suitIndex >= 0 &&
-      suitIndex < state.foundations.length &&
-      canPlaceOnFoundation(topCard, state.foundations[suitIndex], suitIndex)
-    ) {
-      return moveCards(state, { type: 'tableau', index: c }, { type: 'foundation', index: suitIndex }, [
-        topCard.id,
-      ]);
-    }
-
-    for (let f = 0; f < state.foundations.length; f++) {
-      if (f === suitIndex) continue;
-      if (canPlaceOnFoundation(topCard, state.foundations[f], f)) {
-        return moveCards(state, { type: 'tableau', index: c }, { type: 'foundation', index: f }, [
-          topCard.id,
-        ]);
-      }
+    const targetFoundation = canCardMoveToFoundation(topCard);
+    if (targetFoundation !== -1) {
+      return moveCards(
+        state,
+        { type: 'tableau', index: c },
+        { type: 'foundation', index: targetFoundation },
+        [topCard.id]
+      );
     }
   }
 
   // 2. Try designated foundation for waste top card
   if (state.waste.length > 0) {
     const topWaste = state.waste[state.waste.length - 1];
-    const suitIndex = FOUNDATION_SUITS.indexOf(topWaste.suit);
-    if (
-      suitIndex >= 0 &&
-      suitIndex < state.foundations.length &&
-      canPlaceOnFoundation(topWaste, state.foundations[suitIndex], suitIndex)
-    ) {
-      return moveCards(state, { type: 'waste', index: 0 }, { type: 'foundation', index: suitIndex }, [
-        topWaste.id,
-      ]);
+    const targetFoundation = canCardMoveToFoundation(topWaste);
+    if (targetFoundation !== -1) {
+      return moveCards(
+        state,
+        { type: 'waste', index: 0 },
+        { type: 'foundation', index: targetFoundation },
+        [topWaste.id]
+      );
     }
+  }
 
-    for (let f = 0; f < state.foundations.length; f++) {
-      if (f === suitIndex) continue;
-      if (canPlaceOnFoundation(topWaste, state.foundations[f], f)) {
-        return moveCards(state, { type: 'waste', index: 0 }, { type: 'foundation', index: f }, [
-          topWaste.id,
-        ]);
+  // 3. Check if moving a tableau stack directly uncovers a card that can immediately move to foundation
+  for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
+    const fromCol = state.tableau[fromIdx];
+    if (fromCol.length < 2) continue;
+    for (let splitIdx = fromCol.length - 1; splitIdx >= 1; splitIdx--) {
+      const cardUnderneath = fromCol[splitIdx - 1];
+      const leadMovingCard = fromCol[splitIdx];
+      if (!cardUnderneath.faceUp || !leadMovingCard.faceUp) continue;
+      if (canCardMoveToFoundation(cardUnderneath) === -1) continue;
+
+      for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
+        if (toIdx === fromIdx) continue;
+        if (canPlaceOnTableau(leadMovingCard, state.tableau[toIdx])) {
+          const cardIds = fromCol.slice(splitIdx).map((c) => c.id);
+          return moveCards(
+            state,
+            { type: 'tableau', index: fromIdx },
+            { type: 'tableau', index: toIdx },
+            cardIds
+          );
+        }
       }
     }
   }
 
-  // 3. Try placing waste top card onto tableau
+  // 4. Try placing waste top card onto tableau
   if (state.waste.length > 0) {
     const topWaste = state.waste[state.waste.length - 1];
     const candidateColumns: number[] = [];
@@ -569,7 +600,7 @@ export function autoCompleteStep(state: GameState): GameState | null {
     }
   }
 
-  // 4. If waste has a King and no empty column exists, check if moving a tableau stack creates an empty column
+  // 5. If waste has a King and no empty column exists, check if moving a tableau stack creates an empty column
   if (state.waste.length > 0 && state.waste[state.waste.length - 1].rank === 13) {
     const hasEmpty = state.tableau.some((c) => c.length === 0);
     if (!hasEmpty) {
@@ -588,14 +619,62 @@ export function autoCompleteStep(state: GameState): GameState | null {
     }
   }
 
-  // 5. Try drawing from stock
+  // 6. Try drawing from stock
   if (state.stock.length > 0) {
     return drawCards(state);
   }
 
-  // 6. If stock is empty and waste has cards, recycle if cycle not exhausted
+  // 7. If stock is empty and waste has cards, recycle if cycle not exhausted
   if (state.waste.length > 0 && !hasExhaustedStockCycles(state)) {
     return drawCards(state);
+  }
+
+  // 8. Fallback: check if any non-reversing tableau-to-tableau move unlocks advancement
+  const accessibleDeckCards = getAccessibleDeckCards(state);
+  const prevMove = state.history.length > 0 ? state.history[state.history.length - 1] : null;
+  for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
+    const fromCol = state.tableau[fromIdx];
+    for (let cardIdx = 0; cardIdx < fromCol.length; cardIdx++) {
+      const card = fromCol[cardIdx];
+      if (!card.faceUp) continue;
+
+      for (let toIdx = 0; toIdx < state.tableau.length; toIdx++) {
+        if (toIdx === fromIdx) continue;
+        if (card.rank === 13 && cardIdx === 0 && state.tableau[toIdx].length === 0) continue;
+
+        if (
+          prevMove &&
+          prevMove.from.type === 'tableau' &&
+          prevMove.from.index === toIdx &&
+          prevMove.to.type === 'tableau' &&
+          prevMove.to.index === fromIdx &&
+          prevMove.cardIds[0] === card.id
+        ) {
+          continue;
+        }
+
+        if (canPlaceOnTableau(card, state.tableau[toIdx])) {
+          const cardIds = fromCol.slice(cardIdx).map((c) => c.id);
+          if (
+            canMoveUnlockAdvancement(
+              state,
+              { type: 'tableau', index: fromIdx },
+              { type: 'tableau', index: toIdx },
+              cardIds,
+              accessibleDeckCards,
+              false
+            )
+          ) {
+            return moveCards(
+              state,
+              { type: 'tableau', index: fromIdx },
+              { type: 'tableau', index: toIdx },
+              cardIds
+            );
+          }
+        }
+      }
+    }
   }
 
   return null;

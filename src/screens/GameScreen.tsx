@@ -333,6 +333,71 @@ export const GameScreen: React.FC = () => {
   const dragPan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const isAnimatingRef = useRef(false);
   const isAutoCompletingRef = useRef(false);
+  const animTokenRef = useRef(0);
+  const activeAnimWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelActiveAnimations = useCallback(() => {
+    animTokenRef.current += 1;
+    if (activeAnimWatchdogRef.current) {
+      clearTimeout(activeAnimWatchdogRef.current);
+      activeAnimWatchdogRef.current = null;
+    }
+    animProgress.stopAnimation();
+    dragPan.stopAnimation();
+  }, [animProgress, dragPan]);
+
+  const runProgressAnimation = useCallback(
+    (
+      duration: number,
+      easing: (value: number) => number,
+      onComplete: () => void
+    ) => {
+      if (activeAnimWatchdogRef.current) {
+        clearTimeout(activeAnimWatchdogRef.current);
+        activeAnimWatchdogRef.current = null;
+      }
+      const token = ++animTokenRef.current;
+      let settled = false;
+      const finish = () => {
+        if (settled || animTokenRef.current !== token) return;
+        settled = true;
+        if (activeAnimWatchdogRef.current) {
+          clearTimeout(activeAnimWatchdogRef.current);
+          activeAnimWatchdogRef.current = null;
+        }
+        onComplete();
+      };
+
+      activeAnimWatchdogRef.current = setTimeout(finish, Math.max(50, duration + 250));
+      animProgress.setValue(0);
+      Animated.timing(animProgress, {
+        toValue: 1,
+        duration,
+        easing,
+        useNativeDriver: Platform.OS !== 'web',
+      }).start(finish);
+    },
+    [animProgress]
+  );
+
+  const commitGameState = useCallback((nextState: GameState) => {
+    const current = latestGameStateRef.current;
+    const mergedState =
+      current.id === nextState.id && current.elapsedSeconds > nextState.elapsedSeconds
+        ? { ...nextState, elapsedSeconds: current.elapsedSeconds }
+        : nextState;
+    latestGameStateRef.current = mergedState;
+    setGameState(mergedState);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (activeAnimWatchdogRef.current) {
+        clearTimeout(activeAnimWatchdogRef.current);
+        activeAnimWatchdogRef.current = null;
+      }
+    };
+  }, []);
 
   // Toast / Hint Banner
   const [hintMessage, setHintMessage] = useState<string | null>(null);
@@ -980,6 +1045,7 @@ export const GameScreen: React.FC = () => {
   // Animate dealing all cards from the stock deck to start a new game
   const animateInitialDeal = useCallback(
     (game: GameState) => {
+      cancelActiveAnimations();
       clearActiveHint();
       setSelectedCards(null);
       setAnimatingCard(null);
@@ -989,20 +1055,21 @@ export const GameScreen: React.FC = () => {
 
       const steps = generateKlondikeDealSteps(game);
       if (steps.length === 0) {
+        isAnimatingRef.current = false;
         return;
       }
 
       isAnimatingRef.current = true;
       setDealingState({ game, steps });
     },
-    [clearActiveHint]
+    [cancelActiveAnimations, clearActiveHint]
   );
   const animateInitialDealRef = useRef(animateInitialDeal);
   animateInitialDealRef.current = animateInitialDeal;
 
   const handleDealComplete = useCallback(() => {
-    setDealingState(null);
     isAnimatingRef.current = false;
+    setDealingState(null);
     const activeState = latestGameStateRef.current;
     if (
       activeState.status === 'playing' &&
@@ -1018,6 +1085,7 @@ export const GameScreen: React.FC = () => {
   // Internal helper to deal a new game and reset animation/selection states
   const startNewGame = useCallback(
     (count?: 1 | 3) => {
+      cancelActiveAnimations();
       clearActiveHint();
       setSelectedCards(null);
       setAnimatingCard(null);
@@ -1036,10 +1104,17 @@ export const GameScreen: React.FC = () => {
         undefined,
         settings.winningDealsOnly !== false
       );
+      latestGameStateRef.current = newGame;
       setGameState(newGame);
       animateInitialDeal(newGame);
     },
-    [settings.drawCount, settings.winningDealsOnly, clearActiveHint, animateInitialDeal]
+    [
+      settings.drawCount,
+      settings.winningDealsOnly,
+      cancelActiveAnimations,
+      clearActiveHint,
+      animateInitialDeal,
+    ]
   );
 
   // Animate and execute move
@@ -1077,17 +1152,15 @@ export const GameScreen: React.FC = () => {
           isDraw: true,
         });
 
-        animProgress.setValue(0);
-        Animated.timing(animProgress, {
-          toValue: 1,
-          duration: durationOverride !== undefined ? durationOverride : 180,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: Platform.OS !== 'web',
-        }).start(() => {
-          setGameState(nextState);
-          setAnimatingCard(null);
-          isAnimatingRef.current = false;
-        });
+        runProgressAnimation(
+          durationOverride !== undefined ? durationOverride : 180,
+          Easing.out(Easing.cubic),
+          () => {
+            isAnimatingRef.current = false;
+            setAnimatingCard(null);
+            commitGameState(nextState);
+          }
+        );
         return true;
       }
 
@@ -1115,49 +1188,45 @@ export const GameScreen: React.FC = () => {
           isReset: true,
         });
 
-        animProgress.setValue(0);
-        Animated.timing(animProgress, {
-          toValue: 1,
-          duration: durationOverride !== undefined ? durationOverride : 200,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: Platform.OS !== 'web',
-        }).start(() => {
-          if (nextState.waste.length > 0) {
-            const drawnCards = nextState.waste;
-            const drawnIds = drawnCards.map((c) => c.id);
-            const drawStartPos = getPileBasePosition({ type: 'stock' });
-            const nextVisibleCount = getVisibleWasteCount(nextState);
-            const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
+        runProgressAnimation(
+          durationOverride !== undefined ? durationOverride : 200,
+          Easing.out(Easing.cubic),
+          () => {
+            if (nextState.waste.length > 0) {
+              const drawnCards = nextState.waste;
+              const drawnIds = drawnCards.map((c) => c.id);
+              const drawStartPos = getPileBasePosition({ type: 'stock' });
+              const nextVisibleCount = getVisibleWasteCount(nextState);
+              const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
 
-            setGameState(nextState);
-            playDealSound();
-            setAnimatingCard({
-              cards: drawnCards,
-              startX: drawStartPos.x,
-              startY: drawStartPos.y,
-              endX: drawEndPos.x,
-              endY: drawEndPos.y,
-              hiddenCardIds: drawnIds,
-              direction: 'horizontal',
-              isDraw: true,
-            });
+              commitGameState(nextState);
+              playDealSound();
+              setAnimatingCard({
+                cards: drawnCards,
+                startX: drawStartPos.x,
+                startY: drawStartPos.y,
+                endX: drawEndPos.x,
+                endY: drawEndPos.y,
+                hiddenCardIds: drawnIds,
+                direction: 'horizontal',
+                isDraw: true,
+              });
 
-            animProgress.setValue(0);
-            Animated.timing(animProgress, {
-              toValue: 1,
-              duration: durationOverride !== undefined ? durationOverride : 180,
-              easing: Easing.out(Easing.quad),
-              useNativeDriver: Platform.OS !== 'web',
-            }).start(() => {
-              setAnimatingCard(null);
+              runProgressAnimation(
+                durationOverride !== undefined ? durationOverride : 180,
+                Easing.out(Easing.quad),
+                () => {
+                  isAnimatingRef.current = false;
+                  setAnimatingCard(null);
+                }
+              );
+            } else {
               isAnimatingRef.current = false;
-            });
-          } else {
-            setGameState(nextState);
-            setAnimatingCard(null);
-            isAnimatingRef.current = false;
+              setAnimatingCard(null);
+              commitGameState(nextState);
+            }
           }
-        });
+        );
         return true;
       }
 
@@ -1186,7 +1255,7 @@ export const GameScreen: React.FC = () => {
       }
 
       if (movingCards.length === 0) {
-        setGameState(nextState);
+        commitGameState(nextState);
         return true;
       }
 
@@ -1211,21 +1280,19 @@ export const GameScreen: React.FC = () => {
         hiddenCardIds: cardIds,
       });
 
-      animProgress.setValue(0);
-      Animated.timing(animProgress, {
-        toValue: 1,
-        duration: durationOverride !== undefined ? durationOverride : 200,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web',
-      }).start(() => {
-        setGameState(nextState);
-        setAnimatingCard(null);
-        isAnimatingRef.current = false;
-      });
+      runProgressAnimation(
+        durationOverride !== undefined ? durationOverride : 200,
+        Easing.out(Easing.cubic),
+        () => {
+          isAnimatingRef.current = false;
+          setAnimatingCard(null);
+          commitGameState(nextState);
+        }
+      );
 
       return true;
     },
-    [getPileBasePosition, getPileCardPosition]
+    [getPileBasePosition, getPileCardPosition, runProgressAnimation, commitGameState]
   );
 
   // Find valid drop target under drop point
@@ -1395,11 +1462,11 @@ export const GameScreen: React.FC = () => {
             easing: Easing.out(Easing.cubic),
             useNativeDriver: Platform.OS !== 'web',
           }).start(() => {
-            setGameState(nextState);
+            isAnimatingRef.current = false;
             dragStateRef.current = null;
             setDraggedCard(null);
             setSelectedCards(null);
-            isAnimatingRef.current = false;
+            commitGameState(nextState);
           });
           return;
         }
@@ -1413,12 +1480,12 @@ export const GameScreen: React.FC = () => {
         easing: Easing.out(Easing.cubic),
         useNativeDriver: Platform.OS !== 'web',
       }).start(() => {
+        isAnimatingRef.current = false;
         dragStateRef.current = null;
         setDraggedCard(null);
-        isAnimatingRef.current = false;
       });
     },
-    [findDropTarget, getPileCardPosition, dragPan]
+    [findDropTarget, getPileCardPosition, dragPan, commitGameState]
   );
 
   // Stock press with draw animation
@@ -1458,13 +1525,7 @@ export const GameScreen: React.FC = () => {
         isReset: true,
       });
 
-      animProgress.setValue(0);
-      Animated.timing(animProgress, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web',
-      }).start(() => {
+      runProgressAnimation(220, Easing.out(Easing.cubic), () => {
         if (nextState.waste.length > 0) {
           const drawnCards = nextState.waste;
           const drawnIds = drawnCards.map((c) => c.id);
@@ -1472,7 +1533,7 @@ export const GameScreen: React.FC = () => {
           const nextVisibleCount = getVisibleWasteCount(nextState);
           const drawEndPos = getPileBasePosition({ type: 'waste' }, nextState.waste.length, nextVisibleCount);
 
-          setGameState(nextState);
+          commitGameState(nextState);
           playDealSound();
           setAnimatingCard({
             cards: drawnCards,
@@ -1485,20 +1546,14 @@ export const GameScreen: React.FC = () => {
             isDraw: true,
           });
 
-          animProgress.setValue(0);
-          Animated.timing(animProgress, {
-            toValue: 1,
-            duration: 180,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: Platform.OS !== 'web',
-          }).start(() => {
-            setAnimatingCard(null);
+          runProgressAnimation(180, Easing.out(Easing.quad), () => {
             isAnimatingRef.current = false;
+            setAnimatingCard(null);
           });
         } else {
-          setGameState(nextState);
-          setAnimatingCard(null);
           isAnimatingRef.current = false;
+          setAnimatingCard(null);
+          commitGameState(nextState);
         }
       });
       return;
@@ -1525,18 +1580,12 @@ export const GameScreen: React.FC = () => {
       isDraw: true,
     });
 
-    animProgress.setValue(0);
-    Animated.timing(animProgress, {
-      toValue: 1,
-      duration: 180,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: Platform.OS !== 'web',
-    }).start(() => {
-      setGameState(nextState);
-      setAnimatingCard(null);
+    runProgressAnimation(180, Easing.out(Easing.quad), () => {
       isAnimatingRef.current = false;
+      setAnimatingCard(null);
+      commitGameState(nextState);
     });
-  }, [clearActiveHint, getPileBasePosition, startNewGame]);
+  }, [clearActiveHint, getPileBasePosition, startNewGame, runProgressAnimation, commitGameState]);
 
   // Waste card press
   const handleWasteCardPress = useCallback(
@@ -1710,12 +1759,22 @@ export const GameScreen: React.FC = () => {
   // Auto-complete runner with animation (2x speed)
   useEffect(() => {
     const currentState = latestGameStateRef.current;
-    if (currentState.status === 'playing' && canAutoComplete(currentState) && !isAnimatingRef.current) {
+    const isBusy =
+      isAnimatingRef.current ||
+      animatingCard !== null ||
+      dealingState !== null ||
+      dragState !== null;
+
+    if (currentState.status === 'playing' && canAutoComplete(currentState) && !isBusy) {
       clearActiveHint();
       setSelectedCards(null);
       const timer = setTimeout(() => {
         const activeState = latestGameStateRef.current;
-        if (activeState.status !== 'playing' || !canAutoComplete(activeState) || isAnimatingRef.current) {
+        if (
+          activeState.status !== 'playing' ||
+          !canAutoComplete(activeState) ||
+          isAnimatingRef.current
+        ) {
           isAutoCompletingRef.current = false;
           return;
         }
@@ -1723,25 +1782,38 @@ export const GameScreen: React.FC = () => {
         if (next && next.history.length > activeState.history.length) {
           isAutoCompletingRef.current = true;
           const lastMove = next.history[next.history.length - 1];
-          executeMoveWithAnimation(
+          const started = executeMoveWithAnimation(
             lastMove.from,
             lastMove.to,
             lastMove.cardIds,
             AUTO_COMPLETE_ANIMATION_DURATION_MS
           );
+          if (!started) {
+            isAutoCompletingRef.current = false;
+          }
         } else {
           isAutoCompletingRef.current = false;
         }
       }, AUTO_COMPLETE_DELAY_MS);
       return () => clearTimeout(timer);
-    } else if (!canAutoComplete(currentState)) {
+    } else if (!canAutoComplete(currentState) || currentState.status !== 'playing') {
       isAutoCompletingRef.current = false;
     }
-  }, [gameState.id, gameState.history, gameState.status, clearActiveHint, executeMoveWithAnimation]);
+  }, [
+    gameState.id,
+    gameState.history,
+    gameState.status,
+    animatingCard,
+    dealingState,
+    dragState,
+    clearActiveHint,
+    executeMoveWithAnimation,
+  ]);
 
   // Replay the exact same starting deal
   const handleReplayDraw = useCallback(() => {
     const current = latestGameStateRef.current;
+    cancelActiveAnimations();
     clearActiveHint();
     setSelectedCards(null);
     setAnimatingCard(null);
@@ -1754,9 +1826,10 @@ export const GameScreen: React.FC = () => {
     setGameOverDismissed(false);
     setWinDismissed(false);
     const replayed = replayGame(current);
+    latestGameStateRef.current = replayed;
     setGameState(replayed);
     animateInitialDeal(replayed);
-  }, [clearActiveHint, animateInitialDeal]);
+  }, [cancelActiveAnimations, clearActiveHint, animateInitialDeal]);
 
   // Start new game (prompts if active game has moves)
   const handleNewGame = useCallback(() => {
@@ -1788,6 +1861,7 @@ export const GameScreen: React.FC = () => {
     (seed: string) => {
       const current = latestGameStateRef.current;
       const runStart = () => {
+        cancelActiveAnimations();
         clearActiveHint();
         setSelectedCards(null);
         setAnimatingCard(null);
@@ -1800,6 +1874,7 @@ export const GameScreen: React.FC = () => {
         setGameOverDismissed(false);
         setWinDismissed(false);
         const newGame = dealKlondike(settings.drawCount, seed);
+        latestGameStateRef.current = newGame;
         setGameState(newGame);
         animateInitialDeal(newGame);
         if (isDateSeed(seed)) {
@@ -1830,7 +1905,7 @@ export const GameScreen: React.FC = () => {
 
       runStart();
     },
-    [settings.drawCount, clearActiveHint, showHint, animateInitialDeal]
+    [settings.drawCount, cancelActiveAnimations, clearActiveHint, showHint, animateInitialDeal]
   );
 
   // Play today's daily challenge
@@ -2030,16 +2105,10 @@ export const GameScreen: React.FC = () => {
         isReset: true,
       });
 
-      animProgress.setValue(0);
-      Animated.timing(animProgress, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web',
-      }).start(() => {
-        setGameState(nextState);
-        setAnimatingCard(null);
+      runProgressAnimation(200, Easing.out(Easing.cubic), () => {
         isAnimatingRef.current = false;
+        setAnimatingCard(null);
+        commitGameState(nextState);
       });
       return;
     }
@@ -2065,16 +2134,10 @@ export const GameScreen: React.FC = () => {
         direction: 'horizontal',
       });
 
-      animProgress.setValue(0);
-      Animated.timing(animProgress, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: Platform.OS !== 'web',
-      }).start(() => {
-        setGameState(nextState);
-        setAnimatingCard(null);
+      runProgressAnimation(220, Easing.out(Easing.cubic), () => {
         isAnimatingRef.current = false;
+        setAnimatingCard(null);
+        commitGameState(nextState);
       });
       return;
     }
@@ -2103,7 +2166,7 @@ export const GameScreen: React.FC = () => {
 
     if (movingCards.length === 0) {
       playCardMoveSound();
-      setGameState(nextState);
+      commitGameState(nextState);
       return;
     }
 
@@ -2130,18 +2193,68 @@ export const GameScreen: React.FC = () => {
       hiddenCardIds: lastMove.cardIds,
     });
 
-    animProgress.setValue(0);
-    Animated.timing(animProgress, {
-      toValue: 1,
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: Platform.OS !== 'web',
-    }).start(() => {
-      setGameState(nextState);
-      setAnimatingCard(null);
+    runProgressAnimation(200, Easing.out(Easing.cubic), () => {
       isAnimatingRef.current = false;
+      setAnimatingCard(null);
+      commitGameState(nextState);
     });
-  }, [clearActiveHint, getPileBasePosition, getPileCardPosition]);
+  }, [clearActiveHint, commitGameState, getPileBasePosition, getPileCardPosition, runProgressAnimation]);
+
+  // Memoize AnimatedInterpolation nodes for the active flying card overlay so
+  // 1-second timer ticks do not recreate/detach native interpolation nodes mid-flight.
+  const animatingOverlayTransforms = useMemo(() => {
+    if (!animatingCard) return null;
+    const isHorizontal = animatingCard.direction === 'horizontal';
+    const isReset = animatingCard.isReset === true;
+    return {
+      containerTransform: [
+        {
+          translateX: animProgress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [animatingCard.startX, animatingCard.endX],
+          }),
+        },
+        {
+          translateY: animProgress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [animatingCard.startY, animatingCard.endY],
+          }),
+        },
+        {
+          scale: animProgress.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [1, 1.05, 1],
+          }),
+        },
+      ],
+      cardTranslateX: animatingCard.cards.map((_, i) =>
+        isHorizontal
+          ? animProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: isReset ? [i * fanOffset, 0] : [0, i * fanOffset],
+            })
+          : 0
+      ),
+      resetRotateY: isReset
+        ? animProgress.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: ['0deg', '90deg', '0deg'],
+          })
+        : undefined,
+      resetFrontOpacity: isReset
+        ? animProgress.interpolate({
+            inputRange: [0, 0.49, 0.5, 1],
+            outputRange: [1, 1, 0, 0],
+          })
+        : undefined,
+      resetBackOpacity: isReset
+        ? animProgress.interpolate({
+            inputRange: [0, 0.5, 0.51, 1],
+            outputRange: [0, 0, 1, 1],
+          })
+        : undefined,
+    };
+  }, [animatingCard, animProgress, fanOffset]);
 
   const dealingHiddenIds = useMemo(() => {
     if (!dealingState) return EMPTY_CARD_IDS;
@@ -2404,43 +2517,19 @@ export const GameScreen: React.FC = () => {
           </View>
 
           {/* Flying Animated Card Overlay */}
-          {animatingCard && (
+          {animatingCard && animatingOverlayTransforms && (
             <Animated.View
               style={[
                 styles.floatingAnimatedContainer,
                 {
-                  transform: [
-                    {
-                      translateX: animProgress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [animatingCard.startX, animatingCard.endX],
-                      }),
-                    },
-                    {
-                      translateY: animProgress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [animatingCard.startY, animatingCard.endY],
-                      }),
-                    },
-                    {
-                      scale: animProgress.interpolate({
-                        inputRange: [0, 0.5, 1],
-                        outputRange: [1, 1.05, 1],
-                      }),
-                    },
-                  ],
+                  transform: animatingOverlayTransforms.containerTransform,
                 },
               ]}
             >
               {animatingCard.cards.map((c, i) => {
                 const isHorizontal = animatingCard.direction === 'horizontal';
                 const isReset = animatingCard.isReset === true;
-                const animatedLeft = isHorizontal
-                  ? animProgress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: isReset ? [i * fanOffset, 0] : [0, i * fanOffset],
-                    })
-                  : 0;
+                const animatedLeft = animatingOverlayTransforms.cardTranslateX[i] ?? 0;
                 const animatedTop = isHorizontal ? 0 : i * upOffset;
 
                 return (
@@ -2459,14 +2548,9 @@ export const GameScreen: React.FC = () => {
                         style={{
                           width: cardWidth,
                           height: cardHeight,
-                          transform: [
-                            {
-                              rotateY: animProgress.interpolate({
-                                inputRange: [0, 0.5, 1],
-                                outputRange: ['0deg', '90deg', '0deg'],
-                              }),
-                            },
-                          ],
+                          transform: animatingOverlayTransforms.resetRotateY
+                            ? [{ rotateY: animatingOverlayTransforms.resetRotateY }]
+                            : undefined,
                         }}
                       >
                         <Animated.View
@@ -2474,10 +2558,7 @@ export const GameScreen: React.FC = () => {
                             position: 'absolute',
                             top: 0,
                             left: 0,
-                            opacity: animProgress.interpolate({
-                              inputRange: [0, 0.49, 0.5, 1],
-                              outputRange: [1, 1, 0, 0],
-                            }),
+                            opacity: animatingOverlayTransforms.resetFrontOpacity,
                           }}
                         >
                           <CardView
@@ -2492,10 +2573,7 @@ export const GameScreen: React.FC = () => {
                             position: 'absolute',
                             top: 0,
                             left: 0,
-                            opacity: animProgress.interpolate({
-                              inputRange: [0, 0.5, 0.51, 1],
-                              outputRange: [0, 0, 1, 1],
-                            }),
+                            opacity: animatingOverlayTransforms.resetBackOpacity,
                           }}
                         >
                           <CardView

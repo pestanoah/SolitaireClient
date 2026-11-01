@@ -487,3 +487,283 @@ describe('Loss Detection and False-Positive Prevention', () => {
   });
 });
 
+describe('Auto-Complete Freeze Prevention (Waste Recycle & Watchdog Recovery)', () => {
+  const React = require('react');
+  const { Animated } = require('react-native');
+  const { GameScreen } = require('../GameScreen');
+  const storageModule = require('../../storage/storage');
+  const soundModule = require('../../utils/sound');
+  const confettiModule = require('../../utils/confetti');
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.spyOn(soundModule, 'playCardMoveSound').mockImplementation(() => {});
+    jest.spyOn(soundModule, 'playDealSound').mockImplementation(() => {});
+    jest.spyOn(soundModule, 'playResetSound').mockImplementation(() => {});
+    jest.spyOn(soundModule, 'setSoundEnabled').mockImplementation(() => {});
+    jest.spyOn(confettiModule, 'triggerWinConfetti').mockImplementation(() => {});
+    jest.spyOn(storageModule, 'saveGameState').mockResolvedValue(undefined);
+    jest.spyOn(storageModule, 'clearGameState').mockResolvedValue(undefined);
+    jest.spyOn(storageModule, 'loadSettings').mockResolvedValue({
+      soundEnabled: false,
+      tapToMove: true,
+      rightHanded: false,
+    });
+    jest.spyOn(storageModule, 'loadStats').mockResolvedValue({
+      gamesPlayed: 0,
+      gamesWon: 0,
+      currentStreak: 0,
+      bestStreak: 0,
+      bestScore: 0,
+      bestTimeSeconds: null,
+      totalPlayTimeSeconds: 0,
+    });
+    jest.spyOn(storageModule, 'recordGameEnd').mockImplementation(async () => ({
+      gamesPlayed: 1,
+      gamesWon: 1,
+      currentStreak: 1,
+      bestStreak: 1,
+      bestScore: 100,
+      bestTimeSeconds: 25,
+      totalPlayTimeSeconds: 25,
+    }));
+    jest.spyOn(storageModule, 'loadDailyChallenges').mockResolvedValue({});
+    jest.spyOn(storageModule, 'recordDailyChallengeWon').mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  function createAutoCompletableRecycleState(): any {
+    const state = dealKlondike(1);
+    state.foundations = [
+      // Spades: A through 10
+      Array.from({ length: 10 }, (_, i) => ({
+        id: `s_${i + 1}`,
+        suit: 'spades' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Hearts: A through 13 (full)
+      Array.from({ length: 13 }, (_, i) => ({
+        id: `h_${i + 1}`,
+        suit: 'hearts' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Diamonds: A through 13 (full)
+      Array.from({ length: 13 }, (_, i) => ({
+        id: `d_${i + 1}`,
+        suit: 'diamonds' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Clubs: A through 13 (full)
+      Array.from({ length: 13 }, (_, i) => ({
+        id: `c_${i + 1}`,
+        suit: 'clubs' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+    ];
+    // Remaining 3 cards: Spades 13 (King) on Tableau 0, and Spades 11 (Jack), 12 (Queen) in Waste
+    // with Queen (12) on top and Stock empty. Auto-complete must first recycle Waste -> Stock
+    // (triggering the 2-stage animation), then play Jack, Queen, and King to Foundation 0.
+    state.tableau = [[{ id: 's_13', suit: 'spades', rank: 13, faceUp: true }], [], [], [], [], [], []];
+    state.stock = [];
+    state.waste = [
+      { id: 's_11', suit: 'spades', rank: 11, faceUp: true },
+      { id: 's_12', suit: 'spades', rank: 12, faceUp: true },
+    ];
+    state.status = 'playing';
+    state.moves = 10;
+    state.elapsedSeconds = 25;
+    return state;
+  }
+
+  function mountGameScreenHarness() {
+    const states: any[] = [];
+    const refs: { current: any }[] = [];
+    const memos: { value: any; deps: any[] | undefined }[] = [];
+    const callbacks: { fn: any; deps: any[] | undefined }[] = [];
+    const effects: { fn: () => any; deps: any[] | undefined; cleanup?: () => void }[] = [];
+
+    let dirty = false;
+
+    const depsChanged = (prev: any[] | undefined, next: any[] | undefined) => {
+      if (!prev || !next || prev.length !== next.length) return true;
+      for (let i = 0; i < prev.length; i++) {
+        if (!Object.is(prev[i], next[i])) return true;
+      }
+      return false;
+    };
+
+    jest.spyOn(React, 'useState').mockImplementation((init: any) => {
+      const idx = stateCursor++;
+      if (!(idx in states)) {
+        states[idx] = typeof init === 'function' ? init() : init;
+      }
+      const setState = (updater: any) => {
+        const next = typeof updater === 'function' ? updater(states[idx]) : updater;
+        if (!Object.is(states[idx], next)) {
+          states[idx] = next;
+          dirty = true;
+        }
+      };
+      return [states[idx], setState];
+    });
+
+    jest.spyOn(React, 'useRef').mockImplementation((init: any) => {
+      const idx = refCursor++;
+      if (!(idx in refs)) {
+        refs[idx] = { current: init };
+      }
+      return refs[idx];
+    });
+
+    jest.spyOn(React, 'useMemo').mockImplementation((fn: any, deps: any) => {
+      const idx = memoCursor++;
+      if (!(idx in memos) || depsChanged(memos[idx].deps, deps)) {
+        memos[idx] = { value: fn(), deps };
+      }
+      return memos[idx].value;
+    });
+
+    jest.spyOn(React, 'useCallback').mockImplementation((fn: any, deps: any) => {
+      const idx = callbackCursor++;
+      if (!(idx in callbacks) || depsChanged(callbacks[idx].deps, deps)) {
+        callbacks[idx] = { fn, deps };
+      }
+      return callbacks[idx].fn;
+    });
+
+    const pendingEffects: number[] = [];
+    jest.spyOn(React, 'useEffect').mockImplementation((fn: any, deps: any) => {
+      const idx = effectCursor++;
+      if (!(idx in effects) || depsChanged(effects[idx].deps, deps)) {
+        effects[idx] = { fn, deps, cleanup: effects[idx]?.cleanup };
+        pendingEffects.push(idx);
+      }
+    });
+
+    let stateCursor = 0;
+    let refCursor = 0;
+    let memoCursor = 0;
+    let callbackCursor = 0;
+    let effectCursor = 0;
+
+    function flushRender() {
+      let iterations = 0;
+      do {
+        dirty = false;
+        stateCursor = 0;
+        refCursor = 0;
+        memoCursor = 0;
+        callbackCursor = 0;
+        effectCursor = 0;
+        pendingEffects.length = 0;
+
+        GameScreen();
+
+        const toRun = [...pendingEffects];
+        pendingEffects.length = 0;
+        for (const idx of toRun) {
+          if (typeof effects[idx].cleanup === 'function') {
+            effects[idx].cleanup!();
+          }
+          effects[idx].cleanup = effects[idx].fn();
+        }
+        iterations++;
+      } while (dirty && iterations < 25);
+    }
+
+    return {
+      states,
+      refs,
+      flushRender,
+      getGameState: () =>
+        states.find((s) => s && typeof s === 'object' && Array.isArray(s.foundations) && typeof s.status === 'string'),
+    };
+  }
+
+  test('completes auto-complete without freezing when waste must be recycled into stock (2-stage animation)', async () => {
+    const initialRecycleState = createAutoCompletableRecycleState();
+    jest.spyOn(storageModule, 'loadGameState').mockResolvedValue(initialRecycleState);
+
+    jest.spyOn(Animated, 'timing').mockImplementation((_value: any, config: any) => ({
+      start: (cb?: (result: { finished: boolean }) => void) => {
+        setTimeout(() => {
+          if (cb) cb({ finished: true });
+        }, config?.duration ?? 100);
+      },
+      stop: jest.fn(),
+    }));
+
+    const harness = mountGameScreenHarness();
+    harness.flushRender();
+
+    // Flush loadGameState promise resolution
+    await Promise.resolve();
+    await Promise.resolve();
+    harness.flushRender();
+
+    // Advance timers step-by-step across the 2-stage recycle animation and remaining foundation moves
+    for (let step = 0; step < 30; step++) {
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+      harness.flushRender();
+      if (harness.getGameState()?.status === 'won') {
+        break;
+      }
+    }
+
+    const finalGameState = harness.getGameState();
+    expect(finalGameState.status).toBe('won');
+    expect(finalGameState.foundations.reduce((sum: number, f: any[]) => sum + f.length, 0)).toBe(52);
+  });
+
+  test('recovers via watchdog timeout and finishes auto-complete even if an Animated.timing callback is dropped', async () => {
+    const initialRecycleState = createAutoCompletableRecycleState();
+    jest.spyOn(storageModule, 'loadGameState').mockResolvedValue(initialRecycleState);
+
+    // Simulate a dropped native animation callback on the very first animation
+    let callCount = 0;
+    jest.spyOn(Animated, 'timing').mockImplementation((_value: any, config: any) => ({
+      start: (cb?: (result: { finished: boolean }) => void) => {
+        callCount++;
+        if (callCount === 1) {
+          // Never invoke cb! Watchdog timer must recover.
+          return;
+        }
+        setTimeout(() => {
+          if (cb) cb({ finished: true });
+        }, config?.duration ?? 100);
+      },
+      stop: jest.fn(),
+    }));
+
+    const harness = mountGameScreenHarness();
+    harness.flushRender();
+
+    await Promise.resolve();
+    await Promise.resolve();
+    harness.flushRender();
+
+    for (let step = 0; step < 40; step++) {
+      jest.advanceTimersByTime(150);
+      await Promise.resolve();
+      harness.flushRender();
+      if (harness.getGameState()?.status === 'won') {
+        break;
+      }
+    }
+
+    const finalGameState = harness.getGameState();
+    expect(finalGameState.status).toBe('won');
+    expect(finalGameState.foundations.reduce((sum: number, f: any[]) => sum + f.length, 0)).toBe(52);
+  });
+});
+

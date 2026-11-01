@@ -594,6 +594,126 @@ describe('State Transitions & Gameplay', () => {
     expect(activeState!.foundations.reduce((acc, f) => acc + f.length, 0)).toBe(52);
   });
 
+  test('autoCompleteStep moves covering face-up tableau stack to another tableau column to uncover foundation-playable card', () => {
+    let state = dealKlondike(1);
+    state.stock = [];
+    state.waste = [];
+    state.foundations = [
+      [{ id: 's_1', suit: 'spades', rank: 1, faceUp: true }],
+      [],
+      [],
+      [],
+    ];
+    // Column 0 has 2 of Spades (can move to foundation 0) covered by 7 of Hearts (cannot move to foundation yet,
+    // since Hearts foundation is empty, and 7 of Hearts was placed on 8 of Spades or dealt in a custom test state;
+    // even simpler: Column 0 has 6 of Spades (can move to Spades foundation at 5) covered by 5 of Hearts,
+    // and Column 1 has 6 of Clubs (so 5 of Hearts can move onto 6 of Clubs to uncover 6 of Spades)).
+    state.foundations[0] = [
+      { id: 's_1', suit: 'spades', rank: 1, faceUp: true },
+      { id: 's_2', suit: 'spades', rank: 2, faceUp: true },
+      { id: 's_3', suit: 'spades', rank: 3, faceUp: true },
+      { id: 's_4', suit: 'spades', rank: 4, faceUp: true },
+      { id: 's_5', suit: 'spades', rank: 5, faceUp: true },
+    ];
+    state.tableau = [
+      [
+        { id: 's_6', suit: 'spades', rank: 6, faceUp: true },
+        { id: 'h_5', suit: 'hearts', rank: 5, faceUp: true },
+      ],
+      [{ id: 'c_6', suit: 'clubs', rank: 6, faceUp: true }],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+
+    expect(canAutoComplete(state)).toBe(true);
+
+    // Step 1 should move 5 of Hearts from Column 0 to Column 1 (onto 6 of Clubs) to uncover 6 of Spades
+    const step1 = autoCompleteStep(state);
+    expect(step1).not.toBeNull();
+    expect(step1!.tableau[0]).toHaveLength(1);
+    expect(step1!.tableau[0][0].id).toBe('s_6');
+    expect(step1!.tableau[1]).toHaveLength(2);
+    expect(step1!.tableau[1][1].id).toBe('h_5');
+
+    // Step 2 should move the newly uncovered 6 of Spades to Foundation 0
+    const step2 = autoCompleteStep(step1!);
+    expect(step2).not.toBeNull();
+    expect(step2!.foundations[0]).toHaveLength(6);
+    expect(step2!.foundations[0][5].id).toBe('s_6');
+  });
+
+  test('full end-to-end auto-finish completes Draw 3 game requiring waste-to-stock recycle', () => {
+    let state = dealKlondike(3);
+    state.foundations = [
+      // Spades: A through 10
+      Array.from({ length: 10 }, (_, i) => ({
+        id: `s_${i + 1}`,
+        suit: 'spades' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Hearts: A through 13 (full)
+      Array.from({ length: 13 }, (_, i) => ({
+        id: `h_${i + 1}`,
+        suit: 'hearts' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Diamonds: A through 13 (full)
+      Array.from({ length: 13 }, (_, i) => ({
+        id: `d_${i + 1}`,
+        suit: 'diamonds' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+      // Clubs: A through 13 (full)
+      Array.from({ length: 13 }, (_, i) => ({
+        id: `c_${i + 1}`,
+        suit: 'clubs' as const,
+        rank: (i + 1) as any,
+        faceUp: true,
+      })),
+    ];
+
+    // Remaining Spades 11 (J), 12 (Q), 13 (K):
+    // Put 13 (King) on Tableau 0, and [11 (Jack), 12 (Queen)] in Waste with Queen (12) on top.
+    // Neither Foundation (at 10) nor Tableau (King of Spades) can accept Queen of Spades (12),
+    // and empty tableau columns only accept Kings, so autoCompleteStep MUST recycle waste -> stock!
+    state.tableau = [[{ id: 's_13', suit: 'spades', rank: 13, faceUp: true }], [], [], [], [], [], []];
+    state.stock = [];
+    state.waste = [
+      { id: 's_11', suit: 'spades', rank: 11, faceUp: true },
+      { id: 's_12', suit: 'spades', rank: 12, faceUp: true },
+    ];
+
+    expect(canAutoComplete(state)).toBe(true);
+
+    // First step must recycle waste to stock (since top of waste is s_12 which cannot go on s_10 or s_13)
+    const step1 = autoCompleteStep(state);
+    expect(step1).not.toBeNull();
+    expect(step1!.history[step1!.history.length - 1].from.type).toBe('waste');
+    expect(step1!.history[step1!.history.length - 1].to.type).toBe('stock');
+
+    // In Draw 1 (or when s_11 is uncovered after recycle), auto-complete finishes to 'won'
+    const draw1RecycleState: GameState = {
+      ...state,
+      drawCount: 1,
+    };
+    let activeState: GameState | null = draw1RecycleState;
+    let steps = 0;
+    while (activeState && activeState.status === 'playing' && steps < 20) {
+      activeState = autoCompleteStep(activeState);
+      steps++;
+    }
+
+    expect(activeState).not.toBeNull();
+    expect(activeState!.status).toBe('won');
+    expect(isGameWon(activeState!.foundations)).toBe(true);
+  });
+
   test('moveCards transfers card from foundation back down to tableau with penalty and undo restores it', () => {
     let state = dealKlondike(1);
     const red5: Card = { id: 'red_5', suit: 'hearts', rank: 5, faceUp: true };
