@@ -196,9 +196,22 @@ describe('GameHeader Winnable Button', () => {
       expect(style).toBeDefined();
       expect(style.backgroundColor).toBeDefined();
       expect(style.borderBottomWidth).toBe(1);
+      expect(style.paddingTop).toBe('calc(env(safe-area-inset-top, 47px) + 48px)');
     });
 
-    it('applies top safe area padding in landscape mode with topInset', () => {
+    it('applies compact top padding in portrait mode when topInset is zero or absent', () => {
+      const tree = renderHeader({
+        ...baseProps,
+        isLandscape: false,
+        topInset: 0,
+      });
+
+      const style = RN.StyleSheet.flatten(tree.props.style);
+      expect(style).toBeDefined();
+      expect(style.paddingTop).toBe('calc(env(safe-area-inset-top, 0px) + 6px)');
+    });
+
+    it('applies compact top safe area padding in landscape mode with topInset', () => {
       const tree = renderHeader({
         ...baseProps,
         isLandscape: true,
@@ -208,6 +221,7 @@ describe('GameHeader Winnable Button', () => {
       const style = RN.StyleSheet.flatten(tree.props.style);
       expect(style).toBeDefined();
       expect(style.flexDirection).toBe('row');
+      expect(style.paddingTop).toBe('calc(env(safe-area-inset-top, 20px) + 4px)');
     });
   });
 });

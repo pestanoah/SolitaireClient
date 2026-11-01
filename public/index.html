@@ -16,11 +16,13 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Solitaire" />
     <!--
-      Use an opaque status bar. `black-translucent` draws the page under the status bar, and iOS
-      applies a system blur over that top edge in standalone mode, washing out the GameHeader.
-      Note: iOS snapshots this at install time, so the PWA must be re-added to see changes.
+      Omit apple-mobile-web-app-status-bar-style entirely.
+      Specifying `black-translucent` causes WebKit to treat the page as having zero top obscured
+      insets (_obscuredInsets.top == 0), permanently forcing iOS's progressive blur over the top
+      edge with no way for the page to dismiss it.
+      Omitting the tag lets iOS WebKit reserve the top status bar area, pairing with theme-color
+      and the #ios-statusbar-anchor element below to hide the progressive blur pocket.
     -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
@@ -35,15 +37,26 @@
         /* Match the felt so standalone launch / overscroll never flashes white. */
         background-color: #064e3b;
       }
-      /* Real fixed element for iOS standalone status bar color sampler. WebKit samples real DOM elements at top: 0, ignoring pseudo-elements. */
+      /*
+        Fixed element for iOS WebKit standalone status bar color sampler (WebKit LocalFrameView::fixedContainerEdges).
+        WebKit requires:
+        - Position: fixed at top: 0
+        - Border-box height > 10px (thinBorderWidth threshold), so 11px is the exact minimum required
+        - background-clip: text on empty div: computed style carries #064e3b for WebKit's sampler
+          without painting any visible pixels on screen
+        - z-index at top of DOM (2147483647)
+        - pointer-events: none to avoid intercepting touches
+      */
       #ios-statusbar-anchor {
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
-        height: env(safe-area-inset-top, 1px);
+        height: 11px;
         background-color: #064e3b;
-        z-index: 999999;
+        -webkit-background-clip: text;
+        background-clip: text;
+        z-index: 2147483647;
         pointer-events: none;
       }
       /* These styles make the root element full-height */
@@ -66,6 +79,29 @@
             .catch(function (error) {
               console.warn('Service worker registration failed:', error);
             });
+        });
+      }
+
+      /* Force iOS WebKit compositor layer refresh on standalone launch so that
+         the status bar color extension anchor is evaluated immediately on app open. */
+      if (typeof window !== 'undefined') {
+        window.addEventListener('load', function () {
+          var isStandalone = (window.navigator && window.navigator.standalone === true) ||
+            (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+          var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+          if (!isStandalone || !isIOS) return;
+
+          var trigger = document.createElement('div');
+          trigger.style.cssText = 'position:fixed;top:0;right:0;width:11px;height:11px;z-index:2147483646;opacity:0.01;pointer-events:none;transform:translateZ(0);';
+          document.body.appendChild(trigger);
+          requestAnimationFrame(function () {
+            trigger.style.transform = 'translate3d(1px,0,0)';
+            setTimeout(function () {
+              if (trigger && trigger.parentNode) {
+                trigger.parentNode.removeChild(trigger);
+              }
+            }, 400);
+          });
         });
       }
     </script>

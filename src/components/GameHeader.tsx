@@ -64,12 +64,16 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   const seconds = elapsedSeconds % 60;
   const timeFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
+  // On devices with a top safe area inset (notches / Dynamic Island, typically 44-59px),
+  // ensure the header row has comfortable clearance below the system status bar and
+  // completely clears the top 0-108pt region where WebKit applies its compositor blur scrim.
+  // When topInset is 0 (desktop, laptops, iPads, tablets), keep padding compact.
+  const hasTopInset = Boolean(topInset && topInset > 20);
+  const extraPadding = isLand ? spacing.xs : hasTopInset ? 48 : spacing.sm;
   const safePaddingTop: number | string =
     Platform.OS === 'web'
-      ? isLand
-        ? `calc(env(safe-area-inset-top, ${topInset ?? 0}px) + ${spacing.xs}px)`
-        : `calc(env(safe-area-inset-top, ${topInset ?? 0}px) + ${spacing.sm}px)`
-      : (topInset ?? 0) + (isLand ? spacing.xs : spacing.sm);
+      ? `calc(env(safe-area-inset-top, ${topInset ?? 0}px) + ${extraPadding}px)`
+      : (topInset ?? 0) + extraPadding;
 
   const handleOpenSettings = onOpenSettings || onToggleDrawCount || (() => {});
 
