@@ -88,6 +88,13 @@ describe('Local Storage Persistence', () => {
     expect(afterLoss.gamesWon).toBe(1);
     expect(afterLoss.highScore).toBe(350); // Unchanged
     expect(afterLoss.bestTimeSeconds).toBe(120); // Unchanged
+
+    // Converting an undone loss to a victory
+    const afterUndoWin = await recordGameEnd(true, 500, 90, true);
+    expect(afterUndoWin.gamesPlayed).toBe(2); // gamesPlayed unchanged
+    expect(afterUndoWin.gamesWon).toBe(2); // gamesWon incremented
+    expect(afterUndoWin.highScore).toBe(500); // updated
+    expect(afterUndoWin.bestTimeSeconds).toBe(90); // updated
   });
 
   test('resets stats back to default values', async () => {

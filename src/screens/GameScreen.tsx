@@ -318,7 +318,8 @@ export const GameScreen: React.FC = () => {
     confirmLabel?: string;
     onConfirm: () => void;
   } | null>(null);
-  const recordedGameIdsRef = useRef<Set<string>>(new Set());
+  const recordedWinsRef = useRef<Set<string>>(new Set());
+  const recordedLossesRef = useRef<Set<string>>(new Set());
 
   // Animation State
   const animProgress = useRef(new Animated.Value(0)).current;
@@ -747,25 +748,71 @@ export const GameScreen: React.FC = () => {
 
   // Handle victory and loss recording
   useEffect(() => {
-    if (gameState.status === 'won' || gameState.status === 'lost') {
-      const isWon = gameState.status === 'won';
-      if (!recordedGameIdsRef.current.has(gameState.id)) {
-        recordedGameIdsRef.current.add(gameState.id);
-        (async () => {
-          const updated = await recordGameEnd(isWon, gameState.score, gameState.elapsedSeconds);
-          setStats(updated);
+    if (gameState.status === 'won') {
+      if (!recordedWinsRef.current.has(gameState.id)) {
+        recordedWinsRef.current.add(gameState.id);
+        const wasPreviouslyRecordedLoss = recordedLossesRef.current.has(gameState.id);
 
-          if (isWon && gameState.seed && isDateSeed(gameState.seed)) {
-            const dateKey = extractDailyDate(gameState.seed);
-            if (dateKey) {
-              const updatedDaily = await recordDailyChallengeWon(
-                dateKey,
-                gameState.score,
-                gameState.moves,
-                gameState.elapsedSeconds
-              );
-              setDailyHistory(updatedDaily);
-            }
+        const dateKey =
+          gameState.seed && isDateSeed(gameState.seed)
+            ? extractDailyDate(gameState.seed)
+            : null;
+
+        // Optimistically record daily challenge won in React state immediately
+        if (dateKey) {
+          setDailyHistory((prev) => {
+            const existing = prev[dateKey];
+            return {
+              ...prev,
+              [dateKey]: {
+                completed: true,
+                score: existing ? Math.max(existing.score, gameState.score) : gameState.score,
+                moves: existing ? Math.min(existing.moves, gameState.moves) : gameState.moves,
+                elapsedSeconds: existing
+                  ? Math.min(existing.elapsedSeconds, gameState.elapsedSeconds)
+                  : gameState.elapsedSeconds,
+                completedAt: existing?.completedAt || new Date().toISOString(),
+              },
+            };
+          });
+        }
+
+        (async () => {
+          try {
+            const statsPromise = recordGameEnd(
+              true,
+              gameState.score,
+              gameState.elapsedSeconds,
+              wasPreviouslyRecordedLoss
+            ).then((updated) => setStats(updated));
+
+            const dailyPromise = dateKey
+              ? recordDailyChallengeWon(
+                  dateKey,
+                  gameState.score,
+                  gameState.moves,
+                  gameState.elapsedSeconds
+                ).then((updatedDaily) => setDailyHistory(updatedDaily))
+              : Promise.resolve();
+
+            await Promise.all([statsPromise, dailyPromise]);
+          } catch (e) {
+            console.error('Failed to record victory end game', e);
+          }
+        })();
+      }
+    } else if (gameState.status === 'lost') {
+      if (
+        !recordedLossesRef.current.has(gameState.id) &&
+        !recordedWinsRef.current.has(gameState.id)
+      ) {
+        recordedLossesRef.current.add(gameState.id);
+        (async () => {
+          try {
+            const updated = await recordGameEnd(false, gameState.score, gameState.elapsedSeconds);
+            setStats(updated);
+          } catch (e) {
+            console.error('Failed to record loss end game', e);
           }
         })();
       }
@@ -1722,8 +1769,8 @@ export const GameScreen: React.FC = () => {
         confirmLabel: 'Abandon & Deal',
         onConfirm: async () => {
           setConfirmModal(null);
-          if (!recordedGameIdsRef.current.has(current.id)) {
-            recordedGameIdsRef.current.add(current.id);
+          if (!recordedLossesRef.current.has(current.id) && !recordedWinsRef.current.has(current.id)) {
+            recordedLossesRef.current.add(current.id);
             const updated = await recordGameEnd(false, current.score, current.elapsedSeconds);
             setStats(updated);
           }
@@ -1770,8 +1817,8 @@ export const GameScreen: React.FC = () => {
           confirmLabel: 'Abandon & Deal',
           onConfirm: async () => {
             setConfirmModal(null);
-            if (!recordedGameIdsRef.current.has(current.id)) {
-              recordedGameIdsRef.current.add(current.id);
+            if (!recordedLossesRef.current.has(current.id) && !recordedWinsRef.current.has(current.id)) {
+              recordedLossesRef.current.add(current.id);
               const updated = await recordGameEnd(false, current.score, current.elapsedSeconds);
               setStats(updated);
             }
@@ -1849,9 +1896,10 @@ export const GameScreen: React.FC = () => {
         if (
           current.status === 'playing' &&
           current.moves > 0 &&
-          !recordedGameIdsRef.current.has(current.id)
+          !recordedLossesRef.current.has(current.id) &&
+          !recordedWinsRef.current.has(current.id)
         ) {
-          recordedGameIdsRef.current.add(current.id);
+          recordedLossesRef.current.add(current.id);
           const updated = await recordGameEnd(false, current.score, current.elapsedSeconds);
           setStats(updated);
         }
@@ -1950,6 +1998,11 @@ export const GameScreen: React.FC = () => {
 
     clearActiveHint();
     setSelectedCards(null);
+
+    if (current.status === 'lost') {
+      setGameOverDismissed(false);
+      setLossReason('no_moves');
+    }
 
     const lastMove = current.history[current.history.length - 1];
     const nextState = undo(current);
