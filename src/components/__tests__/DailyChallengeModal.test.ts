@@ -177,4 +177,71 @@ describe('DailyChallengeModal', () => {
     closeBtn.props.onPress();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  test('focuses on the currentSeed date instead of today when currentSeed is provided', () => {
+    const onPlayChallenge = jest.fn();
+    const customHistory = {
+      '2026-10-15': {
+        completed: true,
+        score: 710,
+        moves: 58,
+        elapsedSeconds: 90,
+        completedAt: '2026-10-15T14:00:00Z',
+      },
+    };
+
+    const element: any = DailyChallengeModal({
+      visible: true,
+      dailyHistory: customHistory,
+      currentSeed: '2026-10-15_v2',
+      onClose: jest.fn(),
+      onPlayChallenge,
+      referenceDate: fixedToday,
+    });
+
+    // Detail seed should show #2026-10-15
+    expect(findTextContaining(element, '#2026-10-15')).not.toBeNull();
+    expect(findTextContaining(element, '710')).not.toBeNull(); // Score for Oct 15
+
+    const replayBtn = findByAccessibilityLabel(element, 'Replay daily challenge');
+    expect(replayBtn).not.toBeNull();
+    replayBtn.props.onPress();
+    expect(onPlayChallenge).toHaveBeenCalledWith('2026-10-15', expect.any(String));
+  });
+
+  test('synchronizes active date and month view in useEffect when visible', () => {
+    let effectCallback: (() => void) | null = null;
+    jest.spyOn(React, 'useEffect').mockImplementation((fn: any) => {
+      effectCallback = fn;
+    });
+
+    const setSelectedDate = jest.fn();
+    const setViewYear = jest.fn();
+    const setViewMonth = jest.fn();
+
+    let stateCallIndex = 0;
+    (jest.spyOn(React, 'useState') as any).mockImplementation((init: any) => {
+      stateCallIndex++;
+      if (stateCallIndex === 1) return [init, setSelectedDate];
+      if (stateCallIndex === 2) return [init, setViewYear];
+      if (stateCallIndex === 3) return [init, setViewMonth];
+      return [init, jest.fn()];
+    });
+
+    DailyChallengeModal({
+      visible: true,
+      dailyHistory: {},
+      currentSeed: '2026-08-10',
+      onClose: jest.fn(),
+      onPlayChallenge: jest.fn(),
+      referenceDate: fixedToday,
+    });
+
+    expect(effectCallback).not.toBeNull();
+    effectCallback!();
+
+    expect(setSelectedDate).toHaveBeenCalledWith('2026-08-10');
+    expect(setViewYear).toHaveBeenCalledWith(2026);
+    expect(setViewMonth).toHaveBeenCalledWith(7); // August is month index 7
+  });
 });

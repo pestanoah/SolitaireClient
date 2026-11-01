@@ -86,11 +86,12 @@ export async function clearStats(): Promise<void> {
 export async function recordGameEnd(
   won: boolean,
   score: number,
-  elapsedSeconds: number
+  elapsedSeconds: number,
+  wasPreviouslyRecordedLoss = false
 ): Promise<PlayerStats> {
   const current = await loadStats();
   const next: PlayerStats = {
-    gamesPlayed: current.gamesPlayed + 1,
+    gamesPlayed: wasPreviouslyRecordedLoss ? current.gamesPlayed : current.gamesPlayed + 1,
     gamesWon: current.gamesWon + (won ? 1 : 0),
     highScore: Math.max(current.highScore, score),
     bestTimeSeconds: won

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -11,6 +11,7 @@ import {
 import {
   calculateDailyStreak,
   DailyChallengeHistory,
+  extractDailyDate,
   formatDateKey,
   getMonthCalendarData,
   isDateCompleted,
@@ -69,13 +70,29 @@ export const DailyChallengeModal: React.FC<DailyChallengeModalProps> = ({
 }) => {
   const todayKey = useMemo(() => formatDateKey(referenceDate), [referenceDate]);
 
-  // Initial selected date defaults to today or current active challenge date
-  const [selectedDate, setSelectedDate] = useState<string>(todayKey);
+  // Initial selected date defaults to current active challenge date or today
+  const initialTargetKey = useMemo(() => {
+    const seedDate = currentSeed ? extractDailyDate(currentSeed) : null;
+    return seedDate || todayKey;
+  }, [currentSeed, todayKey]);
+
+  const [selectedDate, setSelectedDate] = useState<string>(initialTargetKey);
 
   // Month and Year view for calendar navigation
-  const initialDate = parseDateKey(selectedDate || todayKey);
+  const initialDate = parseDateKey(selectedDate || initialTargetKey);
   const [viewYear, setViewYear] = useState<number>(initialDate.getFullYear());
   const [viewMonth, setViewMonth] = useState<number>(initialDate.getMonth());
+
+  // Automatically focus on the active challenge date whenever the modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      const activeDateKey = (currentSeed ? extractDailyDate(currentSeed) : null) || todayKey;
+      setSelectedDate(activeDateKey);
+      const activeDateObj = parseDateKey(activeDateKey);
+      setViewYear(activeDateObj.getFullYear());
+      setViewMonth(activeDateObj.getMonth());
+    }
+  }, [visible, currentSeed, todayKey]);
 
   const streakInfo = useMemo(
     () => calculateDailyStreak(dailyHistory, referenceDate),
