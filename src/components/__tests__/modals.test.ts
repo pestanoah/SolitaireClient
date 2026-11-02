@@ -5,7 +5,8 @@ import { ConfirmModal } from '../ConfirmModal';
 import { GameOverModal } from '../GameOverModal';
 import { WinModal } from '../WinModal';
 import { SeedModal } from '../SeedModal';
-import { modalStyles } from '../../theme';
+import { DailyChallengeModal } from '../DailyChallengeModal';
+import { modalStyles, MODAL_BOTTOM_BLEED, spacing } from '../../theme';
 import { getDailyChallengeSeed } from '../../engine/deck';
 
 function findByAccessibilityLabel(element: any, label: string): any {
@@ -37,6 +38,7 @@ describe('Modal Backdrop Dismissal', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.spyOn(React, 'useEffect').mockImplementation(() => {});
+    (jest.spyOn(React, 'useMemo') as any).mockImplementation((fn: any) => fn());
     (jest.spyOn(React, 'useState') as any).mockImplementation((init: any) => [
       typeof init === 'function' ? init() : init,
       jest.fn(),
@@ -975,4 +977,91 @@ describe('Modal Backdrop Dismissal', () => {
       expect(onOpenDailyModal).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('Modal Backdrop Mobile Bottom Shading', () => {
+    test('backdropDark and backdropMedium extend past the bottom viewport edge while preserving vertical centering', () => {
+      expect(MODAL_BOTTOM_BLEED).toBeGreaterThan(0);
+
+      for (const backdropStyle of [modalStyles.backdropDark, modalStyles.backdropMedium]) {
+        expect(backdropStyle.flex).toBe(1);
+        expect(backdropStyle.marginBottom).toBe(-MODAL_BOTTOM_BLEED);
+        expect(backdropStyle.padding).toBe(spacing.xxxl);
+        expect(backdropStyle.paddingBottom).toBe(spacing.xxxl + MODAL_BOTTOM_BLEED);
+        // Net vertical offset (marginBottom + paddingBottom - padding) must be 0
+        // so the modal card's vertical center and content-box height remain unchanged.
+        expect(
+          backdropStyle.marginBottom + backdropStyle.paddingBottom - backdropStyle.padding
+        ).toBe(0);
+      }
+    });
+
+    test('all modals apply shared backdropMedium or backdropDark to their root backdrop view', () => {
+      const settingsEl: any = SettingsModal({
+        visible: true,
+        settings: {
+          drawCount: 1,
+          autoMoveOnTap: true,
+          soundEnabled: true,
+          rightHanded: false,
+        },
+        onClose: jest.fn(),
+        onChangeDrawCount: jest.fn(),
+        onToggleSound: jest.fn(),
+        onToggleAutoMove: jest.fn(),
+        onToggleRightHanded: jest.fn(),
+      });
+      expect(settingsEl.props.children.props.style).toBe(modalStyles.backdropMedium);
+
+      const statsEl: any = StatsModal({
+        visible: true,
+        stats: { gamesPlayed: 1, gamesWon: 1, highScore: 100, bestTimeSeconds: 60 },
+        onClose: jest.fn(),
+      });
+      expect(statsEl.props.children.props.style).toBe(modalStyles.backdropMedium);
+
+      const confirmEl: any = ConfirmModal({
+        visible: true,
+        title: 'Test',
+        message: 'Confirm?',
+        onConfirm: jest.fn(),
+        onCancel: jest.fn(),
+      });
+      expect(confirmEl.props.children.props.style).toBe(modalStyles.backdropMedium);
+
+      const seedEl: any = SeedModal({
+        visible: true,
+        drawCount: 1,
+        onClose: jest.fn(),
+        onPlaySeed: jest.fn(),
+      });
+      expect(seedEl.props.children.props.style).toBe(modalStyles.backdropMedium);
+
+      const dailyEl: any = DailyChallengeModal({
+        visible: true,
+        dailyHistory: {},
+        onClose: jest.fn(),
+        onPlayChallenge: jest.fn(),
+      });
+      expect(dailyEl.props.children.props.style).toBe(modalStyles.backdropMedium);
+
+      const winEl: any = WinModal({
+        visible: true,
+        score: 100,
+        moves: 10,
+        elapsedSeconds: 30,
+        onNewGame: jest.fn(),
+      });
+      expect(winEl.props.children.props.style).toBe(modalStyles.backdropDark);
+
+      const gameOverEl: any = GameOverModal({
+        visible: true,
+        score: 50,
+        moves: 15,
+        elapsedSeconds: 45,
+        onNewGame: jest.fn(),
+      });
+      expect(gameOverEl.props.children.props.style).toBe(modalStyles.backdropDark);
+    });
+  });
 });
+
