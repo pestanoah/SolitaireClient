@@ -3,6 +3,17 @@ import { colors } from './colors';
 import { borderRadius, spacing } from './spacing';
 import { fontSize, fontWeight } from './typography';
 
+/**
+ * Extra vertical bleed added below the modal backdrop's layout viewport edge
+ * (via matching negative marginBottom and positive paddingBottom) so that on
+ * mobile browsers and iOS standalone PWAs (where `bottom: 0` on `position: fixed`
+ * modal containers stops above the bottom safe-area inset or floating browser
+ * bar pocket), the dark shading extends seamlessly to the physical bottom of
+ * the screen while keeping the modal card's vertical center and percentage
+ * maxHeight unchanged.
+ */
+export const MODAL_BOTTOM_BLEED = 120;
+
 export const modalStyles = StyleSheet.create({
   backdropDark: {
     flex: 1,
@@ -10,6 +21,8 @@ export const modalStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xxxl,
+    paddingBottom: spacing.xxxl + MODAL_BOTTOM_BLEED,
+    marginBottom: -MODAL_BOTTOM_BLEED,
   },
   backdropMedium: {
     flex: 1,
@@ -17,6 +30,8 @@ export const modalStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xxxl,
+    paddingBottom: spacing.xxxl + MODAL_BOTTOM_BLEED,
+    marginBottom: -MODAL_BOTTOM_BLEED,
   },
   backdropPressable: {
     ...StyleSheet.absoluteFill,
