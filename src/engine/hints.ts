@@ -287,6 +287,22 @@ export function findAvailableHints(
             continue;
           }
 
+          // Avoid immediately reversing the previous tableau-to-tableau move
+          const prevMove =
+            state.history && state.history.length > 0
+              ? state.history[state.history.length - 1]
+              : null;
+          if (
+            prevMove &&
+            prevMove.from.type === 'tableau' &&
+            prevMove.from.index === toIdx &&
+            prevMove.to.type === 'tableau' &&
+            prevMove.to.index === fromIdx &&
+            prevMove.cardIds[0] === card.id
+          ) {
+            continue;
+          }
+
           const cardsToMove = fromCol.slice(cardIdx);
           const uncoversCard = cardIdx > 0 && !fromCol[cardIdx - 1].faceUp;
           const targetCard = toCol.length > 0 ? toCol[toCol.length - 1] : null;
@@ -614,12 +630,80 @@ export function moveRecordToHint(state: GameState, move: MoveRecord): Hint | nul
 export interface OptimalHintResult {
   hint: Hint;
   isWinningPath: boolean;
+  solutionMoves?: MoveRecord[];
+}
+
+export interface CachedSolution {
+  gameId: string;
+  historyLength: number;
+  moves: MoveRecord[];
+}
+
+let activeSolutionCache: CachedSolution | null = null;
+
+export function getCachedSolution(): CachedSolution | null {
+  return activeSolutionCache;
+}
+
+export function setCachedSolution(state: GameState, solutionMoves: MoveRecord[]): void {
+  activeSolutionCache = {
+    gameId: state.id,
+    historyLength: state.history.length,
+    moves: [...solutionMoves],
+  };
+}
+
+export function clearSolutionCache(): void {
+  activeSolutionCache = null;
+}
+
+/**
+ * Checks whether an executed MoveRecord satisfies an expected solution MoveRecord.
+ */
+export function isMoveFulfilling(executed: MoveRecord, expected: MoveRecord): boolean {
+  if (expected.from.type === 'stock' || expected.from.type === 'waste') {
+    // If the executed move is merely cycling stock/waste, it has not yet fulfilled the card placement
+    if (
+      (executed.from.type === 'stock' && executed.to.type === 'waste') ||
+      (executed.from.type === 'waste' && executed.to.type === 'stock')
+    ) {
+      return false;
+    }
+    return (
+      (executed.from.type === 'waste' || executed.from.type === 'stock') &&
+      executed.to.type === expected.to.type &&
+      (expected.to.type !== 'tableau' || executed.to.index === expected.to.index) &&
+      executed.cardIds.some((id) => expected.cardIds.includes(id))
+    );
+  }
+
+  if (expected.from.type === 'tableau') {
+    return (
+      executed.from.type === 'tableau' &&
+      executed.from.index === expected.from.index &&
+      executed.to.type === expected.to.type &&
+      (expected.to.type !== 'tableau' || executed.to.index === expected.to.index) &&
+      executed.cardIds[0] === expected.cardIds[0]
+    );
+  }
+
+  if (expected.from.type === 'foundation') {
+    return (
+      executed.from.type === 'foundation' &&
+      executed.to.type === expected.to.type &&
+      (expected.to.type !== 'tableau' || executed.to.index === expected.to.index) &&
+      executed.cardIds[0] === expected.cardIds[0]
+    );
+  }
+
+  return false;
 }
 
 /**
  * Finds an optimal hint for the current game state by querying the A* solver
- * within a fast budget (default 250ms). If a proven winning path is found,
- * returns the exact first move of that winning path ('isWinningPath: true').
+ * within a bounded budget (default 1500ms). If a proven winning path is found,
+ * caches the solution moves and returns the exact first move of that winning path ('isWinningPath: true').
+ * Subsequent calls along the winning path are served instantly from the solution cache.
  * Otherwise, seamlessly falls back to the strategic 1-step heuristic.
  */
 export async function findOptimalHint(
@@ -628,17 +712,74 @@ export async function findOptimalHint(
     timeoutMs?: number;
     maxStates?: number;
     allowAnyCardOnEmpty?: boolean;
+    ignoreCache?: boolean;
   } = {}
 ): Promise<OptimalHintResult | null> {
-  const timeoutMs = options.timeoutMs ?? 250;
-  const maxStates = options.maxStates ?? 10000;
+  const timeoutMs = options.timeoutMs ?? 1500;
+  const maxStates = options.maxStates ?? 35000;
   const allowAnyCardOnEmpty = options.allowAnyCardOnEmpty ?? false;
+  const ignoreCache = options.ignoreCache ?? false;
 
   if (state.status !== 'playing' || isGameWon(state.foundations)) {
     return null;
   }
 
-  // 1. Query the bounded A* solver
+  // 1. Check if we have an active cached winning solution for this game
+  if (!ignoreCache && activeSolutionCache && activeSolutionCache.gameId === state.id) {
+    if (state.history.length < activeSolutionCache.historyLength) {
+      // Undo was performed; invalidate cached solution path
+      activeSolutionCache = null;
+    } else {
+      let isCacheValid = true;
+
+      // Reconcile any moves played since historyLength
+      for (let i = activeSolutionCache.historyLength; i < state.history.length; i++) {
+        const executed = state.history[i];
+        if (activeSolutionCache.moves.length === 0) {
+          isCacheValid = false;
+          break;
+        }
+
+        const expected = activeSolutionCache.moves[0];
+        if (isMoveFulfilling(executed, expected)) {
+          activeSolutionCache.moves.shift();
+          continue;
+        }
+
+        // Check if executed was drawing or recycling toward an expected deck move
+        if (
+          (expected.from.type === 'stock' || expected.from.type === 'waste') &&
+          ((executed.from.type === 'stock' && executed.to.type === 'waste') ||
+            (executed.from.type === 'waste' && executed.to.type === 'stock'))
+        ) {
+          continue;
+        }
+
+        // Executed move diverged from winning path
+        isCacheValid = false;
+        break;
+      }
+
+      if (isCacheValid) {
+        activeSolutionCache.historyLength = state.history.length;
+        if (activeSolutionCache.moves.length > 0) {
+          const nextSolverMove = activeSolutionCache.moves[0];
+          const hint = moveRecordToHint(state, nextSolverMove);
+          if (hint) {
+            return {
+              hint,
+              isWinningPath: true,
+              solutionMoves: activeSolutionCache.moves,
+            };
+          }
+        }
+      } else {
+        activeSolutionCache = null;
+      }
+    }
+  }
+
+  // 2. Query the bounded A* solver
   try {
     const result = await checkWinnable(state, {
       timeoutMs,
@@ -647,29 +788,14 @@ export async function findOptimalHint(
     });
 
     if (result.status === 'winnable' && result.solutionMoves && result.solutionMoves.length > 0) {
+      setCachedSolution(state, result.solutionMoves);
       const solverMove = result.solutionMoves[0];
-      const isDeckMove =
-        solverMove.from.type === 'stock' ||
-        solverMove.from.type === 'waste';
-
-      // If the solver suggests drawing or playing from waste, but there is an immediate,
-      // productive tableau move available on the board (uncovering a card, clearing a column,
-      // or promoting to foundation), prioritize the visible tableau advancement first.
-      if (isDeckMove) {
-        const topHeuristic = findHint(state, allowAnyCardOnEmpty);
-        if (topHeuristic && topHeuristic.from.type === 'tableau') {
-          return {
-            hint: topHeuristic,
-            isWinningPath: true,
-          };
-        }
-      }
-
       const hint = moveRecordToHint(state, solverMove);
       if (hint) {
         return {
           hint,
           isWinningPath: true,
+          solutionMoves: result.solutionMoves,
         };
       }
     }
@@ -677,7 +803,7 @@ export async function findOptimalHint(
     // Seamless fallback to heuristic on any solver error
   }
 
-  // 2. Fallback to strategic 1-step heuristic
+  // 3. Fallback to strategic 1-step heuristic
   const heuristicHint = findHint(state, allowAnyCardOnEmpty);
   if (heuristicHint) {
     return {
