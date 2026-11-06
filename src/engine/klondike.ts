@@ -630,7 +630,7 @@ export function autoCompleteStep(state: GameState): GameState | null {
   }
 
   // 8. Fallback: check if any non-reversing tableau-to-tableau move unlocks advancement
-  const accessibleDeckCards = getAccessibleDeckCards(state);
+  const accessibleDeckCards = getAccessibleDeckCards(state, true);
   const prevMove = state.history.length > 0 ? state.history[state.history.length - 1] : null;
   for (let fromIdx = 0; fromIdx < state.tableau.length; fromIdx++) {
     const fromCol = state.tableau[fromIdx];

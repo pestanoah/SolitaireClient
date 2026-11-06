@@ -309,5 +309,101 @@ describe('solver', () => {
       expect(result.status).toBe('winnable');
       expect(result.solutionMoves?.length).toBeGreaterThan(0);
     });
+
+    it('does not falsely declare unwinnable when winning move requires playing a buried waste card to tableau with exhausted stock cycles', async () => {
+      const state = makeBaseState();
+      state.drawCount = 1;
+      state.stock = [];
+      // Waste has 9 of Hearts buried underneath 8 of Spades
+      state.waste = [
+        makeCard('9h', 'hearts', 9, true),
+        makeCard('8s', 'spades', 8, true),
+      ];
+      // Tableau column 0 has 8 of Clubs covering face-down Ace of Clubs
+      state.tableau[0] = [
+        makeCard('ac', 'clubs', 1, false),
+        makeCard('8c', 'clubs', 8, true),
+      ];
+      // Tableau column 1 has 10 of Spades (black 10 needs red 9 before 8 of Clubs can move)
+      state.tableau[1] = [makeCard('10s', 'spades', 10, true)];
+      // Foundations: Spades, Hearts, Diamonds have 1..13; Clubs has empty
+      const suits: ('spades' | 'hearts' | 'diamonds' | 'clubs')[] = [
+        'spades',
+        'hearts',
+        'diamonds',
+        'clubs',
+      ];
+      state.foundations = suits.map((suit) => {
+        const count = suit === 'clubs' ? 0 : 13;
+        return Array.from({ length: count }, (_, i) =>
+          makeCard(`${suit}_${i + 1}`, suit, (i + 1) as any, true)
+        );
+      });
+      // Column 2 has clubs in descending order with 2 of Clubs on top
+      state.tableau[2] = [13, 12, 11, 10, 9, 7, 6, 5, 4, 3, 2].map((r) =>
+        makeCard(`c_${r}`, 'clubs', r as any, true)
+      );
+
+      // Simulate exhausted stock cycle
+      state.history = [
+        {
+          from: { type: 'waste', index: 0 },
+          to: { type: 'stock', index: 0 },
+          cardIds: ['9h', '8s'],
+          pointsEarned: -20,
+        },
+      ];
+      const { hasAvailableMoves } = require('../rules');
+      expect(hasAvailableMoves(state)).toBe(false);
+
+      // checkWinnable must find the winning path using the buried 9h to tableau
+      const result = await checkWinnable(state);
+      expect(result.status).toBe('winnable');
+      expect(result.solutionMoves?.length).toBeGreaterThan(0);
+    });
+
+    it('remains winnable before and after recycling the waste in Draw 3 mode with exhausted cycles', async () => {
+      const { drawCards } = require('../klondike');
+      const state = makeBaseState();
+      state.drawCount = 3;
+      state.stock = [];
+      // 4 cards in waste
+      state.waste = [
+        makeCard('kc', 'clubs', 13, true),
+        makeCard('8s', 'spades', 8, true),
+        makeCard('7d', 'diamonds', 7, true),
+        makeCard('6h', 'hearts', 6, true),
+      ];
+      // Foundations: Spades, Hearts, Diamonds are complete (1..13). Clubs is at 12 (needs King of Clubs).
+      const suits: ('spades' | 'hearts' | 'diamonds' | 'clubs')[] = [
+        'spades',
+        'hearts',
+        'diamonds',
+        'clubs',
+      ];
+      state.foundations = suits.map((suit) => {
+        const count = suit === 'clubs' ? 12 : 13;
+        return Array.from({ length: count }, (_, i) =>
+          makeCard(`${suit}_${i + 1}`, suit, (i + 1) as any, true)
+        );
+      });
+      // 3 recycles in history makes cycles exhausted
+      state.history = [
+        { from: { type: 'waste', index: 0 }, to: { type: 'stock', index: 0 }, cardIds: [], pointsEarned: -50 },
+        { from: { type: 'waste', index: 0 }, to: { type: 'stock', index: 0 }, cardIds: [], pointsEarned: -50 },
+        { from: { type: 'waste', index: 0 }, to: { type: 'stock', index: 0 }, cardIds: [], pointsEarned: -50 },
+      ];
+
+      // Verify winnable before recycle
+      const beforeResult = await checkWinnable(state);
+      expect(beforeResult.status).toBe('winnable');
+
+      // Now recycle waste to stock (simulating user action)
+      const afterRecycle = drawCards(state);
+
+      // Verify winnable after recycle
+      const afterResult = await checkWinnable(afterRecycle);
+      expect(afterResult.status).toBe('winnable');
+    });
   });
 });

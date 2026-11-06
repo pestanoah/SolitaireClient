@@ -42,7 +42,7 @@ import {
   isDateSeed,
   isSeedWinnable,
 } from '../engine/deck';
-import { findAvailableHints, findOptimalHint, Hint } from '../engine/hints';
+import { findAvailableHints, findOptimalHint, Hint, moveRecordToHint } from '../engine/hints';
 import {
   autoCompleteStep,
   drawCards,
@@ -497,6 +497,25 @@ export const GameScreen: React.FC = () => {
             playGameOverSound();
             setLossReason('no_moves');
             setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+          } else if (
+            winCheck.status === 'winnable' &&
+            winCheck.solutionMoves &&
+            winCheck.solutionMoves.length > 0
+          ) {
+            const fallbackHint = moveRecordToHint(current, winCheck.solutionMoves[0]);
+            if (fallbackHint) {
+              hintIndexRef.current = 0;
+              setActiveHint(fallbackHint);
+              showHint(`💡 ${fallbackHint.message}`, 4000);
+              if (hintHighlightTimeoutRef.current) {
+                clearTimeout(hintHighlightTimeoutRef.current);
+              }
+              hintHighlightTimeoutRef.current = setTimeout(() => {
+                setActiveHint(null);
+              }, 4000);
+            } else {
+              showHint('No strategic hint found. Try exploring other moves.');
+            }
           } else {
             showHint('No strategic hint found. Try exploring other moves.');
           }

@@ -630,6 +630,45 @@ describe('Hints Engine', () => {
       expect(hints[0].from.type).toBe('tableau');
       expect(hints[0].message).toBe('Move 8♠ onto 9♥');
     });
+
+    test('does not report unwinnable or cause deadlock after recycling waste suggested by hint', async () => {
+      const { drawCards } = require('../klondike');
+      const { checkWinnable } = require('../solver');
+      const state = createBaseState();
+      state.drawCount = 1;
+      state.stock = [];
+      // Buried 9h under non-playable 8s in waste
+      state.waste = [
+        createDummyCard('9h', 'hearts', 9, true),
+        createDummyCard('8s', 'spades', 8, true),
+      ];
+      state.tableau[0] = [
+        createDummyCard('ac', 'clubs', 1, false),
+        createDummyCard('8c', 'clubs', 8, true),
+      ];
+      state.tableau[1] = [createDummyCard('10s', 'spades', 10, true)];
+      state.tableau[2] = [13, 12, 11, 10, 9, 7, 6, 5, 4, 3, 2].map((r) =>
+        createDummyCard(`c_${r}`, 'clubs', r as any, true)
+      );
+      state.foundations = [
+        Array.from({ length: 13 }, (_, i) => createDummyCard(`s_${i + 1}`, 'spades', (i + 1) as any, true)),
+        Array.from({ length: 13 }, (_, i) => createDummyCard(`h_${i + 1}`, 'hearts', (i + 1) as any, true)),
+        Array.from({ length: 13 }, (_, i) => createDummyCard(`d_${i + 1}`, 'diamonds', (i + 1) as any, true)),
+        [],
+      ];
+
+      // Optimal hint indicates the winning path
+      const optResult = await findOptimalHint(state);
+      expect(optResult).not.toBeNull();
+      expect(optResult?.isWinningPath).toBe(true);
+
+      // Player follows the hint and recycles the waste
+      const nextState = drawCards(state);
+
+      // Solver double-check on next state must confirm winnable
+      const winCheck = await checkWinnable(nextState);
+      expect(winCheck.status).toBe('winnable');
+    });
   });
 });
 
