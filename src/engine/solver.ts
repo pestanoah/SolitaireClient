@@ -1,5 +1,6 @@
 import { Card, FOUNDATION_SUITS, GameState, getCardColor, MoveRecord, PileLocation, Suit } from './types';
 import {
+  areAllTableauCardsUncovered,
   canPlaceOnFoundation,
   canPlaceOnTableau,
   getAccessibleDeckCards,
@@ -169,6 +170,9 @@ export function applySafeFoundationMoves(
  * Checks if greedily auto-completing to foundations can win the game directly.
  */
 function tryFastAutoComplete(state: GameState): { won: boolean; moves: MoveRecord[] } {
+  if (!areAllTableauCardsUncovered(state.tableau)) {
+    return { won: false, moves: [] };
+  }
   let curr = state;
   const moves: MoveRecord[] = [];
   let steps = 0;
@@ -645,8 +649,8 @@ export async function checkWinnable(
     const frame = queue.pop()!;
     statesEvaluated++;
 
-    // Yield to the event loop every 250 states to prevent UI hitching
-    if (statesEvaluated % 250 === 0) {
+    // Yield to the event loop every 1000 states to prevent UI hitching
+    if (statesEvaluated % 1000 === 0) {
       if (Date.now() - startTime > timeoutMs) {
         didTimeout = true;
         break;
