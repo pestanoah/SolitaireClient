@@ -529,6 +529,23 @@ describe('Auto-Complete Freeze Prevention (Waste Recycle & Watchdog Recovery)', 
     }));
     jest.spyOn(storageModule, 'loadDailyChallenges').mockResolvedValue({});
     jest.spyOn(storageModule, 'recordDailyChallengeWon').mockResolvedValue({});
+    jest.spyOn(storageModule, 'loadRewardsState').mockResolvedValue({
+      points: 0,
+      lifetimePoints: 0,
+      unlockedIds: [
+        'felt_classic_emerald',
+        'back_classic_navy',
+        'face_classic_white',
+        'confetti_classic',
+      ],
+      equipped: {
+        felt: 'felt_classic_emerald',
+        cardBack: 'back_classic_navy',
+        cardFace: 'face_classic_white',
+        confetti: 'confetti_classic',
+      },
+    });
+    jest.spyOn(storageModule, 'saveRewardsState').mockResolvedValue(undefined);
   });
 
   afterEach(() => {

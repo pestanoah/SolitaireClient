@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, borderRadius, fontSize, fontWeight } from '../theme';
+import { colors, spacing, borderRadius, fontSize, fontWeight, useGameTheme } from '../theme';
 
 export interface BottomBarProps {
   canUndo: boolean;
@@ -25,8 +25,14 @@ export const BottomBar: React.FC<BottomBarProps> = ({
   onCheckWinnable,
   onGiveUp,
 }) => {
+  const { felt } = useGameTheme();
   return (
-    <View style={styles.bottomBar}>
+    <View
+      style={[
+        styles.bottomBar,
+        { backgroundColor: felt.background, borderTopColor: felt.border },
+      ]}
+    >
       <Pressable
         disabled={!canUndo}
         onPress={onUndo}

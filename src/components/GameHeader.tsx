@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { isDateSeed } from '../engine/deck';
-import { colors, spacing, borderRadius, fontSize, fontWeight, letterSpacing } from '../theme';
+import { colors, spacing, borderRadius, fontSize, fontWeight, letterSpacing, useGameTheme } from '../theme';
 
 interface GameHeaderProps {
   score: number;
@@ -17,6 +17,7 @@ interface GameHeaderProps {
   isLandscape?: boolean;
   seed?: string;
   dailyStreak?: number;
+  points?: number;
   topInset?: number;
   onUndo: () => void;
   onHint?: () => void;
@@ -27,6 +28,7 @@ interface GameHeaderProps {
   onOpenSettings: () => void;
   onOpenSeed?: () => void;
   onOpenDailyChallenge?: () => void;
+  onOpenRewards?: () => void;
   onToggleDrawCount?: () => void;
   onToggleSound?: () => void;
 }
@@ -45,6 +47,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   isLandscape,
   seed,
   dailyStreak,
+  points,
   topInset,
   onUndo,
   onHint,
@@ -55,9 +58,11 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
   onOpenSettings,
   onOpenSeed,
   onOpenDailyChallenge,
+  onOpenRewards,
   onToggleDrawCount,
   onToggleSound,
 }) => {
+  const { felt } = useGameTheme();
   const { width, height } = useWindowDimensions();
   const isLand = isLandscape !== undefined ? isLandscape : width > height;
   const minutes = Math.floor(elapsedSeconds / 60);
@@ -79,21 +84,31 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
 
   if (isLand) {
     return (
-      <View style={[styles.header, styles.headerLandscape, { paddingTop: safePaddingTop } as any]}>
+      <View
+        style={[
+          styles.header,
+          styles.headerLandscape,
+          {
+            paddingTop: safePaddingTop,
+            backgroundColor: felt.background,
+            borderBottomColor: felt.border,
+          } as any,
+        ]}
+      >
         {/* Metrics Row (Landscape) */}
         <View style={styles.metricsGroupLandscape}>
           <View style={styles.compactMetric}>
-            <Text style={styles.compactMetricLabel}>SCORE</Text>
+            <Text style={[styles.compactMetricLabel, { color: felt.textMuted }]}>SCORE</Text>
             <Text style={styles.compactMetricValue}>{score}</Text>
           </View>
 
           <View style={styles.compactMetric}>
-            <Text style={styles.compactMetricLabel}>MOVES</Text>
+            <Text style={[styles.compactMetricLabel, { color: felt.textMuted }]}>MOVES</Text>
             <Text style={styles.compactMetricValue}>{moves}</Text>
           </View>
 
           <View style={styles.compactMetric}>
-            <Text style={styles.compactMetricLabel}>TIME</Text>
+            <Text style={[styles.compactMetricLabel, { color: felt.textMuted }]}>TIME</Text>
             <Text style={styles.compactMetricValue}>{timeFormatted}</Text>
           </View>
 
@@ -224,6 +239,21 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             </Pressable>
           )}
 
+          {onOpenRewards && (
+            <Pressable
+              onPress={onOpenRewards}
+              style={({ pressed }) => [
+                styles.actionBtnLandscape,
+                styles.pointsBtnLandscape,
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityLabel={`Rewards shop: ${points ?? 0} points`}
+              accessibilityRole="button"
+            >
+              <Text style={styles.pointsBtnTextLandscape}>{`🪙 ${points ?? 0}`}</Text>
+            </Pressable>
+          )}
+
           <Pressable
             onPress={onOpenStats}
             style={({ pressed }) => [styles.actionBtnLandscape, pressed && { opacity: 0.7 }]}
@@ -251,6 +281,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             style={({ pressed }) => [
               styles.actionBtnLandscape,
               styles.newGameBtnLandscape,
+              { backgroundColor: felt.surface },
               pressed && { opacity: 0.7 },
             ]}
             accessibilityLabel="Deal new game"
@@ -263,27 +294,36 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
     );
   }
 
-  const showModeBadge = !seed && (!onOpenDailyChallenge || width >= 390);
+  const showModeBadge = !seed && (!onOpenDailyChallenge || width >= 430);
   const showDailyBtn = Boolean(onOpenDailyChallenge && (!seed || !isDateSeed(seed)));
 
   return (
-    <View style={[styles.header, { paddingTop: safePaddingTop } as any]}>
+    <View
+      style={[
+        styles.header,
+        {
+          paddingTop: safePaddingTop,
+          backgroundColor: felt.background,
+          borderBottomColor: felt.border,
+        } as any,
+      ]}
+    >
       {/* Top Header Row (Single Compact Row in Portrait) */}
       <View style={styles.headerRowPortrait}>
         {/* Left: Metrics */}
         <View style={styles.metricsGroupPortrait}>
           <View style={styles.metricPortrait}>
-            <Text style={styles.metricLabelPortrait}>SCORE</Text>
+            <Text style={[styles.metricLabelPortrait, { color: felt.textMuted }]}>SCORE</Text>
             <Text style={styles.metricValuePortrait}>{score}</Text>
           </View>
 
           <View style={styles.metricPortrait}>
-            <Text style={styles.metricLabelPortrait}>MOVES</Text>
+            <Text style={[styles.metricLabelPortrait, { color: felt.textMuted }]}>MOVES</Text>
             <Text style={styles.metricValuePortrait}>{moves}</Text>
           </View>
 
           <View style={styles.metricPortrait}>
-            <Text style={styles.metricLabelPortrait}>TIME</Text>
+            <Text style={[styles.metricLabelPortrait, { color: felt.textMuted }]}>TIME</Text>
             <Text style={styles.metricValuePortrait}>{timeFormatted}</Text>
           </View>
         </View>
@@ -301,7 +341,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
               }
               accessibilityRole="button"
             >
-              <Text style={styles.seedBadgeLabelPortrait}>
+              <Text style={[styles.seedBadgeLabelPortrait, { color: felt.accent }]}>
                 {isDateSeed(seed) ? 'DAILY' : 'SEED'}
               </Text>
               <Text style={styles.seedBadgeValuePortrait} numberOfLines={1}>
@@ -317,7 +357,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
               accessibilityLabel={`Draw mode: Draw ${drawCount}. Tap to open settings.`}
               accessibilityRole="button"
             >
-              <Text style={styles.modeLabelPortrait}>MODE</Text>
+              <Text style={[styles.modeLabelPortrait, { color: felt.accent }]}>MODE</Text>
               <Text style={styles.modeValuePortrait}>Draw {drawCount}</Text>
             </Pressable>
           )}
@@ -332,6 +372,21 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
               <Text style={styles.actionBtnTextPortrait}>
                 {dailyStreak && dailyStreak > 0 ? `Daily (${dailyStreak})` : 'Daily'}
               </Text>
+            </Pressable>
+          )}
+
+          {onOpenRewards && (
+            <Pressable
+              onPress={onOpenRewards}
+              style={({ pressed }) => [
+                styles.actionBtnPortrait,
+                styles.pointsBtnPortrait,
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityLabel={`Rewards shop: ${points ?? 0} points`}
+              accessibilityRole="button"
+            >
+              <Text style={styles.pointsBtnTextPortrait}>{`🪙 ${points ?? 0}`}</Text>
             </Pressable>
           )}
 
@@ -362,6 +417,7 @@ export const GameHeader: React.FC<GameHeaderProps> = ({
             style={({ pressed }) => [
               styles.actionBtnPortrait,
               styles.newGameBtnPortrait,
+              { backgroundColor: felt.surface },
               pressed && { opacity: 0.7 },
             ]}
             accessibilityLabel="Deal new game"
@@ -502,6 +558,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.felt.surface,
     borderColor: colors.action.success,
   },
+  pointsBtnPortrait: {
+    borderColor: colors.hint.sourceBorder,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+  },
+  pointsBtnTextPortrait: {
+    color: colors.white,
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.bold,
+    lineHeight: 15,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
   newGameText: {
     fontWeight: fontWeight.bold,
   },
@@ -580,6 +648,18 @@ const styles = StyleSheet.create({
   newGameBtnLandscape: {
     backgroundColor: colors.felt.surface,
     borderColor: colors.action.success,
+  },
+  pointsBtnLandscape: {
+    borderColor: colors.hint.sourceBorder,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+  },
+  pointsBtnTextLandscape: {
+    color: colors.white,
+    fontSize: fontSize.subtext,
+    fontWeight: fontWeight.bold,
+    lineHeight: 14,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   btnDisabled: {
     opacity: 0.4,

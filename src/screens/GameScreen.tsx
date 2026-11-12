@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { spacing } from '../theme';
+import { GameThemeProvider, spacing } from '../theme';
 import { styles } from './GameScreen.styles';
 import { CardView } from '../components/CardView';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -26,6 +26,7 @@ import { TableauColumn, calculateTableauOffsets } from '../components/TableauCol
 import { WinModal } from '../components/WinModal';
 import { SeedModal } from '../components/SeedModal';
 import { DailyChallengeModal } from '../components/DailyChallengeModal';
+import { RewardsModal } from '../components/RewardsModal';
 import {
   DealingOverlay,
   DEFAULT_DEAL_STAGGER_MS,
@@ -75,15 +76,28 @@ import {
   extractDailyDate,
 } from '../engine/daily';
 import {
+  awardPoints,
+  calculateWinPoints,
+  DEFAULT_REWARDS_STATE,
+  equipReward,
+  getRewardById,
+  redeemReward,
+  resolveEquippedThemes,
+  RewardsState,
+  WinPointsBreakdown,
+} from '../engine/rewards';
+import {
   clearGameState,
   loadDailyChallenges,
   loadGameState,
+  loadRewardsState,
   loadSettings,
   loadStats,
   recordDailyChallengeWon,
   recordGameEnd,
   resetStats,
   saveGameState,
+  saveRewardsState,
   saveSettings,
 } from '../storage/storage';
 import {
@@ -300,7 +314,19 @@ export const GameScreen: React.FC = () => {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [seedModalVisible, setSeedModalVisible] = useState(false);
   const [dailyModalVisible, setDailyModalVisible] = useState(false);
+  const [rewardsModalVisible, setRewardsModalVisible] = useState(false);
   const [dailyHistory, setDailyHistory] = useState<DailyChallengeHistory>({});
+  const dailyHistoryRef = useRef<DailyChallengeHistory>(dailyHistory);
+  dailyHistoryRef.current = dailyHistory;
+
+  const [rewardsState, setRewardsState] = useState<RewardsState>(() => ({
+    ...DEFAULT_REWARDS_STATE,
+  }));
+  const rewardsStateRef = useRef<RewardsState>(rewardsState);
+  rewardsStateRef.current = rewardsState;
+  const [lastWinPoints, setLastWinPoints] = useState<WinPointsBreakdown | null>(null);
+
+  const resolvedTheme = useMemo(() => resolveEquippedThemes(rewardsState), [rewardsState]);
 
   const dailyStreakInfo = useMemo(
     () => calculateDailyStreak(dailyHistory),
@@ -727,6 +753,11 @@ export const GameScreen: React.FC = () => {
       if (!isMounted) return;
       setDailyHistory(loadedDaily);
 
+      const loadedRewards = await loadRewardsState();
+      if (!isMounted) return;
+      setRewardsState(loadedRewards);
+      rewardsStateRef.current = loadedRewards;
+
       const urlSeedData = parseSeedFromUrl();
       if (urlSeedData?.seed) {
         const count = urlSeedData.drawCount ?? loadedSettings.drawCount;
@@ -867,24 +898,43 @@ export const GameScreen: React.FC = () => {
             ? extractDailyDate(gameState.seed)
             : null;
 
+        const currentDaily = dailyHistoryRef.current;
+        const isFirstDailyCompletion = Boolean(dateKey && !currentDaily[dateKey]?.completed);
+
+        let nextDailyHistory = currentDaily;
         // Optimistically record daily challenge won in React state immediately
         if (dateKey) {
-          setDailyHistory((prev) => {
-            const existing = prev[dateKey];
-            return {
-              ...prev,
-              [dateKey]: {
-                completed: true,
-                score: existing ? Math.max(existing.score, gameState.score) : gameState.score,
-                moves: existing ? Math.min(existing.moves, gameState.moves) : gameState.moves,
-                elapsedSeconds: existing
-                  ? Math.min(existing.elapsedSeconds, gameState.elapsedSeconds)
-                  : gameState.elapsedSeconds,
-                completedAt: existing?.completedAt || new Date().toISOString(),
-              },
-            };
-          });
+          const existing = currentDaily[dateKey];
+          nextDailyHistory = {
+            ...currentDaily,
+            [dateKey]: {
+              completed: true,
+              score: existing ? Math.max(existing.score, gameState.score) : gameState.score,
+              moves: existing ? Math.min(existing.moves, gameState.moves) : gameState.moves,
+              elapsedSeconds: existing
+                ? Math.min(existing.elapsedSeconds, gameState.elapsedSeconds)
+                : gameState.elapsedSeconds,
+              completedAt: existing?.completedAt || new Date().toISOString(),
+            },
+          };
+          dailyHistoryRef.current = nextDailyHistory;
+          setDailyHistory(nextDailyHistory);
         }
+
+        const updatedStreakInfo = calculateDailyStreak(nextDailyHistory);
+        const winPoints = calculateWinPoints({
+          score: gameState.score,
+          elapsedSeconds: gameState.elapsedSeconds,
+          drawCount: gameState.drawCount,
+          isDaily: Boolean(dateKey),
+          isFirstDailyCompletion,
+          dailyStreak: updatedStreakInfo.currentStreak,
+        });
+        setLastWinPoints(winPoints);
+
+        const nextRewards = awardPoints(rewardsStateRef.current, winPoints.totalEarned);
+        rewardsStateRef.current = nextRewards;
+        setRewardsState(nextRewards);
 
         (async () => {
           try {
@@ -904,7 +954,9 @@ export const GameScreen: React.FC = () => {
                 ).then((updatedDaily) => setDailyHistory(updatedDaily))
               : Promise.resolve();
 
-            await Promise.all([statsPromise, dailyPromise]);
+            const rewardsPromise = saveRewardsState(nextRewards);
+
+            await Promise.all([statsPromise, dailyPromise, rewardsPromise]);
           } catch (e) {
             console.error('Failed to record victory end game', e);
           }
@@ -2110,6 +2162,42 @@ export const GameScreen: React.FC = () => {
     showHint('Statistics reset.');
   }, [showHint]);
 
+  const handleRedeemReward = useCallback(
+    (rewardId: string) => {
+      const result = redeemReward(rewardsStateRef.current, rewardId);
+      if (!result.success) {
+        if (result.error) showHint(result.error);
+        return;
+      }
+      rewardsStateRef.current = result.state;
+      setRewardsState(result.state);
+      saveRewardsState(result.state);
+      const item = getRewardById(rewardId);
+      if (item) {
+        showHint(`Unlocked & equipped ${item.name}!`);
+      }
+    },
+    [showHint]
+  );
+
+  const handleEquipReward = useCallback(
+    (rewardId: string) => {
+      const result = equipReward(rewardsStateRef.current, rewardId);
+      if (!result.success) {
+        if (result.error) showHint(result.error);
+        return;
+      }
+      rewardsStateRef.current = result.state;
+      setRewardsState(result.state);
+      saveRewardsState(result.state);
+      const item = getRewardById(rewardId);
+      if (item) {
+        showHint(`Equipped ${item.name}`);
+      }
+    },
+    [showHint]
+  );
+
   // Undo move with animation
   const handleUndo = useCallback(() => {
     const current = latestGameStateRef.current;
@@ -2316,46 +2404,57 @@ export const GameScreen: React.FC = () => {
     : EMPTY_CARD_IDS;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
-      <GameHeader
-        topInset={insets.top}
-        score={gameState.score}
-        moves={gameState.moves}
-        elapsedSeconds={gameState.elapsedSeconds}
-        drawCount={gameState.drawCount}
-        canUndo={gameState.history.length > 0 && !isDealing}
-        canHint={gameState.status === 'playing' && !isDealing && !isCheckingHint}
-        canGiveUp={gameState.status === 'playing' && gameState.moves > 0 && !isDealing}
-        canCheckWinnable={gameState.status === 'playing' && !isDealing && !isCheckingWinnable}
-        isCheckingWinnable={isCheckingWinnable}
-        soundEnabled={settings.soundEnabled !== false}
-        isLandscape={isLandscape}
-        seed={gameState.seed}
-        dailyStreak={dailyStreakInfo.currentStreak}
-        onUndo={handleUndo}
-        onHint={handleHint}
-        onCheckWinnable={handleCheckWinnable}
-        onGiveUp={handleGiveUp}
-        onNewGame={handleNewGame}
-        onOpenStats={() => setStatsVisible(true)}
-        onOpenSettings={() => setSettingsVisible(true)}
-        onOpenSeed={() => setSeedModalVisible(true)}
-        onOpenDailyChallenge={() => setDailyModalVisible(true)}
-        onToggleDrawCount={handleToggleDrawCount}
-        onToggleSound={handleToggleSound}
-      />
+    <GameThemeProvider value={resolvedTheme}>
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: resolvedTheme.felt.background }]}
+        edges={['bottom', 'left', 'right']}
+      >
+        <GameHeader
+          topInset={insets.top}
+          score={gameState.score}
+          moves={gameState.moves}
+          elapsedSeconds={gameState.elapsedSeconds}
+          drawCount={gameState.drawCount}
+          canUndo={gameState.history.length > 0 && !isDealing}
+          canHint={gameState.status === 'playing' && !isDealing && !isCheckingHint}
+          canGiveUp={gameState.status === 'playing' && gameState.moves > 0 && !isDealing}
+          canCheckWinnable={gameState.status === 'playing' && !isDealing && !isCheckingWinnable}
+          isCheckingWinnable={isCheckingWinnable}
+          soundEnabled={settings.soundEnabled !== false}
+          isLandscape={isLandscape}
+          seed={gameState.seed}
+          dailyStreak={dailyStreakInfo.currentStreak}
+          points={rewardsState.points}
+          onUndo={handleUndo}
+          onHint={handleHint}
+          onCheckWinnable={handleCheckWinnable}
+          onGiveUp={handleGiveUp}
+          onNewGame={handleNewGame}
+          onOpenStats={() => setStatsVisible(true)}
+          onOpenSettings={() => setSettingsVisible(true)}
+          onOpenSeed={() => setSeedModalVisible(true)}
+          onOpenDailyChallenge={() => setDailyModalVisible(true)}
+          onOpenRewards={() => setRewardsModalVisible(true)}
+          onToggleDrawCount={handleToggleDrawCount}
+          onToggleSound={handleToggleSound}
+        />
 
-      {hintMessage && (
-        <View
-          style={[
-            styles.hintBanner,
-            isLandscape && styles.hintBannerLandscape,
-            isLandscape && insets.top > 0 && { top: insets.top + 42 },
-          ]}
-        >
-          <Text style={styles.hintText}>{hintMessage}</Text>
-        </View>
-      )}
+        {hintMessage && (
+          <View
+            style={[
+              styles.hintBanner,
+              {
+                backgroundColor: resolvedTheme.felt.banner,
+                borderBottomColor: resolvedTheme.felt.bannerBorder,
+                borderColor: resolvedTheme.felt.bannerBorder,
+              },
+              isLandscape && styles.hintBannerLandscape,
+              isLandscape && insets.top > 0 && { top: insets.top + 42 },
+            ]}
+          >
+            <Text style={styles.hintText}>{hintMessage}</Text>
+          </View>
+        )}
 
       <ScrollView
         style={styles.scrollView}
@@ -2545,6 +2644,10 @@ export const GameScreen: React.FC = () => {
                 <Pressable
                   style={({ pressed }) => [
                     styles.dealButton,
+                    {
+                      backgroundColor: resolvedTheme.felt.surface,
+                      borderColor: resolvedTheme.felt.accent,
+                    },
                     isLandscape && styles.dealButtonLandscape,
                     pressed && styles.dealButtonPressed,
                   ]}
@@ -2720,9 +2823,12 @@ export const GameScreen: React.FC = () => {
         dailyStreak={dailyStreakInfo.currentStreak}
         longestDailyStreak={dailyStreakInfo.longestStreak}
         dailyWonCount={dailyStreakInfo.totalCompleted}
+        points={rewardsState.points}
+        unlockedRewardsCount={rewardsState.unlockedIds.length}
         onClose={() => setStatsVisible(false)}
         onResetStats={handleResetStats}
         onOpenDailyModal={() => setDailyModalVisible(true)}
+        onOpenRewardsModal={() => setRewardsModalVisible(true)}
       />
 
       <SettingsModal
@@ -2730,6 +2836,7 @@ export const GameScreen: React.FC = () => {
         settings={settings}
         currentSeed={gameState.seed}
         dailyStreak={dailyStreakInfo.currentStreak}
+        points={rewardsState.points}
         onClose={() => setSettingsVisible(false)}
         onChangeDrawCount={handleChangeDrawCount}
         onToggleSound={handleToggleSound}
@@ -2739,6 +2846,7 @@ export const GameScreen: React.FC = () => {
         onOpenSeedModal={() => setSeedModalVisible(true)}
         onPlayDailyChallenge={handlePlayDailyChallenge}
         onOpenDailyModal={() => setDailyModalVisible(true)}
+        onOpenRewardsModal={() => setRewardsModalVisible(true)}
       />
 
       <WinModal
@@ -2748,11 +2856,14 @@ export const GameScreen: React.FC = () => {
         elapsedSeconds={gameState.elapsedSeconds}
         seed={gameState.seed}
         dailyStreak={dailyStreakInfo.currentStreak}
+        pointsEarned={lastWinPoints}
+        totalPoints={rewardsState.points}
         onReplaySeed={handleReplayDraw}
         onReplayDraw={handleReplayDraw}
         onNewGame={() => startNewGame()}
         onClose={() => setWinDismissed(true)}
         onOpenDailyModal={() => setDailyModalVisible(true)}
+        onOpenRewards={() => setRewardsModalVisible(true)}
         onShare={(stats) =>
           handleShareDeck(gameState.seed, {
             score: stats?.score ?? gameState.score,
@@ -2803,6 +2914,14 @@ export const GameScreen: React.FC = () => {
         onPlayChallenge={handlePlayDailyChallengeDate}
       />
 
+      <RewardsModal
+        visible={rewardsModalVisible}
+        rewardsState={rewardsState}
+        onClose={() => setRewardsModalVisible(false)}
+        onRedeemReward={handleRedeemReward}
+        onEquipReward={handleEquipReward}
+      />
+
       {confirmModal && (
         <ConfirmModal
           visible={confirmModal.visible}
@@ -2814,5 +2933,6 @@ export const GameScreen: React.FC = () => {
         />
       )}
     </SafeAreaView>
+    </GameThemeProvider>
   );
 };

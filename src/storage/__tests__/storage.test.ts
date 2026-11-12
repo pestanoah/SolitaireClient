@@ -4,16 +4,20 @@ import {
   clearStats,
   loadDailyChallenges,
   loadGameState,
+  loadRewardsState,
   loadSettings,
   loadStats,
   recordDailyChallengeWon,
   recordGameEnd,
+  resetRewardsState,
   resetStats,
   saveDailyChallenges,
   saveGameState,
+  saveRewardsState,
   saveSettings,
 } from '../storage';
 import { dealKlondike } from '../../engine/deck';
+import { awardPoints, DEFAULT_REWARDS_STATE, redeemReward } from '../../engine/rewards';
 
 // Mock AsyncStorage
 const mockStorage: Record<string, string> = {};
@@ -206,6 +210,28 @@ describe('Local Storage Persistence', () => {
       await clearDailyChallenges();
       const after = await loadDailyChallenges();
       expect(after).toEqual({});
+    });
+  });
+
+  describe('Rewards Persistence', () => {
+    test('loads default rewards state when none is stored', async () => {
+      const loaded = await loadRewardsState();
+      expect(loaded).toEqual(DEFAULT_REWARDS_STATE);
+    });
+
+    test('saves, loads, and resets rewards state', async () => {
+      const withPoints = awardPoints(DEFAULT_REWARDS_STATE, 600);
+      const redeemed = redeemReward(withPoints, 'felt_royal_sapphire').state;
+      await saveRewardsState(redeemed);
+
+      const loaded = await loadRewardsState();
+      expect(loaded.points).toBe(350);
+      expect(loaded.lifetimePoints).toBe(600);
+      expect(loaded.unlockedIds).toContain('felt_royal_sapphire');
+      expect(loaded.equipped.felt).toBe('felt_royal_sapphire');
+
+      const reset = await resetRewardsState();
+      expect(reset).toEqual(DEFAULT_REWARDS_STATE);
     });
   });
 });

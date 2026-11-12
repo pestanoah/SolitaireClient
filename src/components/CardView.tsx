@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, getCardColor, Rank, Suit } from '../engine/types';
-import { colors, borderRadius, fontSize, fontWeight, shadows } from '../theme';
+import { colors, borderRadius, fontSize, fontWeight, shadows, useGameTheme } from '../theme';
 
 interface CardViewProps {
   card: Card;
@@ -38,21 +38,30 @@ const RANK_LABELS: Record<Rank, string> = {
 
 export const CardView: React.FC<CardViewProps> = React.memo(
   ({ card, width, height, isDragging, isSelected, isHintSource, isHintTarget }) => {
+    const { cardBack, cardFace } = useGameTheme();
+
     if (!card.faceUp) {
       return (
         <View
           style={[
             styles.cardBase,
             styles.cardBack,
-            { width, height },
+            {
+              width,
+              height,
+              backgroundColor: cardBack.backBg,
+              borderColor: cardBack.backBorder,
+            },
             isHintSource && styles.hintSource,
             isHintTarget && styles.hintTarget,
             isDragging && styles.dragging,
           ]}
         >
-          <View style={styles.cardBackInner}>
-            <View style={styles.cardBackPattern}>
-              <Text style={styles.cardBackEmblem}>♦</Text>
+          <View style={[styles.cardBackInner, { backgroundColor: cardBack.backInnerBg }]}>
+            <View style={[styles.cardBackPattern, { backgroundColor: cardBack.backPatternBg }]}>
+              <Text style={[styles.cardBackEmblem, { color: cardBack.backEmblem }]}>
+                {cardBack.emblemSymbol}
+              </Text>
             </View>
           </View>
         </View>
@@ -60,7 +69,9 @@ export const CardView: React.FC<CardViewProps> = React.memo(
     }
 
     const color = getCardColor(card.suit);
-    const textColor = color === 'red' ? colors.card.redSuit : colors.card.blackSuit;
+    const textColor =
+      cardFace.suitColors?.[card.suit] ??
+      (color === 'red' ? cardFace.redSuit : cardFace.blackSuit);
     const suitSymbol = SUIT_SYMBOLS[card.suit];
     const rankLabel = RANK_LABELS[card.rank];
     const isTen = card.rank === 10;
@@ -76,7 +87,12 @@ export const CardView: React.FC<CardViewProps> = React.memo(
         style={[
           styles.cardBase,
           styles.cardFront,
-          { width, height },
+          {
+            width,
+            height,
+            backgroundColor: cardFace.frontBg,
+            borderColor: cardFace.border,
+          },
           isSelected && styles.selected,
           isHintSource && styles.hintSource,
           isHintTarget && styles.hintTarget,

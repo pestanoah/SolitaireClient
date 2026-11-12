@@ -65,11 +65,14 @@ export const CONFETTI_Z_INDEX = 99999;
  * Fires a sequence of celebratory confetti bursts across the screen.
  * Returns a cleanup function that cancels pending bursts and resets the canvas.
  */
-export function triggerWinConfetti(): () => void {
+export function triggerWinConfetti(customColors?: string[]): () => void {
   const confetti = getConfettiFunction();
   if (!confetti) {
     return () => {};
   }
+
+  const activeColors =
+    customColors && customColors.length > 0 ? customColors : WIN_CONFETTI_COLORS;
 
   const timeouts: ReturnType<typeof setTimeout>[] = [];
 
@@ -79,7 +82,7 @@ export function triggerWinConfetti(): () => void {
       particleCount: 100,
       spread: 70,
       origin: { y: 0.6 },
-      colors: WIN_CONFETTI_COLORS,
+      colors: activeColors,
       zIndex: CONFETTI_Z_INDEX,
     });
   } catch {}
@@ -93,7 +96,7 @@ export function triggerWinConfetti(): () => void {
           angle: 60,
           spread: 60,
           origin: { x: 0, y: 0.7 },
-          colors: WIN_CONFETTI_COLORS,
+          colors: activeColors,
           zIndex: CONFETTI_Z_INDEX,
         });
       } catch {}
@@ -109,7 +112,7 @@ export function triggerWinConfetti(): () => void {
           angle: 120,
           spread: 60,
           origin: { x: 1, y: 0.7 },
-          colors: WIN_CONFETTI_COLORS,
+          colors: activeColors,
           zIndex: CONFETTI_Z_INDEX,
         });
       } catch {}
@@ -124,7 +127,7 @@ export function triggerWinConfetti(): () => void {
           particleCount: 80,
           spread: 100,
           origin: { y: 0.5 },
-          colors: WIN_CONFETTI_COLORS,
+          colors: activeColors,
           zIndex: CONFETTI_Z_INDEX,
         });
       } catch {}

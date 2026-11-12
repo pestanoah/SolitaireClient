@@ -10,10 +10,13 @@ export interface StatsModalProps {
   dailyStreak?: number;
   longestDailyStreak?: number;
   dailyWonCount?: number;
+  points?: number;
+  unlockedRewardsCount?: number;
   onClose: () => void;
   onResetStats?: () => void;
   onReset?: () => void;
   onOpenDailyModal?: () => void;
+  onOpenRewardsModal?: () => void;
 }
 
 export const StatsModal: React.FC<StatsModalProps> = ({
@@ -22,10 +25,13 @@ export const StatsModal: React.FC<StatsModalProps> = ({
   dailyStreak,
   longestDailyStreak,
   dailyWonCount,
+  points,
+  unlockedRewardsCount,
   onClose,
   onResetStats,
   onReset,
   onOpenDailyModal,
+  onOpenRewardsModal,
 }) => {
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -103,6 +109,20 @@ export const StatsModal: React.FC<StatsModalProps> = ({
                 <View style={[styles.statBox, styles.streakBox]}>
                   <Text style={styles.streakValue}>{longestDailyStreak ?? dailyStreak}</Text>
                   <Text style={styles.statLabel}>Best Streak</Text>
+                </View>
+              </>
+            )}
+
+            {points !== undefined && (
+              <>
+                <View style={[styles.statBox, styles.pointsBox]}>
+                  <Text style={styles.pointsValue}>{points}</Text>
+                  <Text style={styles.statLabel}>Points</Text>
+                </View>
+
+                <View style={[styles.statBox, styles.pointsBox]}>
+                  <Text style={styles.pointsValue}>{unlockedRewardsCount ?? 4}</Text>
+                  <Text style={styles.statLabel}>Rewards</Text>
                 </View>
               </>
             )}
@@ -229,6 +249,14 @@ const styles = StyleSheet.create({
   },
   streakValue: {
     color: colors.white,
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.heavy,
+  },
+  pointsBox: {
+    borderColor: colors.hint.sourceBorder,
+  },
+  pointsValue: {
+    color: colors.hint.sourceBorder,
     fontSize: fontSize.xl,
     fontWeight: fontWeight.heavy,
   },

@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DailyChallengeHistory, DailyChallengeRecord } from '../engine/daily';
+import {
+  DEFAULT_REWARDS_STATE,
+  normalizeRewardsState,
+  RewardsState,
+} from '../engine/rewards';
 import { GameState, PlayerStats, UserSettings } from '../engine/types';
 
 const STORAGE_KEYS = {
@@ -7,6 +12,7 @@ const STORAGE_KEYS = {
   STATS: '@solitaire:stats',
   SETTINGS: '@solitaire:settings',
   DAILY_CHALLENGES: '@solitaire:daily_challenges',
+  REWARDS: '@solitaire:rewards',
 };
 
 export const DEFAULT_STATS: PlayerStats = {
@@ -177,4 +183,29 @@ export async function clearDailyChallenges(): Promise<void> {
   } catch (e) {
     console.error('Failed to clear daily challenges history', e);
   }
+}
+
+export async function loadRewardsState(): Promise<RewardsState> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.REWARDS);
+    if (!raw) return normalizeRewardsState(DEFAULT_REWARDS_STATE);
+    return normalizeRewardsState(JSON.parse(raw));
+  } catch (e) {
+    console.error('Failed to load rewards state', e);
+    return normalizeRewardsState(DEFAULT_REWARDS_STATE);
+  }
+}
+
+export async function saveRewardsState(state: RewardsState): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.REWARDS, JSON.stringify(state));
+  } catch (e) {
+    console.error('Failed to save rewards state', e);
+  }
+}
+
+export async function resetRewardsState(): Promise<RewardsState> {
+  const fresh = normalizeRewardsState(DEFAULT_REWARDS_STATE);
+  await saveRewardsState(fresh);
+  return fresh;
 }

@@ -24,6 +24,7 @@ export interface SettingsModalProps {
   settings: UserSettings;
   currentSeed?: string;
   dailyStreak?: number;
+  points?: number;
   onClose: () => void;
   onChangeDrawCount: (drawCount: 1 | 3) => void;
   onToggleSound: (enabled: boolean) => void;
@@ -33,6 +34,7 @@ export interface SettingsModalProps {
   onOpenSeedModal?: () => void;
   onPlayDailyChallenge?: () => void;
   onOpenDailyModal?: () => void;
+  onOpenRewardsModal?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -40,6 +42,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   currentSeed,
   dailyStreak,
+  points,
   onClose,
   onChangeDrawCount,
   onToggleSound,
@@ -49,6 +52,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenSeedModal,
   onPlayDailyChallenge,
   onOpenDailyModal,
+  onOpenRewardsModal,
 }) => {
   const isSoundOn = settings.soundEnabled !== false;
 
@@ -309,6 +313,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </View>
               </>
             )}
+
+            {onOpenRewardsModal && (
+              <>
+                <View style={styles.divider} />
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    onClose();
+                    onOpenRewardsModal();
+                  }}
+                  style={styles.rewardsBtn}
+                  accessibilityLabel="Open themes and rewards shop"
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.rewardsBtnText}>
+                    {points !== undefined
+                      ? `Themes & Rewards Shop (🪙 ${points})`
+                      : 'Themes & Rewards Shop'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           {/* Done Button */}
@@ -490,6 +516,22 @@ const styles = StyleSheet.create({
   },
   calendarModalBtnText: {
     color: colors.action.info,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  rewardsBtn: {
+    backgroundColor: colors.slate[800],
+    borderWidth: 1,
+    borderColor: colors.hint.sourceBorder,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  rewardsBtnText: {
+    color: colors.hint.sourceBorder,
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
   },
