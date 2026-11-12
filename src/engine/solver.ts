@@ -1,5 +1,6 @@
 import { Card, FOUNDATION_SUITS, GameState, getCardColor, MoveRecord, PileLocation, Suit } from './types';
 import {
+  areAllTableauCardsUncovered,
   canPlaceOnFoundation,
   canPlaceOnTableau,
   getAccessibleDeckCards,
@@ -136,10 +137,7 @@ export function applySafeFoundationMoves(
     if (madeMove) continue;
 
     // 3. Any accessible card in stock or waste can be safely promoted
-    const deckCards =
-      current.drawCount === 1
-        ? [...current.stock, ...current.waste]
-        : getAccessibleDeckCards(current);
+    const deckCards = getAccessibleDeckCards(current, true);
 
     for (const card of deckCards) {
       const targetFIndex = FOUNDATION_SUITS.indexOf(card.suit);
@@ -172,6 +170,9 @@ export function applySafeFoundationMoves(
  * Checks if greedily auto-completing to foundations can win the game directly.
  */
 function tryFastAutoComplete(state: GameState): { won: boolean; moves: MoveRecord[] } {
+  if (!areAllTableauCardsUncovered(state.tableau)) {
+    return { won: false, moves: [] };
+  }
   let curr = state;
   const moves: MoveRecord[] = [];
   let steps = 0;
@@ -312,14 +313,18 @@ function playCardFromDeck(
   let curr = state;
   let safety = 0;
   const maxDraws = (state.stock.length + state.waste.length) * (state.drawCount + 1) + 10;
+  const seenStates = new Set<string>();
 
   while (safety++ < maxDraws) {
     if (curr.stock.length === 0 && curr.waste.length === 0) {
       return null;
     }
-    if (curr.stock.length === 0 && hasExhaustedStockCycles(curr)) {
+    const deckKey = `${curr.stock.map((c) => c.id).join(',')}|${curr.waste.map((c) => c.id).join(',')}`;
+    if (seenStates.has(deckKey)) {
       return null;
     }
+    seenStates.add(deckKey);
+
     const next = drawCards(curr);
     if (next === curr) return null;
     moves.push(next.history[next.history.length - 1]);
@@ -492,7 +497,7 @@ function generateCandidateMoves(
   }
 
   // 2. Play accessible deck cards (stock/waste) directly to foundation or tableau
-  const accessibleCards = getAccessibleDeckCards(state);
+  const accessibleCards = getAccessibleDeckCards(state, true);
   for (const card of accessibleCards) {
     const isTopWaste =
       state.waste.length > 0 && state.waste[state.waste.length - 1].id === card.id;
@@ -644,8 +649,8 @@ export async function checkWinnable(
     const frame = queue.pop()!;
     statesEvaluated++;
 
-    // Yield to the event loop every 250 states to prevent UI hitching
-    if (statesEvaluated % 250 === 0) {
+    // Yield to the event loop every 1000 states to prevent UI hitching
+    if (statesEvaluated % 1000 === 0) {
       if (Date.now() - startTime > timeoutMs) {
         didTimeout = true;
         break;

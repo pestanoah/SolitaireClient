@@ -194,6 +194,9 @@ export function isReversingFoundationMove(
         move.to.index === tableauIndex
       );
     }
+    if (move.to.type === 'tableau' || move.to.type === 'foundation') {
+      return false;
+    }
   }
   return false;
 }
@@ -217,6 +220,9 @@ export function isReversingTableauMove(
         move.to.type === 'foundation'
       );
     }
+    if (move.to.type === 'tableau' || move.to.type === 'foundation') {
+      return false;
+    }
   }
   return false;
 }
@@ -228,14 +234,14 @@ export function isReversingTableauMove(
  * In Draw 3 mode, only cards that land at the top of the waste (every 3rd card in stock,
  * cycling across passes) can ever be accessed without making board plays.
  */
-export function getAccessibleDeckCards(state: GameState): Card[] {
+export function getAccessibleDeckCards(state: GameState, ignoreCycleLimit = false): Card[] {
   if (state.stock.length === 0 && state.waste.length === 0) {
     return [];
   }
 
   // If stock is empty and recycling cycles have been exhausted, no more cards from stock/waste can ever be accessed.
   // Only the single currently exposed waste card (if any) is accessible.
-  if (state.stock.length === 0 && hasExhaustedStockCycles(state)) {
+  if (!ignoreCycleLimit && state.stock.length === 0 && hasExhaustedStockCycles(state)) {
     return state.waste.length > 0 ? [state.waste[state.waste.length - 1]] : [];
   }
 
@@ -273,7 +279,7 @@ export function getAccessibleDeckCards(state: GameState): Card[] {
       accessible.set(topCard.id, topCard);
     }
 
-    const key = `${simStock.length}_${simWaste.length}_${topCard?.id ?? ''}`;
+    const key = `${simStock.map((c) => c.id).join(',')}|${simWaste.map((c) => c.id).join(',')}`;
     if (seenStates.has(key)) {
       break;
     }

@@ -1,4 +1,13 @@
-import { findAvailableHints, findHint, findOptimalHint, formatCardShort, moveRecordToHint } from '../hints';
+import {
+  clearSolutionCache,
+  findAvailableHints,
+  findHint,
+  findOptimalHint,
+  formatCardShort,
+  getCachedSolution,
+  isMoveFulfilling,
+  moveRecordToHint,
+} from '../hints';
 import { hasAvailableMoves } from '../rules';
 import { Card, GameState } from '../types';
 
@@ -583,26 +592,28 @@ describe('Hints Engine', () => {
       expect(result?.isWinningPath).toBe(false);
     });
 
-    test('prioritizes visible tableau reveals over drawing from stock on winning deals', async () => {
+    test('strictly adheres to solver winning path over unverified tableau moves', async () => {
       const { dealKlondike } = require('../deck');
       const game = dealKlondike(1, '2026-10-20');
 
       const result = await findOptimalHint(game, { timeoutMs: 1000 });
       expect(result).not.toBeNull();
       expect(result?.isWinningPath).toBe(true);
-      expect(result?.hint.from.type).toBe('tableau');
-      expect(result?.hint.message).toBe('Move J♥ onto Q♣');
+      expect(result?.hint.from.type).toBe('stock');
+      expect(result?.hint.message).toBe('Draw from the stock pile');
+      expect(result?.solutionMoves).toBeDefined();
     });
 
-    test('prioritizes tableau uncover move over stock draw on deal 2', async () => {
+    test('recommends solver winning move on deal 2', async () => {
       const { dealKlondike } = require('../deck');
       const game = dealKlondike(1, '2');
 
       const result = await findOptimalHint(game, { timeoutMs: 1000 });
       expect(result).not.toBeNull();
       expect(result?.isWinningPath).toBe(true);
-      expect(result?.hint.from.type).toBe('tableau');
-      expect(result?.hint.message).toBe('Move 2♠ onto 3♥');
+      expect(result?.hint.from.type).toBe('stock');
+      expect(result?.hint.message).toBe('Draw from the stock pile');
+      expect(result?.solutionMoves).toBeDefined();
     });
 
     test('recommends waste card to tableau when tableau has no available moves', async () => {
@@ -630,6 +641,112 @@ describe('Hints Engine', () => {
       expect(hints[0].from.type).toBe('tableau');
       expect(hints[0].message).toBe('Move 8♠ onto 9♥');
     });
+
+    test('does not report unwinnable or cause deadlock after recycling waste suggested by hint', async () => {
+      const { drawCards } = require('../klondike');
+      const { checkWinnable } = require('../solver');
+      const state = createBaseState();
+      state.drawCount = 1;
+      state.stock = [];
+      // Buried 9h under non-playable 8s in waste
+      state.waste = [
+        createDummyCard('9h', 'hearts', 9, true),
+        createDummyCard('8s', 'spades', 8, true),
+      ];
+      state.tableau[0] = [
+        createDummyCard('ac', 'clubs', 1, false),
+        createDummyCard('8c', 'clubs', 8, true),
+      ];
+      state.tableau[1] = [createDummyCard('10s', 'spades', 10, true)];
+      state.tableau[2] = [13, 12, 11, 10, 9, 7, 6, 5, 4, 3, 2].map((r) =>
+        createDummyCard(`c_${r}`, 'clubs', r as any, true)
+      );
+      state.foundations = [
+        Array.from({ length: 13 }, (_, i) => createDummyCard(`s_${i + 1}`, 'spades', (i + 1) as any, true)),
+        Array.from({ length: 13 }, (_, i) => createDummyCard(`h_${i + 1}`, 'hearts', (i + 1) as any, true)),
+        Array.from({ length: 13 }, (_, i) => createDummyCard(`d_${i + 1}`, 'diamonds', (i + 1) as any, true)),
+        [],
+      ];
+
+      // Optimal hint indicates the winning path
+      const optResult = await findOptimalHint(state);
+      expect(optResult).not.toBeNull();
+      expect(optResult?.isWinningPath).toBe(true);
+
+      // Player follows the hint and recycles the waste
+      const nextState = drawCards(state);
+
+      // Solver double-check on next state must confirm winnable
+      const winCheck = await checkWinnable(nextState);
+      expect(winCheck.status).toBe('winnable');
+    });
+
+    test('cached solution path provides instant subsequent hints and invalidates on divergence', async () => {
+      const { dealKlondike } = require('../deck');
+      const { drawCards, moveCards, undo } = require('../klondike');
+      clearSolutionCache();
+
+      const game = dealKlondike(1, '2026-10-20');
+      const firstResult = await findOptimalHint(game);
+      expect(firstResult).not.toBeNull();
+      expect(firstResult?.isWinningPath).toBe(true);
+
+      const cached = getCachedSolution();
+      expect(cached).not.toBeNull();
+      expect(cached?.gameId).toBe(game.id);
+
+      // Follow the hint (draw)
+      const afterDraw = drawCards(game);
+      const secondResult = await findOptimalHint(afterDraw);
+      expect(secondResult).not.toBeNull();
+      expect(secondResult?.isWinningPath).toBe(true);
+      expect(getCachedSolution()?.moves.length).toBe(cached!.moves.length);
+
+      // Undo invalidates cache
+      const undone = undo(afterDraw);
+      expect(undone.history.length).toBeLessThan(afterDraw.history.length);
+      await findOptimalHint(undone);
+      // Cache was refreshed or re-evaluated
+      expect(getCachedSolution()?.gameId).toBe(undone.id);
+    });
+
+    test('following hints from start of daily challenge #2026-09-10 results in victory without fatal moves', async () => {
+      const { dealKlondike } = require('../deck');
+      const { drawCards, moveCards } = require('../klondike');
+      clearSolutionCache();
+
+      let state = dealKlondike(1, '2026-09-10');
+
+      // The fatal move in #2026-09-10 is "Move 7♦ onto 8♣", which uncovers a card into a permanent deadlock.
+      // The verified winning path starts by drawing from stock.
+      const initialHint = await findOptimalHint(state);
+      expect(initialHint).not.toBeNull();
+      expect(initialHint?.isWinningPath).toBe(true);
+      expect(initialHint?.hint.from.type).toBe('stock');
+      expect(initialHint?.hint.message).toBe('Draw from the stock pile');
+
+      let steps = 0;
+      while (steps++ < 300 && state.status !== 'won') {
+        const result = await findOptimalHint(state);
+        expect(result).not.toBeNull();
+        expect(result?.isWinningPath).toBe(true);
+
+        const hint = result!.hint;
+        // Verify fatal move was never recommended
+        expect(hint.message).not.toBe('Move 7♦ onto 8♣');
+
+        let next = null;
+        if (hint.type === 'draw' || hint.type === 'recycle') {
+          next = drawCards(state);
+        } else if (hint.type === 'move' && hint.to && hint.cardIds) {
+          next = moveCards(state, hint.from, hint.to, hint.cardIds);
+        }
+        expect(next).not.toBeNull();
+        state = next!;
+      }
+
+      expect(state.status).toBe('won');
+    }, 30000);
   });
 });
 

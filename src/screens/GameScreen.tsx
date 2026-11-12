@@ -43,7 +43,14 @@ import {
   isDateSeed,
   isSeedWinnable,
 } from '../engine/deck';
-import { findAvailableHints, findOptimalHint, Hint } from '../engine/hints';
+import {
+  clearSolutionCache,
+  findAvailableHints,
+  findOptimalHint,
+  Hint,
+  moveRecordToHint,
+  setCachedSolution,
+} from '../engine/hints';
 import {
   autoCompleteStep,
   drawCards,
@@ -433,6 +440,7 @@ export const GameScreen: React.FC = () => {
   const [activeHint, setActiveHint] = useState<Hint | null>(null);
   const hintIndexRef = useRef<number>(0);
   const hintHighlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isWinningPathRef = useRef<boolean>(false);
 
   const clearActiveHint = useCallback(() => {
     if (hintHighlightTimeoutRef.current) {
@@ -440,6 +448,7 @@ export const GameScreen: React.FC = () => {
       hintHighlightTimeoutRef.current = null;
     }
     setActiveHint(null);
+    isWinningPathRef.current = false;
   }, []);
 
   const showHint = useCallback((msg: string, duration = 2800) => {
@@ -463,8 +472,13 @@ export const GameScreen: React.FC = () => {
       return;
     }
 
-    // If an active hint is already showing and the player taps again, cycle through heuristic hints
+    // If an active hint is already showing and the player taps again:
+    // If on a known winning path, re-display the winning path hint rather than cycling to losing heuristic moves.
     if (activeHint) {
+      if (isWinningPathRef.current) {
+        showHint(`💡 ${activeHint.message}`, 4000);
+        return;
+      }
       const hints = findAvailableHints(current);
       if (hints.length > 0) {
         const nextIndex = (hintIndexRef.current + 1) % hints.length;
@@ -478,6 +492,7 @@ export const GameScreen: React.FC = () => {
         }
         hintHighlightTimeoutRef.current = setTimeout(() => {
           setActiveHint(null);
+          isWinningPathRef.current = false;
         }, 4000);
         return;
       }
@@ -488,8 +503,8 @@ export const GameScreen: React.FC = () => {
 
     try {
       const result = await findOptimalHint(current, {
-        timeoutMs: 300,
-        maxStates: 10000,
+        timeoutMs: 2500,
+        maxStates: 35000,
       });
 
       // Discard if state changed while finding hint
@@ -512,7 +527,7 @@ export const GameScreen: React.FC = () => {
 
         // Legal moves exist, but no optimal or heuristic hint found within budget.
         // Query solver to verify if the game is mathematically unwinnable.
-        const winCheck = await checkWinnable(current, { timeoutMs: 1200, maxStates: 12000 });
+        const winCheck = await checkWinnable(current, { timeoutMs: 1500, maxStates: 20000 });
         if (
           latestGameStateRef.current.id === current.id &&
           latestGameStateRef.current.moves === current.moves &&
@@ -523,6 +538,28 @@ export const GameScreen: React.FC = () => {
             playGameOverSound();
             setLossReason('no_moves');
             setGameState((prev) => (prev.status === 'playing' ? { ...prev, status: 'lost' } : prev));
+          } else if (
+            winCheck.status === 'winnable' &&
+            winCheck.solutionMoves &&
+            winCheck.solutionMoves.length > 0
+          ) {
+            setCachedSolution(current, winCheck.solutionMoves);
+            const fallbackHint = moveRecordToHint(current, winCheck.solutionMoves[0]);
+            if (fallbackHint) {
+              hintIndexRef.current = 0;
+              isWinningPathRef.current = true;
+              setActiveHint(fallbackHint);
+              showHint(`💡 ${fallbackHint.message}`, 4000);
+              if (hintHighlightTimeoutRef.current) {
+                clearTimeout(hintHighlightTimeoutRef.current);
+              }
+              hintHighlightTimeoutRef.current = setTimeout(() => {
+                setActiveHint(null);
+                isWinningPathRef.current = false;
+              }, 4000);
+            } else {
+              showHint('No strategic hint found. Try exploring other moves.');
+            }
           } else {
             showHint('No strategic hint found. Try exploring other moves.');
           }
@@ -531,6 +568,7 @@ export const GameScreen: React.FC = () => {
       }
 
       hintIndexRef.current = 0;
+      isWinningPathRef.current = result.isWinningPath;
       setActiveHint(result.hint);
       showHint(`💡 ${result.hint.message}`, 4000);
 
@@ -539,12 +577,14 @@ export const GameScreen: React.FC = () => {
       }
       hintHighlightTimeoutRef.current = setTimeout(() => {
         setActiveHint(null);
+        isWinningPathRef.current = false;
       }, 4000);
     } catch {
       // Fallback to synchronous hints on any unexpected error
       const hints = findAvailableHints(current);
       if (hints.length > 0) {
         const hint = hints[0];
+        isWinningPathRef.current = false;
         setActiveHint(hint);
         showHint(`💡 ${hint.message}`, 4000);
       }
@@ -581,8 +621,12 @@ export const GameScreen: React.FC = () => {
       }
 
       if (result.status === 'winnable') {
+        if (result.solutionMoves && result.solutionMoves.length > 0) {
+          setCachedSolution(current, result.solutionMoves);
+        }
         showHint('Game is still winnable.', 4000);
       } else if (result.status === 'unwinnable') {
+        clearSolutionCache();
         showHint('No winning path from this position.', 4000);
       } else {
         showHint('Complex position — could not confirm a win.', 4000);
@@ -1099,6 +1143,7 @@ export const GameScreen: React.FC = () => {
     (game: GameState) => {
       cancelActiveAnimations();
       clearActiveHint();
+      clearSolutionCache();
       setSelectedCards(null);
       setAnimatingCard(null);
       dragStateRef.current = null;
@@ -2160,6 +2205,7 @@ export const GameScreen: React.FC = () => {
     if (current.history.length === 0) return;
 
     clearActiveHint();
+    clearSolutionCache();
     setSelectedCards(null);
 
     if (current.status === 'lost') {
