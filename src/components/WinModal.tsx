@@ -1,7 +1,17 @@
 import React, { useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { isDateSeed } from '../engine/deck';
-import { colors, modalStyles, shadows, spacing, borderRadius, fontSize, fontWeight } from '../theme';
+import { WinPointsBreakdown } from '../engine/rewards';
+import {
+  colors,
+  modalStyles,
+  shadows,
+  spacing,
+  borderRadius,
+  fontSize,
+  fontWeight,
+  useGameTheme,
+} from '../theme';
 import { triggerWinConfetti } from '../utils/confetti';
 
 export interface WinModalProps {
@@ -11,6 +21,8 @@ export interface WinModalProps {
   elapsedSeconds: number;
   seed?: string;
   dailyStreak?: number;
+  pointsEarned?: WinPointsBreakdown | null;
+  totalPoints?: number;
   onNewGame: () => void;
   onReplaySeed?: () => void;
   onReplayDraw?: () => void;
@@ -18,6 +30,7 @@ export interface WinModalProps {
   onClose?: () => void;
   onShare?: (stats?: { score: number; elapsedSeconds: number }) => void;
   onOpenDailyModal?: () => void;
+  onOpenRewards?: () => void;
 }
 
 export const WinModal: React.FC<WinModalProps> = ({
@@ -27,6 +40,8 @@ export const WinModal: React.FC<WinModalProps> = ({
   elapsedSeconds,
   seed,
   dailyStreak,
+  pointsEarned,
+  totalPoints,
   onNewGame,
   onReplaySeed,
   onReplayDraw,
@@ -34,15 +49,18 @@ export const WinModal: React.FC<WinModalProps> = ({
   onClose,
   onShare,
   onOpenDailyModal,
+  onOpenRewards,
 }) => {
+  const { felt, confetti } = useGameTheme();
+
   useEffect(() => {
     if (visible) {
-      const cleanup = triggerWinConfetti();
+      const cleanup = triggerWinConfetti(confetti.colors);
       return () => {
         cleanup();
       };
     }
-  }, [visible]);
+  }, [visible, confetti.colors]);
 
   if (!visible) return null;
 
@@ -62,27 +80,69 @@ export const WinModal: React.FC<WinModalProps> = ({
             accessibilityRole="button"
           />
         )}
-        <View style={[modalStyles.cardBase, modalStyles.cardFelt, styles.card]}>
+        <View
+          style={[
+            modalStyles.cardBase,
+            modalStyles.cardFelt,
+            styles.card,
+            { backgroundColor: felt.background },
+          ]}
+        >
           <Text style={styles.celebrationIcon}>🎉</Text>
           <Text style={modalStyles.title}>Victory!</Text>
-          <Text style={styles.subtitle}>You completed the game!</Text>
+          <Text style={[styles.subtitle, { color: felt.textMuted }]}>
+            You completed the game!
+          </Text>
 
           <View style={styles.statsContainer}>
             <View style={modalStyles.statItem}>
               <Text style={modalStyles.statValue}>{score}</Text>
-              <Text style={styles.statLabel}>Final Score</Text>
+              <Text style={[styles.statLabel, { color: felt.accent }]}>Final Score</Text>
             </View>
 
             <View style={modalStyles.statItem}>
               <Text style={modalStyles.statValue}>{moves}</Text>
-              <Text style={styles.statLabel}>Moves</Text>
+              <Text style={[styles.statLabel, { color: felt.accent }]}>Moves</Text>
             </View>
 
             <View style={modalStyles.statItem}>
               <Text style={modalStyles.statValue}>{timeFormatted}</Text>
-              <Text style={styles.statLabel}>Time</Text>
+              <Text style={[styles.statLabel, { color: felt.accent }]}>Time</Text>
             </View>
           </View>
+
+          {pointsEarned && pointsEarned.totalEarned > 0 && (
+            <View style={styles.pointsEarnedCard}>
+              <View style={styles.pointsEarnedHeader}>
+                <Text style={styles.pointsEarnedTitle}>
+                  {`🪙 +${pointsEarned.totalEarned} Points Earned!`}
+                </Text>
+                {totalPoints !== undefined && (
+                  <Text style={styles.pointsBalancePill}>{`Balance: ${totalPoints}`}</Text>
+                )}
+              </View>
+              <View style={styles.pointsBreakdownRow}>
+                <Text style={styles.pointsBonusTag}>{`Win +${pointsEarned.baseWinPoints}`}</Text>
+                {pointsEarned.scoreBonus > 0 && (
+                  <Text style={styles.pointsBonusTag}>{`Score +${pointsEarned.scoreBonus}`}</Text>
+                )}
+                {pointsEarned.draw3Bonus > 0 && (
+                  <Text style={styles.pointsBonusTag}>{`Draw 3 +${pointsEarned.draw3Bonus}`}</Text>
+                )}
+                {pointsEarned.speedBonus > 0 && (
+                  <Text style={styles.pointsBonusTag}>{`Speed +${pointsEarned.speedBonus}`}</Text>
+                )}
+                {pointsEarned.dailyChallengeBonus > 0 && (
+                  <Text style={styles.pointsBonusTag}>
+                    {`Daily +${pointsEarned.dailyChallengeBonus}`}
+                  </Text>
+                )}
+                {pointsEarned.streakBonus > 0 && (
+                  <Text style={styles.pointsBonusTag}>{`Streak +${pointsEarned.streakBonus}`}</Text>
+                )}
+              </View>
+            </View>
+          )}
 
           {seed ? (
             <View style={styles.seedBadge}>
@@ -135,6 +195,25 @@ export const WinModal: React.FC<WinModalProps> = ({
                 accessibilityRole="button"
               >
                 <Text style={styles.calendarBtnText}>Daily Challenges Calendar</Text>
+              </TouchableOpacity>
+            )}
+
+            {onOpenRewards && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  onClose?.();
+                  onOpenRewards();
+                }}
+                style={[modalStyles.actionBtn, styles.rewardsShopBtn]}
+                accessibilityLabel="Open rewards shop"
+                accessibilityRole="button"
+              >
+                <Text style={styles.rewardsShopBtnText}>
+                  {totalPoints !== undefined
+                    ? `Rewards Shop (🪙 ${totalPoints})`
+                    : 'Rewards Shop'}
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -288,6 +367,61 @@ const styles = StyleSheet.create({
   },
   calendarBtnText: {
     color: colors.felt.accent,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+  },
+  pointsEarnedCard: {
+    width: '100%',
+    backgroundColor: colors.overlay.panelDark,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.hint.sourceBorder,
+  },
+  pointsEarnedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  pointsEarnedTitle: {
+    color: colors.hint.sourceBorder,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.heavy,
+  },
+  pointsBalancePill: {
+    color: colors.white,
+    fontSize: fontSize.caption,
+    fontWeight: fontWeight.bold,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+  },
+  pointsBreakdownRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  pointsBonusTag: {
+    color: colors.slate[200],
+    fontSize: fontSize.tiny,
+    fontWeight: fontWeight.bold,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  rewardsShopBtn: {
+    backgroundColor: colors.slate[800],
+    borderWidth: 1,
+    borderColor: colors.hint.sourceBorder,
+    width: '100%',
+  },
+  rewardsShopBtnText: {
+    color: colors.hint.sourceBorder,
     fontSize: fontSize.base,
     fontWeight: fontWeight.bold,
   },

@@ -115,6 +115,23 @@ describe('confetti utility', () => {
       jest.useRealTimers();
     });
 
+    it('uses custom confetti colors when provided', () => {
+      jest.doMock('canvas-confetti', () => ({
+        __esModule: true,
+        default: mockConfettiFn,
+      }));
+
+      const customPalette = ['#fbbf24', '#f59e0b'];
+      const cleanup = triggerWinConfetti(customPalette);
+
+      expect(mockConfettiFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          colors: customPalette,
+        })
+      );
+      cleanup();
+    });
+
     it('handles direct function export from canvas-confetti', () => {
       jest.isolateModules(() => {
         const directMock = Object.assign(jest.fn(), { reset: jest.fn() });

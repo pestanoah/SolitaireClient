@@ -21,3 +21,4 @@ export { spacing, borderRadius } from './spacing';
 export { fontSize, fontWeight, letterSpacing } from './typography';
 export { shadows } from './shadows';
 export { modalStyles, MODAL_BOTTOM_BLEED } from './modal.styles';
+export { GameThemeContext, GameThemeProvider, useGameTheme } from './ThemeContext';

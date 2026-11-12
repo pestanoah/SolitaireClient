@@ -184,6 +184,33 @@ describe('GameHeader Winnable Button', () => {
     expect(onOpenDailyChallenge).toHaveBeenCalledTimes(1);
   });
 
+  it('renders Rewards shop points badge in portrait and landscape and calls onOpenRewards', () => {
+    const onOpenRewards = jest.fn();
+    const portraitTree = renderHeader({
+      ...baseProps,
+      isLandscape: false,
+      points: 420,
+      onOpenRewards,
+    });
+
+    const portraitBtn = findByAccessibilityLabel(portraitTree, 'Rewards shop: 420 points');
+    expect(portraitBtn).not.toBeNull();
+    expect(findTextContaining(portraitBtn, '420')).not.toBeNull();
+    portraitBtn.props.onPress();
+    expect(onOpenRewards).toHaveBeenCalledTimes(1);
+
+    const landscapeTree = renderHeader({
+      ...baseProps,
+      isLandscape: true,
+      points: 420,
+      onOpenRewards,
+    });
+    const landscapeBtn = findByAccessibilityLabel(landscapeTree, 'Rewards shop: 420 points');
+    expect(landscapeBtn).not.toBeNull();
+    landscapeBtn.props.onPress();
+    expect(onOpenRewards).toHaveBeenCalledTimes(2);
+  });
+
   describe('Safe Area Inset and Layout Styling', () => {
     it('applies top safe area padding in portrait mode with topInset', () => {
       const tree = renderHeader({

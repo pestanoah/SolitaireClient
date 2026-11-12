@@ -6,8 +6,10 @@ import { GameOverModal } from '../GameOverModal';
 import { WinModal } from '../WinModal';
 import { SeedModal } from '../SeedModal';
 import { DailyChallengeModal } from '../DailyChallengeModal';
+import { RewardsModal } from '../RewardsModal';
 import { modalStyles, MODAL_BOTTOM_BLEED, spacing } from '../../theme';
 import { getDailyChallengeSeed } from '../../engine/deck';
+import { awardPoints, DEFAULT_REWARDS_STATE, redeemReward } from '../../engine/rewards';
 
 function findByAccessibilityLabel(element: any, label: string): any {
   if (!element || typeof element !== 'object') return null;
@@ -978,6 +980,136 @@ describe('Modal Backdrop Dismissal', () => {
     });
   });
 
+  describe('RewardsModal', () => {
+    test('returns null when visible is false', () => {
+      const element = RewardsModal({
+        visible: false,
+        rewardsState: DEFAULT_REWARDS_STATE,
+        onClose: jest.fn(),
+        onRedeemReward: jest.fn(),
+        onEquipReward: jest.fn(),
+      });
+      expect(element).toBeNull();
+    });
+
+    test('renders backdrop pressable and close buttons that trigger onClose', () => {
+      const onClose = jest.fn();
+      const element: any = RewardsModal({
+        visible: true,
+        rewardsState: awardPoints(DEFAULT_REWARDS_STATE, 450),
+        onClose,
+        onRedeemReward: jest.fn(),
+        onEquipReward: jest.fn(),
+      });
+      expect(element).not.toBeNull();
+      expect(element.props.onRequestClose).toBe(onClose);
+
+      const backdropPressable = findByAccessibilityLabel(element, 'Close rewards shop modal');
+      expect(backdropPressable).not.toBeNull();
+      backdropPressable.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      const closeIconBtn = findByAccessibilityLabel(element, 'Close rewards shop');
+      closeIconBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(2);
+
+      const doneBtn = findByAccessibilityLabel(element, 'Done');
+      doneBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(3);
+    });
+
+    test('triggers onRedeemReward when clicking Unlock on an affordable locked item', () => {
+      const onRedeemReward = jest.fn();
+      const element: any = RewardsModal({
+        visible: true,
+        rewardsState: awardPoints(DEFAULT_REWARDS_STATE, 500),
+        onClose: jest.fn(),
+        onRedeemReward,
+        onEquipReward: jest.fn(),
+      });
+
+      const unlockSapphire = findByAccessibilityLabel(
+        element,
+        'Unlock Royal Sapphire for 250 points'
+      );
+      expect(unlockSapphire).not.toBeNull();
+      expect(unlockSapphire.props.disabled).toBe(false);
+      unlockSapphire.props.onPress();
+      expect(onRedeemReward).toHaveBeenCalledWith('felt_royal_sapphire');
+    });
+
+    test('disables Unlock button when player has insufficient points', () => {
+      const element: any = RewardsModal({
+        visible: true,
+        rewardsState: awardPoints(DEFAULT_REWARDS_STATE, 100),
+        onClose: jest.fn(),
+        onRedeemReward: jest.fn(),
+        onEquipReward: jest.fn(),
+      });
+
+      const unlockSapphire = findByAccessibilityLabel(
+        element,
+        'Unlock Royal Sapphire for 250 points'
+      );
+      expect(unlockSapphire).not.toBeNull();
+      expect(unlockSapphire.props.disabled).toBe(true);
+    });
+
+    test('triggers onEquipReward when clicking Equip on an unlocked unequipped item', () => {
+      const onEquipReward = jest.fn();
+      const unlockedSapphire = redeemReward(
+        awardPoints(DEFAULT_REWARDS_STATE, 500),
+        'felt_royal_sapphire'
+      ).state;
+
+      const element: any = RewardsModal({
+        visible: true,
+        rewardsState: unlockedSapphire,
+        onClose: jest.fn(),
+        onRedeemReward: jest.fn(),
+        onEquipReward,
+      });
+
+      const equipClassic = findByAccessibilityLabel(element, 'Equip Classic Emerald');
+      expect(equipClassic).not.toBeNull();
+      equipClassic.props.onPress();
+      expect(onEquipReward).toHaveBeenCalledWith('felt_classic_emerald');
+    });
+
+    test('renders WinModal points earned breakdown and Rewards Shop button', () => {
+      const onClose = jest.fn();
+      const onOpenRewards = jest.fn();
+      const element: any = WinModal({
+        visible: true,
+        score: 500,
+        moves: 80,
+        elapsedSeconds: 100,
+        pointsEarned: {
+          baseWinPoints: 100,
+          scoreBonus: 100,
+          draw3Bonus: 50,
+          speedBonus: 50,
+          dailyChallengeBonus: 0,
+          streakBonus: 0,
+          totalEarned: 300,
+        },
+        totalPoints: 750,
+        onNewGame: jest.fn(),
+        onClose,
+        onOpenRewards,
+      });
+
+      expect(findTextContaining(element, '+300 Points Earned!')).not.toBeNull();
+      expect(findTextContaining(element, 'Balance: 750')).not.toBeNull();
+
+      const shopBtn = findByAccessibilityLabel(element, 'Open rewards shop');
+      expect(shopBtn).not.toBeNull();
+      shopBtn.props.onPress();
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onOpenRewards).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Modal Backdrop Mobile Bottom Shading', () => {
     test('backdropDark and backdropMedium extend past the bottom viewport edge while preserving vertical centering', () => {
       expect(MODAL_BOTTOM_BLEED).toBeGreaterThan(0);
@@ -1061,6 +1193,15 @@ describe('Modal Backdrop Dismissal', () => {
         onNewGame: jest.fn(),
       });
       expect(gameOverEl.props.children.props.style).toBe(modalStyles.backdropDark);
+
+      const rewardsEl: any = RewardsModal({
+        visible: true,
+        rewardsState: DEFAULT_REWARDS_STATE,
+        onClose: jest.fn(),
+        onRedeemReward: jest.fn(),
+        onEquipReward: jest.fn(),
+      });
+      expect(rewardsEl.props.children.props.style).toBe(modalStyles.backdropMedium);
     });
   });
 });
